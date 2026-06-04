@@ -42,6 +42,7 @@ html, body {
 }
 
 .logo { height: 32px; display: block; }
+.header a:has(.logo) { text-decoration: none; line-height: 0; }
 
 .header-right {
   display: flex;
