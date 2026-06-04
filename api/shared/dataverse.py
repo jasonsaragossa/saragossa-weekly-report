@@ -92,7 +92,7 @@ def get_active_consultants() -> list[dict]:
         "systemusers",
         params={
             "$select": "systemuserid,fullname,jobtitle,createdon,_territoryid_value",
-            "$expand": "teammembership_association($select=name,teamtype)",
+            "$expand": "teammembership_association",
             "$filter": f"isdisabled eq false and ({territory_filter})",
             "$orderby": "createdon asc",
         },
