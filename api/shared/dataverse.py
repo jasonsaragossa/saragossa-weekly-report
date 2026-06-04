@@ -4,7 +4,6 @@ Uses MSAL client credentials (service principal) to authenticate.
 The Web API OData endpoint has no row cap - we paginate with $skiptoken.
 """
 import os, requests, msal, logging
-from datetime import datetime, timezone
 from functools import lru_cache
 
 DATAVERSE_URL  = os.environ["DATAVERSE_URL"]          # e.g. https://saragossa.crm11.dynamics.com
@@ -215,7 +214,6 @@ def upsert_override(data: dict, updated_by: str) -> dict:
         "crbb7_team":      data.get("team", ""),
         "crbb7_ishidden":  data.get("is_hidden", False),
         "crbb7_updatedby": updated_by,
-        "crbb7_updatedon": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
     if existing:
         rid = existing[0]["crbb7_useroverrideid"]
