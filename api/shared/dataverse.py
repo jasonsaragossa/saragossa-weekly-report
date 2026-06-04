@@ -203,12 +203,10 @@ def upsert_override(data: dict, updated_by: str) -> dict:
         },
     )
     body = {
-        "crbb7_name":      data.get("name", ""),
-        "crbb7_userid":    data["userid"],
-        "crbb7_territory": data.get("territory", ""),
-        "crbb7_team":      data.get("team", ""),
-        "crbb7_ishidden":  data.get("is_hidden", False),
-        "crbb7_updatedby": updated_by,
+        "crbb7_name":     data.get("name", ""),
+        "crbb7_userid":   data["userid"],
+        "crbb7_team":     data.get("team", ""),
+        "crbb7_ishidden": data.get("is_hidden", False),
     }
     if existing:
         rid = existing[0]["crbb7_useroverrideid"]
