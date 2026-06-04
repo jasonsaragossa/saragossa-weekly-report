@@ -94,6 +94,7 @@ def build_report(
     placements: list[dict],
     overrides: list[dict],
     today: date,
+    team_map: dict = None,
 ) -> dict:
     """
     Assembles the full report structure.
@@ -135,7 +136,7 @@ def build_report(
         if ov.get("crbb7_ishidden"):
             continue  # hidden by admin
 
-        team = ov.get("crbb7_team") or _default_team(c, territory)
+        team = ov.get("crbb7_team") or _default_team(uid, territory, team_map or {})
         role = _clean_role(c.get("jobtitle") or "")
         ccy  = CCY.get(territory, "GBP")
 
@@ -189,18 +190,9 @@ def _territory_name(tid: str) -> str:
     return _TERRITORY_NAME_MAP.get(tid)
 
 
-def _default_team(consultant: dict, territory: str) -> str:
-    """
-    Reads team directly from Mercury team memberships.
-    Picks the first team whose name matches a known report team for this territory.
-    """
-    known_teams = set(TEAM_ORDER.get(territory, []))
-    if not known_teams:
-        return ""
-    for t in consultant.get("teammembership_association", []):
-        if t.get("name") in known_teams:
-            return t["name"]
-    return ""
+def _default_team(uid: str, territory: str, team_map: dict) -> str:
+    """Returns the team name from the pre-fetched Mercury team membership map."""
+    return team_map.get(uid, "")
 
 
 _ROLE_STRIP = [

@@ -86,7 +86,7 @@ FINANCE_TEAM_NAME = "Bristol Finance and Compliance"
 # ── User queries ─────────────────────────────────────────────────────────────
 
 def get_active_consultants() -> list[dict]:
-    """Returns all active users in the 6 territories, with their team memberships."""
+    """Returns all active users in the 6 territories."""
     territory_filter = " or ".join(
         f"_territoryid_value eq '{tid}'" for tid in TERRITORY_IDS.values()
     )
@@ -94,11 +94,40 @@ def get_active_consultants() -> list[dict]:
         "systemusers",
         params={
             "$select": "systemuserid,fullname,jobtitle,createdon,_territoryid_value",
-            "$expand": "teammembership_association",
             "$filter": f"isdisabled eq false and ({territory_filter})",
             "$orderby": "createdon asc",
         },
     )
+
+
+# Known report team names — must match Dataverse team names exactly
+_REPORT_TEAM_NAMES = [
+    "Team Batt", "Team Charlie", "Team Sion", "Team Harry W",
+    "Team Data & Cyber", "Team Snoz",
+    "Team JD", "Team Matty", "Team Adam",
+]
+
+def get_team_membership_map() -> dict:
+    """
+    Returns {systemuserid: team_name} for all users in any known report team.
+    Uses separate queries per team to avoid $expand encoding issues.
+    """
+    name_filter = " or ".join(f"name eq '{t}'" for t in _REPORT_TEAM_NAMES)
+    teams = odata_get_all("teams", params={
+        "$select": "teamid,name",
+        "$filter": name_filter,
+    })
+    uid_to_team = {}
+    for team in teams:
+        members = odata_get_all(
+            f"teams({team['teamid']})/teammembership_association",
+            params={"$select": "systemuserid"},
+        )
+        for m in members:
+            uid = m.get("systemuserid")
+            if uid and uid not in uid_to_team:
+                uid_to_team[uid] = team["name"]
+    return uid_to_team
 
 def get_territory_name(tid: str) -> str:
     return next((k for k, v in TERRITORY_IDS.items() if v == tid), "Unknown")
