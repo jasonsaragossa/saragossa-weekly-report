@@ -204,7 +204,6 @@ def upsert_override(data: dict, updated_by: str) -> dict:
         },
     )
     body = {
-        "crbb7_name":     data.get("name", ""),
         "crbb7_userid":   data["userid"],
         "crbb7_team":     data.get("team", ""),
         "crbb7_ishidden": data.get("is_hidden", False),
