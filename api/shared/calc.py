@@ -54,7 +54,7 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
 
     fx = TO_GBP if display_ccy == "GBP" else TO_USD
 
-    ytd = written = roll12 = 0.0
+    ytd = written = roll12_base = roll12_uplift = 0.0
 
     for p in placements:
         factor = split_factor(p, uid)
@@ -74,15 +74,18 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
 
         if roll12_start <= d <= today:
             is_nb = "new business" in (p.get("crimson_specialinstructionsclient") or "").lower()
-            roll12 += val * (1.5 if is_nb else 1.0)
+            roll12_base   += val
+            roll12_uplift += val * 0.5 if is_nb else 0.0
 
     year_pred = (written / week_no) * 52 if written > 0 else 0.0
 
     return {
-        "ytd":       round(ytd, 2),
-        "written":   round(written, 2),
-        "year_pred": round(year_pred, 2),
-        "roll12":    round(roll12, 2),
+        "ytd":          round(ytd, 2),
+        "written":      round(written, 2),
+        "year_pred":    round(year_pred, 2),
+        "roll12":       round(roll12_base, 2),
+        "roll12_uplift": round(roll12_uplift, 2),
+        "roll12_total": round(roll12_base + roll12_uplift, 2),
     }
 
 

@@ -128,6 +128,8 @@ function permHeaders() {
     <th class="num">Written Perm</th>
     <th class="num">Year Prediction</th>
     <th class="num">Rolling 12M</th>
+    <th class="num">NB Uplift</th>
+    <th class="num">12M Total</th>
   </tr></thead>`;
 }
 
@@ -139,13 +141,15 @@ function permRow(m) {
     <td class="num">${fmt(m.written, m.sym)}</td>
     <td class="num">${fmt(m.year_pred, m.sym)}</td>
     <td class="num">${fmt(m.roll12, m.sym)}</td>
+    <td class="num">${fmt(m.roll12_uplift, m.sym)}</td>
+    <td class="num">${fmt(m.roll12_total, m.sym)}</td>
   </tr>`;
 }
 
 function buildPermTeamTable(groups) {
   let body = "";
   for (const g of groups) {
-    body += `<tr class="team-header"><td colspan="6">${esc(g.team)}</td></tr>`;
+    body += `<tr class="team-header"><td colspan="8">${esc(g.team)}</td></tr>`;
     body += g.members.map(permRow).join("");
   }
   return tableWrap(`<table>${permHeaders()}<tbody>${body}</tbody></table>`);
