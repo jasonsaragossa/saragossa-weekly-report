@@ -198,7 +198,6 @@ def upsert_override(data: dict, updated_by: str) -> dict:
     existing = odata_get_all(
         "crbb7_useroverrides",
         params={
-            "$select": "crbb7_useroverrideid",
             "$filter": f"crbb7_userid eq '{data['userid']}'",
         },
     )
