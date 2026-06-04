@@ -185,15 +185,10 @@ def get_placements(start_date: str, end_date: str) -> list[dict]:
 # ── Override table (crbb7_useroverride) ───────────────────────────────────────
 
 def get_overrides() -> list[dict]:
-    return odata_get_all(
-        "crbb7_useroverrides",
-        params={
-            "$select": (
-                "crbb7_useroverrideid,crbb7_userid,crbb7_name,"
-                "crbb7_team,crbb7_ishidden,crbb7_territory"
-            )
-        },
-    )
+    # No $select — table is small so fetching all columns is fine.
+    # Specific $select causes 400s likely due to a column name discrepancy
+    # in the Dataverse table; calc.py reads only the fields it needs by name.
+    return odata_get_all("crbb7_useroverrides")
 
 def upsert_override(data: dict, updated_by: str) -> dict:
     """
