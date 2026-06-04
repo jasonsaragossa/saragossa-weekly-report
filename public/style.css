@@ -1,17 +1,46 @@
+@font-face {
+  font-family: 'Aeonik Pro';
+  src: url('/fonts/AeonikPro-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Aeonik Pro';
+  src: url('/fonts/AeonikPro-RegularItalic.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Aeonik Pro';
+  src: url('/fonts/AeonikPro-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Aeonik Pro';
+  src: url('/fonts/AeonikPro-MediumItalic.woff2') format('woff2');
+  font-weight: 500;
+  font-style: italic;
+  font-display: swap;
+}
+
 :root {
-  --bg:       #000000;
-  --surface:  #111111;
-  --surface2: #1a1a1a;
-  --border:   #2a2a2a;
+  --bg:       #111112;
+  --surface:  #151516;
+  --surface2: #1c1c1d;
+  --border:   #2a2a2b;
   --mid:      #747487;
   --light:    #c8c9cc;
-  --contrast: #737386;
+  --contrast: #757f6a;
   --white:    #ffffff;
-  --gold:     #c8a84b;
+  --accent:   #5d8f9a;
   --green:    #4ade80;
   --red:      #f87171;
   --tab-h:    48px;
-  --font:     'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font:     'Aeonik Pro', -apple-system, BlinkMacSystemFont, sans-serif;
   --mono:     'SF Mono', 'Fira Code', ui-monospace, monospace;
 }
 
@@ -111,7 +140,7 @@ html, body {
   user-select: none;
 }
 .tab:hover  { color: var(--light); }
-.tab.active { color: var(--white); border-bottom-color: var(--gold); }
+.tab.active { color: var(--white); border-bottom-color: var(--accent); }
 
 /* ── Panels ──────────────────────────────────────────────────────────────── */
 
@@ -160,13 +189,13 @@ tbody tr:hover:not(.team-header) { background: rgba(255,255,255,.03); }
 /* Team header rows */
 tr.team-header td {
   background: #0a0a0a;
-  color: var(--gold);
+  color: var(--accent);
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .12em;
   padding: 14px 14px 8px;
-  border-bottom: 1px solid var(--gold);
+  border-bottom: 1px solid var(--accent);
   border-top: 1px solid var(--border);
 }
 tr.team-header:first-child td { border-top: none; }
@@ -188,9 +217,9 @@ tr.team-header:first-child td { border-top: none; }
 .manual-cell[contenteditable=true]:focus {
   background: rgba(200,168,75,.08);
   border-radius: 4px;
-  box-shadow: 0 0 0 1px var(--gold);
+  box-shadow: 0 0 0 1px var(--accent);
 }
-.wnf-cell          { color: var(--gold); }
+.wnf-cell          { color: var(--accent); }
 .year-billing-cell { color: var(--green); }
 
 /* ── States ──────────────────────────────────────────────────────────────── */
@@ -209,7 +238,7 @@ tr.team-header:first-child td { border-top: none; }
   width: 32px;
   height: 32px;
   border: 2px solid var(--border);
-  border-top-color: var(--gold);
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin .8s linear infinite;
 }
@@ -257,7 +286,7 @@ tr.team-header:first-child td { border-top: none; }
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .12em;
-  color: var(--gold);
+  color: var(--accent);
   margin-bottom: 12px;
 }
 
@@ -301,10 +330,10 @@ tr.team-header:first-child td { border-top: none; }
   cursor: pointer;
   width: 100%;
 }
-.team-select:focus { outline: none; box-shadow: 0 0 0 1px var(--gold); }
+.team-select:focus { outline: none; box-shadow: 0 0 0 1px var(--accent); }
 
 .toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; }
-.toggle input { accent-color: var(--gold); cursor: pointer; }
+.toggle input { accent-color: var(--accent); cursor: pointer; }
 .toggle-label { font-size: 11px; color: var(--mid); }
 
 .save-btn, .clear-btn {
@@ -318,8 +347,8 @@ tr.team-header:first-child td { border-top: none; }
 
 .save-btn {
   background: rgba(200,168,75,.12);
-  color: var(--gold);
-  border-color: var(--gold);
+  color: var(--accent);
+  border-color: var(--accent);
   margin-right: 6px;
 }
 .save-btn:hover   { background: rgba(200,168,75,.24); }
