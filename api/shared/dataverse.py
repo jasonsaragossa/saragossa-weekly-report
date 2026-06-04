@@ -190,8 +190,7 @@ def get_overrides() -> list[dict]:
         params={
             "$select": (
                 "crbb7_useroverrideid,crbb7_userid,crbb7_name,"
-                "crbb7_team,crbb7_ishidden,crbb7_territory,"
-                "crbb7_updatedby,crbb7_updatedon"
+                "crbb7_team,crbb7_ishidden,crbb7_territory"
             )
         },
     )
