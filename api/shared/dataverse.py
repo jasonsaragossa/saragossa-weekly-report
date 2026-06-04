@@ -51,7 +51,9 @@ def odata_get_all(path: str, params: dict = None) -> list:
 
 def odata_post(path: str, body: dict) -> dict:
     url = f"{DATAVERSE_URL}/api/data/v9.1/{path}"
-    resp = requests.post(url, headers=_headers(), json=body)
+    headers = _headers()
+    headers["Prefer"] = "return=representation"
+    resp = requests.post(url, headers=headers, json=body)
     resp.raise_for_status()
     return resp.json() if resp.content else {}
 
@@ -183,8 +185,16 @@ def get_placements(start_date: str, end_date: str) -> list[dict]:
 # ── Override table (crbb7_useroverride) ───────────────────────────────────────
 
 def get_overrides() -> list[dict]:
-    # No $select — fetch all columns so we can verify the exact schema names
-    return odata_get_all("crbb7_useroverrides")
+    return odata_get_all(
+        "crbb7_useroverrides",
+        params={
+            "$select": (
+                "crbb7_useroverrideid,crbb7_userid,crbb7_name,"
+                "crbb7_team,crbb7_ishidden,crbb7_territory,"
+                "crbb7_updatedby,crbb7_updatedon"
+            )
+        },
+    )
 
 def upsert_override(data: dict, updated_by: str) -> dict:
     """
