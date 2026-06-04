@@ -6,6 +6,12 @@ from datetime import date, datetime
 
 # HMRC 2025 annual average FX rates (unitsPerGbp → used as multiplier from foreign to GBP)
 # Source: https://www.gov.uk/government/collections/exchange-rates-for-customs-and-vat
+TEAM_ORDER = {
+    "Bristol":  ["Team Batt", "Team Charlie", "Team Sion", "Team Harry W"],
+    "London":   ["Team Data & Cyber", "Team Snoz"],
+    "Chicago":  ["Team JD", "Team Matty", "Team Adam"],
+}
+
 TO_GBP = {
     "GBP": 1.000, "USD": 0.789, "EUR": 0.838,
     "SGD": 0.591, "HKD": 0.101, "CAD": 0.575, "AUD": 0.491,
@@ -110,11 +116,7 @@ def build_report(
     }
 
     # Default team ordering per territory (team → sort key)
-    TEAM_ORDER = {
-        "Bristol":  ["Team Batt", "Team Charlie", "Team Sion", "Team Harry W"],
-        "London":   ["Team Data & Cyber", "Team Snoz"],
-        "Chicago":  ["Team JD", "Team Matty", "Team Adam"],
-    }
+    # (defined at module level as TEAM_ORDER)
 
     # Group consultants by territory
     from collections import defaultdict
