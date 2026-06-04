@@ -41,7 +41,7 @@ html, body {
   gap: 16px;
 }
 
-.logo { height: 32px; }
+.logo { height: 32px; display: block; }
 
 .header-right {
   display: flex;

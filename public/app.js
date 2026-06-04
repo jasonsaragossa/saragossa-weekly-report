@@ -24,9 +24,15 @@ const CONTRACT_TERRITORIES = new Set(["London Contract", "Chicago Contract"]);
   let data;
   try {
     const resp = await fetch("/api/report-data");
-    data = await resp.json();
+    const text = await resp.text();
+    try {
+      data = JSON.parse(text);
+    } catch (_) {
+      showError(`API returned non-JSON (HTTP ${resp.status}): ${text.slice(0, 200)}`);
+      return;
+    }
   } catch (e) {
-    showError("Could not reach the API. Please refresh.");
+    showError(`Could not reach the API: ${e.message}`);
     return;
   }
 
