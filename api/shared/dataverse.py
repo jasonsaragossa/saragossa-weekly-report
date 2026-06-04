@@ -183,16 +183,8 @@ def get_placements(start_date: str, end_date: str) -> list[dict]:
 # ── Override table (crbb7_useroverride) ───────────────────────────────────────
 
 def get_overrides() -> list[dict]:
-    return odata_get_all(
-        "crbb7_useroverrides",
-        params={
-            "$select": (
-                "crbb7_useroverrideid,crbb7_userid,crbb7_name,"
-                "crbb7_team,crbb7_ishidden,crbb7_territory,"
-                "crbb7_updatedby,crbb7_updatedon"
-            )
-        },
-    )
+    # No $select — fetch all columns so we can verify the exact schema names
+    return odata_get_all("crbb7_useroverrides")
 
 def upsert_override(data: dict, updated_by: str) -> dict:
     """
