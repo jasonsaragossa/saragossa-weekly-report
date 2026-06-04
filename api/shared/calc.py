@@ -130,7 +130,7 @@ def build_report(
         if ov.get("crbb7_ishidden"):
             continue  # hidden by admin
 
-        team = ov.get("crbb7_team") or _default_team(uid, territory)
+        team = ov.get("crbb7_team") or _default_team(c, territory)
         role = _clean_role(c.get("jobtitle") or "")
         ccy  = CCY.get(territory, "GBP")
 
@@ -184,51 +184,18 @@ def _territory_name(tid: str) -> str:
     return _TERRITORY_NAME_MAP.get(tid)
 
 
-# Default team assignments (used when Mercury team field is blank and no override set)
-_DEFAULT_TEAMS = {
-    # Bristol
-    "4935f278-3264-ee11-8def-6045bd0c1d6a": "Team Batt",
-    "5db0b87b-3264-ee11-8def-6045bd0c1c1b": "Team Batt",
-    "6cce3e73-3264-ee11-8def-002248c7244c": "Team Batt",
-    "1e36f278-3264-ee11-8def-6045bd0c1d6a": "Team Batt",
-    "18a4c869-3264-ee11-8def-6045bd0c1c1b": "Team Charlie",
-    "7a9c971e-decd-ef11-b8e8-6045bdfcb26b": "Team Charlie",
-    "ec50e9d9-6f24-f111-8342-7c1e5209a533": "Team Charlie",
-    "aeb0b87b-3264-ee11-8def-6045bd0c1c1b": "Team Sion",
-    "b66c43de-dcb9-ee11-9078-6045bd0c1c1b": "Team Sion",
-    "7b3a3779-3264-ee11-8def-002248c7244c": "Team Sion",
-    "4eebf101-72b5-f011-bbd2-7ced8d38bc76": "Team Sion",
-    "c16b951b-72b5-f011-bbd2-000d3a0b968e": "Team Sion",
-    "e8a2bb75-3264-ee11-8def-6045bd0c1c1b": "Team Harry W",
-    "fef8b081-3264-ee11-8def-6045bd0c1c1b": "Team Harry W",
-    "c61c64e7-331f-ef11-840a-7c1e5202d395": "Team Harry W",
-    "92e7c547-d03d-ef11-a316-7c1e5209b93e": "Team Harry W",
-    # London
-    "1b55466d-3264-ee11-8def-002248c7244c": "Team Data & Cyber",
-    "36b3f816-9313-ef11-9f89-6045bdfc783a": "Team Data & Cyber",
-    "aea2bb75-3264-ee11-8def-6045bd0c1c1b": "Team Snoz",
-    "aece3e73-3264-ee11-8def-002248c7244c": "Team Snoz",
-    "82459d8d-1866-ef11-a670-7c1e521e091e": "Team Snoz",
-    "daf84725-accd-ef11-b8e8-7c1e52030438": "Team Snoz",
-    "3d9b7f7a-9c46-f011-877a-7c1e5265898b": "Team Snoz",
-    # Chicago
-    "263b3779-3264-ee11-8def-002248c7244c": "Team JD",
-    "7f967670-5311-f011-998a-7c1e5265e7a2": "Team JD",
-    "4e91b476-36a8-f011-bbd2-002248422ca5": "Team JD",
-    "5b12d316-46af-f011-bbd2-002248422ca5": "Team JD",
-    "778a4e38-fe3e-f111-88b5-7c1e5209a533": "Team JD",
-    "94b0b87b-3264-ee11-8def-6045bd0c1c1b": "Team Matty",
-    "72e1ec7e-3264-ee11-8def-6045bd0c1d6a": "Team Matty",
-    "823dbaba-bb7c-ee11-8179-002248c7244c": "Team Matty",
-    "5dc0690b-365e-ef11-bfe3-6045bdd0de71": "Team Matty",
-    "172d900a-5211-f011-998a-7c1e5265898b": "Team Matty",
-    "b8f8b081-3264-ee11-8def-6045bd0c1c1b": "Team Adam",
-    "8f1dc6e3-b392-ef11-8a68-7c1e522e3320": "Team Adam",
-    "1bb9cdd5-7644-f111-bec7-7ced8d6b281b": "Team Adam",
-}
-
-def _default_team(uid: str, territory: str) -> str:
-    return _DEFAULT_TEAMS.get(uid, "")
+def _default_team(consultant: dict, territory: str) -> str:
+    """
+    Reads team directly from Mercury team memberships.
+    Picks the first team whose name matches a known report team for this territory.
+    """
+    known_teams = set(TEAM_ORDER.get(territory, []))
+    if not known_teams:
+        return ""
+    for t in consultant.get("teammembership_association", []):
+        if t.get("name") in known_teams:
+            return t["name"]
+    return ""
 
 
 _ROLE_STRIP = [

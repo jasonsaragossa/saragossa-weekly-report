@@ -84,7 +84,7 @@ FINANCE_TEAM_NAME = "Bristol Finance and Compliance"
 # ── User queries ─────────────────────────────────────────────────────────────
 
 def get_active_consultants() -> list[dict]:
-    """Returns all active users in the 6 territories."""
+    """Returns all active users in the 6 territories, with their team memberships."""
     territory_filter = " or ".join(
         f"_territoryid_value eq '{tid}'" for tid in TERRITORY_IDS.values()
     )
@@ -92,6 +92,7 @@ def get_active_consultants() -> list[dict]:
         "systemusers",
         params={
             "$select": "systemuserid,fullname,jobtitle,createdon,_territoryid_value",
+            "$expand": "teammembership_association($select=name,teamtype)",
             "$filter": f"isdisabled eq false and ({territory_filter})",
             "$orderby": "createdon asc",
         },
