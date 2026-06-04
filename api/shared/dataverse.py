@@ -53,13 +53,15 @@ def odata_post(path: str, body: dict) -> dict:
     headers = _headers()
     headers["Prefer"] = "return=representation"
     resp = requests.post(url, headers=headers, json=body)
-    resp.raise_for_status()
+    if not resp.ok:
+        raise RuntimeError(f"POST {path} {resp.status_code}: {resp.text[:1000]}")
     return resp.json() if resp.content else {}
 
 def odata_patch(path: str, body: dict) -> None:
     url = f"{DATAVERSE_URL}/api/data/v9.1/{path}"
     resp = requests.patch(url, headers=_headers(), json=body)
-    resp.raise_for_status()
+    if not resp.ok:
+        raise RuntimeError(f"PATCH {path} {resp.status_code}: {resp.text[:1000]}")
 
 def odata_delete(path: str) -> None:
     url = f"{DATAVERSE_URL}/api/data/v9.1/{path}"
