@@ -1,0 +1,227 @@
+"""
+Mercury Dataverse client.
+Uses MSAL client credentials (service principal) to authenticate.
+The Web API OData endpoint has no row cap - we paginate with $skiptoken.
+"""
+import os, requests, msal, logging
+from datetime import datetime, timezone
+from functools import lru_cache
+
+DATAVERSE_URL  = os.environ["DATAVERSE_URL"]          # e.g. https://saragossa.crm11.dynamics.com
+TENANT_ID      = os.environ["DATAVERSE_TENANT_ID"]
+CLIENT_ID      = os.environ["DATAVERSE_CLIENT_ID"]
+CLIENT_SECRET  = os.environ["DATAVERSE_CLIENT_SECRET"]
+SCOPE          = [f"{DATAVERSE_URL}/.default"]
+
+@lru_cache(maxsize=1)
+def _msal_app() -> msal.ConfidentialClientApplication:
+    return msal.ConfidentialClientApplication(
+        CLIENT_ID,
+        authority=f"https://login.microsoftonline.com/{TENANT_ID}",
+        client_credential=CLIENT_SECRET,
+    )
+
+def _get_token() -> str:
+    result = _msal_app().acquire_token_for_client(scopes=SCOPE)
+    if "access_token" not in result:
+        raise RuntimeError(f"MSAL token error: {result.get('error_description')}")
+    return result["access_token"]
+
+def _headers() -> dict:
+    return {
+        "Authorization": f"Bearer {_get_token()}",
+        "OData-MaxVersion": "4.0",
+        "OData-Version": "4.0",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Prefer": "odata.maxpagesize=1000",
+    }
+
+def odata_get_all(path: str, params: dict = None) -> list:
+    """Fetches all pages from an OData endpoint."""
+    url = f"{DATAVERSE_URL}/api/data/v9.1/{path}"
+    results = []
+    while url:
+        resp = requests.get(url, headers=_headers(), params=params if url.endswith(path) else None)
+        resp.raise_for_status()
+        data = resp.json()
+        results.extend(data.get("value", []))
+        url = data.get("@odata.nextLink")
+    return results
+
+def odata_post(path: str, body: dict) -> dict:
+    url = f"{DATAVERSE_URL}/api/data/v9.1/{path}"
+    resp = requests.post(url, headers=_headers(), json=body)
+    resp.raise_for_status()
+    return resp.json() if resp.content else {}
+
+def odata_patch(path: str, body: dict) -> None:
+    url = f"{DATAVERSE_URL}/api/data/v9.1/{path}"
+    resp = requests.patch(url, headers=_headers(), json=body)
+    resp.raise_for_status()
+
+def odata_delete(path: str) -> None:
+    url = f"{DATAVERSE_URL}/api/data/v9.1/{path}"
+    resp = requests.delete(url, headers=_headers())
+    resp.raise_for_status()
+
+
+# ── Territory IDs ────────────────────────────────────────────────────────────
+
+TERRITORY_IDS = {
+    "Bristol":          "b10329a2-cbbe-ee11-9079-6045bd0c1c1b",
+    "London":           "134b21a8-cbbe-ee11-9079-6045bd0c1c1b",
+    "Chicago":          "ca64adae-cbbe-ee11-9079-6045bd0c1c1b",
+    "New York":         "776699c0-5bae-f011-bbd2-000d3a0b968e",
+    "London Contract":  "e5a8ae46-ffc4-ee11-9079-6045bd0c1d6a",
+    "Chicago Contract": "34eed662-22b2-ef11-b8e8-6045bdfcb26b",
+}
+
+FINANCE_TEAM_NAME = "Bristol Finance and Compliance"
+
+
+# ── User queries ─────────────────────────────────────────────────────────────
+
+def get_active_consultants() -> list[dict]:
+    """Returns all active users in the 6 territories."""
+    territory_filter = " or ".join(
+        f"_territoryid_value eq '{tid}'" for tid in TERRITORY_IDS.values()
+    )
+    return odata_get_all(
+        "systemusers",
+        params={
+            "$select": "systemuserid,fullname,jobtitle,createdon,_territoryid_value",
+            "$filter": f"isdisabled eq false and ({territory_filter})",
+            "$orderby": "createdon asc",
+        },
+    )
+
+def get_territory_name(tid: str) -> str:
+    return next((k for k, v in TERRITORY_IDS.items() if v == tid), "Unknown")
+
+def is_admin(user_email: str) -> bool:
+    """
+    Admin = Director job title OR member of Bristol Finance and Compliance team.
+    """
+    # Check job title
+    users = odata_get_all(
+        "systemusers",
+        params={
+            "$select": "jobtitle",
+            "$filter": f"internalemailaddress eq '{user_email}' and isdisabled eq false",
+        },
+    )
+    if users and "director" in (users[0].get("jobtitle") or "").lower():
+        return True
+
+    # Check team membership
+    teams = odata_get_all(
+        "teams",
+        params={
+            "$select": "teamid",
+            "$filter": f"name eq '{FINANCE_TEAM_NAME}'",
+        },
+    )
+    if not teams:
+        return False
+    team_id = teams[0]["teamid"]
+
+    # Check if this user is in that team
+    user_lookup = odata_get_all(
+        "systemusers",
+        params={
+            "$select": "systemuserid",
+            "$filter": f"internalemailaddress eq '{user_email}' and isdisabled eq false",
+        },
+    )
+    if not user_lookup:
+        return False
+    user_id = user_lookup[0]["systemuserid"]
+
+    members = odata_get_all(
+        f"teams({team_id})/teammembership_association",
+        params={"$select": "systemuserid", "$filter": f"systemuserid eq '{user_id}'"},
+    )
+    return len(members) > 0
+
+
+# ── Placement queries ─────────────────────────────────────────────────────────
+
+PERM_TYPE   = 143570000
+CANCEL_CODES = [2, 4, 100001, 100002, 100003]  # adjust to your actual cancellation statecodes
+
+def get_placements(start_date: str, end_date: str) -> list[dict]:
+    """
+    Fetches all active perm placements where crimson_startdate is in range.
+    No row cap — paginated automatically.
+    """
+    cancel_filter = " and ".join(f"statuscode ne {c}" for c in CANCEL_CODES)
+    return odata_get_all(
+        "crimson_placements",
+        params={
+            "$select": (
+                "crimson_placementid,recruit_truegrossprofit,"
+                "crimson_startdate,crimson_specialinstructionsclient,"
+                "_recruit_truegrossprofitcurrency_value,"
+                "_mercury_clientrelationshipowner_value,"
+                "_crimson_consultant_value,"
+                "_mercury_assignmentowner_value,"
+                "_mercury_contractorrelationship_userid_value"
+            ),
+            "$filter": (
+                f"crimson_type eq {PERM_TYPE}"
+                f" and statecode eq 0"
+                f" and crimson_startdate ge {start_date}"
+                f" and crimson_startdate le {end_date}"
+                f" and {cancel_filter}"
+            ),
+            "$expand": "recruit_truegrossprofitcurrency($select=isocurrencycode)",
+        },
+    )
+
+
+# ── Override table (crbb7_useroverride) ───────────────────────────────────────
+
+def get_overrides() -> list[dict]:
+    return odata_get_all(
+        "crbb7_useroverrides",
+        params={
+            "$select": (
+                "crbb7_useroverrideid,crbb7_userid,crbb7_name,"
+                "crbb7_team,crbb7_ishidden,crbb7_territory,"
+                "crbb7_updatedby,crbb7_updatedon"
+            )
+        },
+    )
+
+def upsert_override(data: dict, updated_by: str) -> dict:
+    """
+    data: { userid, name, territory, team, is_hidden }
+    Checks for existing override by userid; patches if found, posts if not.
+    """
+    existing = odata_get_all(
+        "crbb7_useroverrides",
+        params={
+            "$select": "crbb7_useroverrideid",
+            "$filter": f"crbb7_userid eq '{data['userid']}'",
+        },
+    )
+    body = {
+        "crbb7_name":      data.get("name", ""),
+        "crbb7_userid":    data["userid"],
+        "crbb7_territory": data.get("territory", ""),
+        "crbb7_team":      data.get("team", ""),
+        "crbb7_ishidden":  data.get("is_hidden", False),
+        "crbb7_updatedby": updated_by,
+        "crbb7_updatedon": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    if existing:
+        rid = existing[0]["crbb7_useroverrideid"]
+        odata_patch(f"crbb7_useroverrides({rid})", body)
+        return {"id": rid, **body}
+    else:
+        result = odata_post("crbb7_useroverrides", body)
+        return result
+
+def delete_override(override_id: str) -> None:
+    odata_delete(f"crbb7_useroverrides({override_id})")

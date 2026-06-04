@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Report Settings — Saragossa</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header class="header">
+  <a href="/"><img src="/logo.png" alt="Saragossa" class="logo"></a>
+  <div class="header-right">
+    <span class="week-label">Report Settings</span>
+    <a href="/.auth/logout" class="logout-link">Sign out</a>
+  </div>
+</header>
+
+<div class="settings-container">
+  <div class="settings-header">
+    <h1>User Overrides</h1>
+    <p class="settings-desc">
+      Override team assignments or hide users from the report.
+      Changes take effect on the next report load.
+      Users appear automatically when added to Mercury; leavers disappear when disabled.
+    </p>
+  </div>
+
+  <div id="settings-content">
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading…</p>
+    </div>
+  </div>
+</div>
+
+<div class="footer">Saragossa · Admin Settings</div>
+
+<script src="/settings.js"></script>
+</body>
+</html>

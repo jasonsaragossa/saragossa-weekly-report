@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Saragossa Weekly Report</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header class="header">
+  <img src="/logo.png" alt="Saragossa" class="logo">
+  <div class="header-right">
+    <span class="data-note" id="data-note">Loading…</span>
+    <span class="week-label">Week ending</span>
+    <span id="report-date" class="report-date"></span>
+    <div class="header-actions" id="admin-link" style="display:none">
+      <a href="/settings" class="settings-link">⚙ Settings</a>
+    </div>
+    <a href="/.auth/logout" class="logout-link">Sign out</a>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs"></nav>
+
+<div class="panels" id="panels">
+  <div class="loading-state">
+    <div class="spinner"></div>
+    <p>Loading report data…</p>
+  </div>
+</div>
+
+<div class="footer" id="footer"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>
