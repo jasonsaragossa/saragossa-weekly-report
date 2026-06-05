@@ -77,7 +77,7 @@ def settings_get(req: func.HttpRequest) -> func.HttpResponse:
             {
                 "uid":       c["systemuserid"],
                 "name":      c.get("fullname", ""),
-                "role":      c.get("jobtitle", ""),
+                "role":      c.get("title", ""),
                 "territory": tid_to_name.get(c.get("_territoryid_value"), "Unknown"),
                 "createdon": c.get("createdon", ""),
             }

@@ -137,7 +137,7 @@ def build_report(
             continue  # hidden by admin
 
         team = ov.get("crbb7_team") or _default_team(uid, territory, team_map or {})
-        role = _clean_role(c.get("jobtitle") or "")
+        role = _clean_role(c.get("title") or "")
         ccy  = CCY.get(territory, "GBP")
 
         metrics = compute_metrics(uid, placements, ccy, today)

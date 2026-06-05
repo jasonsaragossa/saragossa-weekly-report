@@ -93,7 +93,7 @@ def get_active_consultants() -> list[dict]:
     return odata_get_all(
         "systemusers",
         params={
-            "$select": "systemuserid,fullname,jobtitle,createdon,_territoryid_value",
+            "$select": "systemuserid,fullname,title,createdon,_territoryid_value",
             "$filter": f"isdisabled eq false and ({territory_filter})",
             "$orderby": "createdon asc",
         },
