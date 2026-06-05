@@ -24,6 +24,10 @@ const CONTRACT_TERRITORIES = new Set(["London Contract", "Chicago Contract"]);
   let data;
   try {
     const resp = await fetch("/api/report-data");
+    if (resp.status === 401) {
+      window.location.href = "/.auth/login/aad?post_login_redirect_uri=" + encodeURIComponent(window.location.pathname);
+      return;
+    }
     const text = await resp.text();
     try {
       data = JSON.parse(text);

@@ -24,6 +24,10 @@ let overrideMap = {}; // uid → override record
   let data;
   try {
     const resp = await fetch("/api/settings");
+    if (resp.status === 401) {
+      window.location.href = "/.auth/login/aad?post_login_redirect_uri=" + encodeURIComponent(window.location.pathname);
+      return;
+    }
     if (resp.status === 403) {
       document.getElementById("settings-content").innerHTML =
         `<div class="error-state"><p>⚠ Admin access required.</p></div>`;
