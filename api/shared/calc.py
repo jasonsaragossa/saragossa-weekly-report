@@ -6,6 +6,29 @@ from datetime import date, datetime
 
 # HMRC 2025 annual average FX rates (unitsPerGbp → used as multiplier from foreign to GBP)
 # Source: https://www.gov.uk/government/collections/exchange-rates-for-customs-and-vat
+def _build_fx_tables(rates_units_per_gbp: dict) -> tuple:
+    """
+    Convert {iso_code: unitsPerGbp} from Dataverse into TO_GBP and TO_USD dicts.
+    unitsPerGbp: how many units of foreign currency = 1 GBP (HMRC format).
+    Falls back to hardcoded values for any currency not in the live table.
+    """
+    usd_per_gbp = rates_units_per_gbp.get("USD") or TO_USD.get("GBP", 1.267)
+    to_gbp = {"GBP": 1.0}
+    to_usd = {"GBP": usd_per_gbp, "USD": 1.0}
+    for ccy, units in rates_units_per_gbp.items():
+        if not units or ccy == "GBP":
+            continue
+        to_gbp[ccy] = 1.0 / units
+        to_usd[ccy] = units / usd_per_gbp
+    # Fill gaps with hardcoded fallback
+    for ccy in TO_GBP:
+        if ccy not in to_gbp:
+            to_gbp[ccy] = TO_GBP[ccy]
+        if ccy not in to_usd:
+            to_usd[ccy] = TO_USD[ccy]
+    return to_gbp, to_usd
+
+
 TEAM_ORDER = {
     "Bristol":  ["Team Batt", "Team Charlie", "Team Sion", "Team Harry W"],
     "London":   ["Team Data & Cyber", "Team Snoz"],
@@ -40,7 +63,7 @@ def split_factor(placement: dict, uid: str) -> float:
     return count / denom if count > 0 else 0.0
 
 
-def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: date) -> dict:
+def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: date, to_gbp: dict = None, to_usd: dict = None) -> dict:
     """
     Returns YTD, Written, Year Prediction, and Rolling 12M for a single user.
     """
@@ -52,7 +75,7 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
     # ISO week number for year prediction
     week_no = today.isocalendar()[1]
 
-    fx = TO_GBP if display_ccy == "GBP" else TO_USD
+    fx = (to_gbp or TO_GBP) if display_ccy == "GBP" else (to_usd or TO_USD)
 
     ytd = written = roll12_base = roll12_uplift = 0.0
 
@@ -89,9 +112,9 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
     }
 
 
-def compute_wnf(uid: str, live_contracts: list, display_ccy: str) -> float:
+def compute_wnf(uid: str, live_contracts: list, display_ccy: str, to_gbp: dict = None, to_usd: dict = None) -> float:
     """Returns the user's share of WNF across all live contract placements."""
-    fx = TO_GBP if display_ccy == "GBP" else TO_USD
+    fx = (to_gbp or TO_GBP) if display_ccy == "GBP" else (to_usd or TO_USD)
     total = 0.0
     for p in live_contracts:
         factor = split_factor(p, uid)
@@ -110,6 +133,7 @@ def build_report(
     today: date,
     team_map: dict = None,
     live_contracts: list = None,
+    fx_rates: dict = None,
 ) -> dict:
     """
     Assembles the full report structure.
@@ -122,6 +146,7 @@ def build_report(
     Returns a dict keyed by territory name, each value a list of team groups.
     """
     live_contracts = live_contracts or []
+    to_gbp, to_usd = _build_fx_tables(fx_rates) if fx_rates else (TO_GBP, TO_USD)
 
     # Build override lookup by userid
     override_map = {o["crbb7_userid"]: o for o in overrides}
@@ -157,8 +182,8 @@ def build_report(
         role = _clean_role(c.get("title") or "")
         ccy  = CCY.get(territory, "GBP")
 
-        metrics = compute_metrics(uid, placements, ccy, today)
-        wnf     = compute_wnf(uid, live_contracts, ccy)
+        metrics = compute_metrics(uid, placements, ccy, today, to_gbp, to_usd)
+        wnf     = compute_wnf(uid, live_contracts, ccy, to_gbp, to_usd)
 
         by_territory[territory].append({
             "uid":              uid,

@@ -15,7 +15,7 @@ import azure.functions as func
 from shared.auth import require_auth, require_admin
 from shared.dataverse import (
     get_active_consultants, get_placements, get_overrides,
-    get_team_membership_map, get_live_contract_placements,
+    get_team_membership_map, get_live_contract_placements, get_fx_rates,
     upsert_override, delete_override, TERRITORY_IDS,
 )
 from shared.calc import build_report
@@ -43,8 +43,13 @@ def report_data(req: func.HttpRequest) -> func.HttpResponse:
         overrides       = get_overrides()
         team_map        = get_team_membership_map()
         live_contracts  = get_live_contract_placements(today.isoformat())
+        try:
+            fx_rates = get_fx_rates()
+        except Exception:
+            logging.warning("Could not fetch live FX rates — using hardcoded fallback")
+            fx_rates = None
 
-        report = build_report(consultants, placements, overrides, today, team_map, live_contracts)
+        report = build_report(consultants, placements, overrides, today, team_map, live_contracts, fx_rates)
 
         return func.HttpResponse(
             json.dumps({"ok": True, "report": report, "as_of": today.isoformat()}),

@@ -215,6 +215,30 @@ def get_placements(start_date: str, end_date: str) -> list[dict]:
     )
 
 
+# ── FX rates ─────────────────────────────────────────────────────────────────
+
+def get_fx_rates() -> dict:
+    """
+    Returns {iso_code: unitsPerGbp} using the most recent rate per currency
+    from the existing crbb7_fxrate table.
+    crbb7_name format is 'USD 2026-01' — currency is the first token.
+    """
+    records = odata_get_all(
+        "crbb7_fxrates",
+        params={
+            "$select": "crbb7_name,crbb7_rate",
+            "$orderby": "crbb7_month desc",
+        },
+    )
+    rates = {}
+    for r in records:
+        name = r.get("crbb7_name") or ""
+        ccy = name.split()[0] if name else None
+        if ccy and ccy not in rates and r.get("crbb7_rate"):
+            rates[ccy] = float(r["crbb7_rate"])
+    return rates
+
+
 # ── Live contract placements ──────────────────────────────────────────────────
 
 def get_live_contract_placements(today_str: str) -> list[dict]:
