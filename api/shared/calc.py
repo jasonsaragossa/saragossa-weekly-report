@@ -193,7 +193,7 @@ def build_report(
             "createdon":        c.get("createdon", ""),
             "sym":              "£" if ccy == "GBP" else "$",
             "wnf":              wnf,
-            "margin_ytd":       ov.get("crbb7_marginydt"),
+            "margin_ytd":       ov.get("crbb7_marginytd"),
             "contract_last12m": ov.get("crbb7_contractlast12m"),
             "rolling_3m":       ov.get("crbb7_rolling3m"),
             **metrics,

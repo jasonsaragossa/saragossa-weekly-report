@@ -300,7 +300,7 @@ def upsert_override(data: dict, updated_by: str) -> dict:
     }
     # Contract manual fields — only included once the Dataverse columns exist
     for api_key, dv_key in [
-        ("margin_ytd",       "crbb7_marginydt"),
+        ("margin_ytd",       "crbb7_marginytd"),
         ("contract_last12m", "crbb7_contractlast12m"),
         ("rolling_3m",       "crbb7_rolling3m"),
     ]:
