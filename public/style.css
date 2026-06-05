@@ -359,3 +359,16 @@ tr.team-header:first-child td { border-top: none; }
   color: var(--mid);
 }
 .clear-btn:hover { color: var(--red); border-color: var(--red); }
+
+.contract-input {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--light);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-family: var(--mono);
+  width: 90px;
+  text-align: right;
+}
+.contract-input:focus { outline: none; box-shadow: 0 0 0 1px var(--accent); }

@@ -169,41 +169,31 @@ function buildContractTable(tdata) {
   const headers = `<thead><tr>
     <th>Consultant</th>
     <th>Role</th>
-    <th class="num">Total Contract Margin YTD</th>
-    <th class="num">Year Billing (WNF×52)</th>
+    <th class="num">Total Margin YTD</th>
     <th class="num">Perm Last 12M</th>
     <th class="num">Contract Last 12M</th>
-    <th class="num">Rolling 3M Contract</th>
+    <th class="num">Rolling 3M</th>
     <th class="num">Current WNF</th>
+    <th class="num">Year Billing</th>
   </tr></thead>`;
-  const body = members.map(m => `<tr>
-    <td>${esc(m.name)}</td>
-    <td class="role-cell">${esc(m.role)}</td>
-    <td class="num manual-cell" contenteditable="true" data-field="margin_ytd">—</td>
-    <td class="num year-billing-cell">—</td>
-    <td class="num manual-cell" contenteditable="true" data-field="perm_12">—</td>
-    <td class="num manual-cell" contenteditable="true" data-field="contract_12">—</td>
-    <td class="num manual-cell" contenteditable="true" data-field="rolling_3m">—</td>
-    <td class="num wnf-cell" contenteditable="true" data-sym="${m.sym}" data-field="wnf">—</td>
-  </tr>`).join("");
 
-  const wrap = tableWrap(`<table class="contract-table">${headers}<tbody>${body}</tbody></table>`);
+  const body = members.map(m => {
+    const yearBilling = m.wnf > 0
+      ? m.sym + Math.round(m.wnf * 52).toLocaleString("en-GB")
+      : "—";
+    return `<tr>
+      <td>${esc(m.name)}</td>
+      <td class="role-cell">${esc(m.role)}</td>
+      <td class="num">${m.margin_ytd       != null ? fmt(m.margin_ytd,       m.sym) : "—"}</td>
+      <td class="num">${fmt(m.roll12_total, m.sym)}</td>
+      <td class="num">${m.contract_last12m != null ? fmt(m.contract_last12m, m.sym) : "—"}</td>
+      <td class="num">${m.rolling_3m       != null ? fmt(m.rolling_3m,       m.sym) : "—"}</td>
+      <td class="num">${fmt(m.wnf, m.sym)}</td>
+      <td class="num year-billing-cell">${yearBilling}</td>
+    </tr>`;
+  }).join("");
 
-  // Wire up WNF → Year Billing
-  wrap.querySelectorAll(".contract-table tbody tr").forEach(row => {
-    const wnf = row.querySelector(".wnf-cell");
-    const yb  = row.querySelector(".year-billing-cell");
-    if (!wnf || !yb) return;
-    const sym = wnf.dataset.sym || "£";
-    wnf.addEventListener("input", () => {
-      const v = parseFloat(wnf.textContent.replace(/[^0-9.]/g, ""));
-      yb.textContent = !isNaN(v) && v > 0
-        ? sym + (v * 52).toLocaleString("en-GB", { maximumFractionDigits: 0 })
-        : "—";
-    });
-  });
-
-  return wrap;
+  return tableWrap(`<table class="contract-table">${headers}<tbody>${body}</tbody></table>`);
 }
 
 

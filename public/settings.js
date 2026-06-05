@@ -8,6 +8,8 @@ const TERRITORY_ORDER = [
   "London Contract", "Chicago Contract",
 ];
 
+const CONTRACT_TERRITORIES = new Set(["London Contract", "Chicago Contract"]);
+
 const TEAMS_BY_TERRITORY = {
   "Bristol":          ["Team Batt", "Team Charlie", "Team Sion", "Team Harry W"],
   "London":           ["Team Data & Cyber", "Team Snoz"],
@@ -66,6 +68,7 @@ function renderSettings() {
     section.className = "settings-section";
     section.innerHTML = `<h2 class="settings-territory">${territory}</h2>`;
 
+    const isContract = CONTRACT_TERRITORIES.has(territory);
     const table = document.createElement("table");
     table.className = "settings-table";
     table.innerHTML = `<thead><tr>
@@ -73,6 +76,7 @@ function renderSettings() {
       <th>Role (Mercury)</th>
       <th>Team</th>
       <th>Hidden</th>
+      ${isContract ? "<th>Total Margin YTD</th><th>Contract Last 12M</th><th>Rolling 3M</th>" : ""}
       <th></th>
     </tr></thead>`;
 
@@ -89,6 +93,7 @@ function buildUserRow(u, territory) {
   const isHidden = ov.crbb7_ishidden || false;
   const currentTeam = ov.crbb7_team || "";
   const teams = TEAMS_BY_TERRITORY[territory] || [];
+  const isContract = CONTRACT_TERRITORIES.has(territory);
 
   const tr = document.createElement("tr");
   if (isHidden) tr.classList.add("hidden-user");
@@ -96,6 +101,18 @@ function buildUserRow(u, territory) {
   const teamOptions = ["", ...teams]
     .map(t => `<option value="${esc(t)}" ${t === currentTeam ? "selected" : ""}>${t || "— Mercury default —"}</option>`)
     .join("");
+
+  const contractFields = isContract ? `
+    <td><input type="number" class="contract-input" data-field="margin_ytd"
+         placeholder="0" step="1"
+         value="${ov.crbb7_marginydt != null ? ov.crbb7_marginydt : ""}"></td>
+    <td><input type="number" class="contract-input" data-field="contract_last12m"
+         placeholder="0" step="1"
+         value="${ov.crbb7_contractlast12m != null ? ov.crbb7_contractlast12m : ""}"></td>
+    <td><input type="number" class="contract-input" data-field="rolling_3m"
+         placeholder="0" step="1"
+         value="${ov.crbb7_rolling3m != null ? ov.crbb7_rolling3m : ""}"></td>
+  ` : "";
 
   tr.innerHTML = `
     <td>${esc(u.name)}</td>
@@ -111,6 +128,7 @@ function buildUserRow(u, territory) {
         <span class="toggle-label">Hide</span>
       </label>
     </td>
+    ${contractFields}
     <td>
       <button class="save-btn" data-uid="${esc(u.uid)}"
               data-name="${esc(u.name)}"
@@ -129,7 +147,12 @@ function buildUserRow(u, territory) {
     const uid = btn.dataset.uid;
     const team = tr.querySelector(".team-select").value;
     const hidden = tr.querySelector(".hidden-toggle").checked;
-    await saveOverride(uid, btn.dataset.name, btn.dataset.territory, team, hidden, tr);
+    const contractData = {};
+    tr.querySelectorAll(".contract-input").forEach(inp => {
+      const v = inp.value.trim();
+      contractData[inp.dataset.field] = v !== "" ? parseFloat(v) : null;
+    });
+    await saveOverride(uid, btn.dataset.name, btn.dataset.territory, team, hidden, contractData, tr);
   });
 
   // Clear override
@@ -144,7 +167,7 @@ function buildUserRow(u, territory) {
   return tr;
 }
 
-async function saveOverride(uid, name, territory, team, isHidden, tr) {
+async function saveOverride(uid, name, territory, team, isHidden, contractData, tr) {
   const btn = tr.querySelector(".save-btn");
   btn.textContent = "Saving…";
   btn.disabled = true;
@@ -153,7 +176,7 @@ async function saveOverride(uid, name, territory, team, isHidden, tr) {
     const resp = await fetch("/api/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userid: uid, name, territory, team, is_hidden: isHidden }),
+      body: JSON.stringify({ userid: uid, name, territory, team, is_hidden: isHidden, ...contractData }),
     });
     const data = await resp.json();
     if (data.ok) {

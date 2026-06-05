@@ -180,7 +180,9 @@ def is_admin(user_email: str) -> bool:
 
 # ── Placement queries ─────────────────────────────────────────────────────────
 
-PERM_TYPE   = 143570000
+PERM_TYPE              = 143570000
+CONTRACT_TYPES         = [143570001, 143570002]   # Contract, Temporary
+CANCELLED_DIDNOTSTART  = 143570009
 CANCEL_CODES = [2, 4, 100001, 100002, 100003]  # adjust to your actual cancellation statecodes
 
 def get_placements(start_date: str, end_date: str) -> list[dict]:
@@ -213,6 +215,41 @@ def get_placements(start_date: str, end_date: str) -> list[dict]:
     )
 
 
+# ── Live contract placements ──────────────────────────────────────────────────
+
+def get_live_contract_placements(today_str: str) -> list[dict]:
+    """
+    Returns all live contract/temp placements as of today_str.
+    Live = startdate <= today AND effective_enddate >= today
+    Effective end = min(crimson_actualenddate, crimson_enddate).
+    Excludes cancelled-did-not-start (statuscode 143570009).
+    """
+    type_filter = " or ".join(f"crimson_type eq {t}" for t in CONTRACT_TYPES)
+    return odata_get_all(
+        "crimson_placements",
+        params={
+            "$select": (
+                "crimson_placementid,"
+                "crimson_startdate,crimson_enddate,crimson_actualenddate,"
+                "statuscode,recruit_trueweeklygrossprofit,"
+                "_mercury_clientrelationshipowner_value,"
+                "_crimson_consultant_value,"
+                "_mercury_assignmentowner_value,"
+                "_mercury_contractorrelationship_userid_value"
+            ),
+            "$expand": "recruit_trueweeklygrossprofitcurrency($select=isocurrencycode)",
+            "$filter": (
+                f"({type_filter})"
+                f" and statecode eq 0"
+                f" and statuscode ne {CANCELLED_DIDNOTSTART}"
+                f" and crimson_startdate le {today_str}"
+                f" and crimson_enddate ge {today_str}"
+                f" and (crimson_actualenddate eq null or crimson_actualenddate ge {today_str})"
+            ),
+        },
+    )
+
+
 # ── Override table (crbb7_useroverride) ───────────────────────────────────────
 
 def get_overrides() -> list[dict]:
@@ -237,6 +274,14 @@ def upsert_override(data: dict, updated_by: str) -> dict:
         "crbb7_team":     data.get("team", ""),
         "crbb7_ishidden": data.get("is_hidden", False),
     }
+    # Contract manual fields — only included once the Dataverse columns exist
+    for api_key, dv_key in [
+        ("margin_ytd",       "crbb7_marginydt"),
+        ("contract_last12m", "crbb7_contractlast12m"),
+        ("rolling_3m",       "crbb7_rolling3m"),
+    ]:
+        if api_key in data and data[api_key] is not None:
+            body[dv_key] = data[api_key]
     if existing:
         rid = existing[0]["crbb7_useroverrideid"]
         odata_patch(f"crbb7_useroverrides({rid})", body)

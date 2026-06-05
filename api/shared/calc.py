@@ -89,12 +89,27 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
     }
 
 
+def compute_wnf(uid: str, live_contracts: list, display_ccy: str) -> float:
+    """Returns the user's share of WNF across all live contract placements."""
+    fx = TO_GBP if display_ccy == "GBP" else TO_USD
+    total = 0.0
+    for p in live_contracts:
+        factor = split_factor(p, uid)
+        if factor == 0:
+            continue
+        wnf = p.get("recruit_trueweeklygrossprofit") or 0.0
+        ccy = (p.get("recruit_trueweeklygrossprofitcurrency") or {}).get("isocurrencycode")
+        total += wnf * factor * fx.get(ccy, 1.0)
+    return round(total, 2)
+
+
 def build_report(
     consultants: list[dict],
     placements: list[dict],
     overrides: list[dict],
     today: date,
     team_map: dict = None,
+    live_contracts: list = None,
 ) -> dict:
     """
     Assembles the full report structure.
@@ -106,6 +121,8 @@ def build_report(
 
     Returns a dict keyed by territory name, each value a list of team groups.
     """
+    live_contracts = live_contracts or []
+
     # Build override lookup by userid
     override_map = {o["crbb7_userid"]: o for o in overrides}
 
@@ -141,14 +158,19 @@ def build_report(
         ccy  = CCY.get(territory, "GBP")
 
         metrics = compute_metrics(uid, placements, ccy, today)
+        wnf     = compute_wnf(uid, live_contracts, ccy)
 
         by_territory[territory].append({
-            "uid":      uid,
-            "name":     c.get("fullname", ""),
-            "role":     role,
-            "team":     team,
-            "createdon": c.get("createdon", ""),
-            "sym":      "£" if ccy == "GBP" else "$",
+            "uid":              uid,
+            "name":             c.get("fullname", ""),
+            "role":             role,
+            "team":             team,
+            "createdon":        c.get("createdon", ""),
+            "sym":              "£" if ccy == "GBP" else "$",
+            "wnf":              wnf,
+            "margin_ytd":       ov.get("crbb7_marginydt"),
+            "contract_last12m": ov.get("crbb7_contractlast12m"),
+            "rolling_3m":       ov.get("crbb7_rolling3m"),
             **metrics,
         })
 
