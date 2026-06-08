@@ -97,12 +97,14 @@ function buildSummarySection() {
   table.innerHTML = `<thead><tr>
     <th>Territory</th>
     <th class="num">Written YTD</th>
+    <th class="num">Last Year YTD</th>
+    <th class="num">YTD YoY</th>
     <th class="num">YTD Budget</th>
     <th class="num">vs Budget</th>
     <th class="num">Full Year Written</th>
+    <th class="num">Last Year Full</th>
+    <th class="num">Full Year YoY</th>
     <th class="num">Annual Budget</th>
-    <th class="num">Last Year</th>
-    <th class="num">YoY</th>
     <th>Set Budget</th>
   </tr></thead>`;
 
@@ -115,32 +117,40 @@ function buildSummarySection() {
 
     const sym          = tdata.sym;
     const months       = tdata.territory_months;
+    const lastMonths   = tdata.territory_last_year_months || {};
     const annualBudget = (tdata.budget && tdata.budget.amount) || 0;
 
-    // YTD = months 1..currentMonth
-    let ytd = 0;
-    for (let m = 1; m <= currentMonth; m++) ytd += months[String(m)] || 0;
+    // YTD = months 1..currentMonth for this year and last year
+    let ytd = 0, lastYtd = 0;
+    for (let m = 1; m <= currentMonth; m++) {
+      ytd     += months[String(m)]     || 0;
+      lastYtd += lastMonths[String(m)] || 0;
+    }
 
-    const fullYear  = tdata.territory_total;
-    const lastYear  = tdata.territory_last_year;
-    const ytdBudget = annualBudget > 0 ? annualBudget * (currentMonth / 12) : 0;
-    const vsBudget  = ytdBudget > 0 ? ytd - ytdBudget : null;
-    const yoyPct    = lastYear > 0 ? (fullYear - lastYear) / lastYear * 100 : null;
+    const fullYear     = tdata.territory_total;
+    const lastYear     = tdata.territory_last_year;
+    const ytdBudget    = annualBudget > 0 ? annualBudget * (currentMonth / 12) : 0;
+    const vsBudget     = ytdBudget > 0 ? ytd - ytdBudget : null;
+    const ytdYoyPct    = lastYtd   > 0 ? (ytd      - lastYtd)  / lastYtd  * 100 : null;
+    const fullYoyPct   = lastYear  > 0 ? (fullYear  - lastYear) / lastYear * 100 : null;
 
-    const vsCls  = vsBudget  !== null ? (vsBudget  >= 0 ? " pos" : " neg") : "";
-    const yoyCls = yoyPct    !== null ? (yoyPct    >= 0 ? " pos" : " neg") : "";
+    const vsCls        = vsBudget    !== null ? (vsBudget    >= 0 ? " pos" : " neg") : "";
+    const ytdYoyCls    = ytdYoyPct   !== null ? (ytdYoyPct   >= 0 ? " pos" : " neg") : "";
+    const fullYoyCls   = fullYoyPct  !== null ? (fullYoyPct  >= 0 ? " pos" : " neg") : "";
 
     const tr = document.createElement("tr");
     tr.dataset.territory = territory;
     tr.innerHTML = `
       <td><strong>${esc(territory)}</strong></td>
       <td class="num">${fmt(ytd, sym)}</td>
+      <td class="num dim">${lastYtd > 0 ? fmt(lastYtd, sym) : "—"}</td>
+      <td class="num${ytdYoyCls}">${ytdYoyPct !== null ? fmtPct(ytdYoyPct) : "—"}</td>
       <td class="num">${ytdBudget > 0 ? fmt(ytdBudget, sym) : "—"}</td>
       <td class="num${vsCls}">${vsBudget !== null ? fmtDelta(vsBudget, sym) : "—"}</td>
       <td class="num">${fmt(fullYear, sym)}</td>
-      <td class="num">${annualBudget > 0 ? fmt(annualBudget, sym) : "—"}</td>
       <td class="num dim">${lastYear > 0 ? fmt(lastYear, sym) : "—"}</td>
-      <td class="num${yoyCls}">${yoyPct !== null ? fmtPct(yoyPct) : "—"}</td>
+      <td class="num${fullYoyCls}">${fullYoyPct !== null ? fmtPct(fullYoyPct) : "—"}</td>
+      <td class="num">${annualBudget > 0 ? fmt(annualBudget, sym) : "—"}</td>
       <td class="budget-edit-cell">
         <input type="number" class="contract-input budget-input"
                placeholder="Annual target"

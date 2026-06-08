@@ -207,15 +207,16 @@ def build_admin_report(
         total_last  = sum(months_last.values())
 
         by_territory[territory].append({
-            "uid":             uid,
-            "name":            c.get("fullname", ""),
-            "role":            role,
-            "team":            team,
-            "createdon":       c.get("createdon", ""),
-            "sym":             "£" if ccy == "GBP" else "$",
-            "months":          months_this,
-            "total":           round(total_this, 2),
-            "last_year_total": round(total_last, 2),
+            "uid":               uid,
+            "name":              c.get("fullname", ""),
+            "role":              role,
+            "team":              team,
+            "createdon":         c.get("createdon", ""),
+            "sym":               "£" if ccy == "GBP" else "$",
+            "months":            months_this,
+            "last_year_months":  months_last,
+            "total":             round(total_this, 2),
+            "last_year_total":   round(total_last, 2),
         })
 
     report = {}
@@ -224,12 +225,15 @@ def build_admin_report(
         ccy   = CCY.get(territory, "GBP")
         sym   = "£" if ccy == "GBP" else "$"
 
-        # Territory-level monthly totals
-        t_months = {str(m): 0.0 for m in range(1, 13)}
-        t_last   = 0.0
+        # Territory-level monthly totals (this year and last year)
+        t_months      = {str(m): 0.0 for m in range(1, 13)}
+        t_last_months = {str(m): 0.0 for m in range(1, 13)}
+        t_last        = 0.0
         for member in members:
             for m_str, v in member["months"].items():
                 t_months[m_str] = round(t_months[m_str] + v, 2)
+            for m_str, v in member.get("last_year_months", {}).items():
+                t_last_months[m_str] = round(t_last_months[m_str] + v, 2)
             t_last += member.get("last_year_total", 0)
         t_total = sum(t_months.values())
 
@@ -251,11 +255,12 @@ def build_admin_report(
             result = {"type": "flat", "members": members}
 
         result.update({
-            "sym":               sym,
-            "territory_months":  t_months,
-            "territory_total":   round(t_total, 2),
-            "territory_last_year": round(t_last, 2),
-            "budget":            budget_map.get(territory, {"amount": 0, "id": None}),
+            "sym":                      sym,
+            "territory_months":         t_months,
+            "territory_last_year_months": t_last_months,
+            "territory_total":          round(t_total, 2),
+            "territory_last_year":      round(t_last, 2),
+            "budget":                   budget_map.get(territory, {"amount": 0, "id": None}),
         })
         report[territory] = result
 
