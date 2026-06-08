@@ -6,7 +6,7 @@
 
 const TERRITORY_ORDER = [
   "Bristol", "London", "Chicago", "New York",
-  "London Contract", "Chicago Contract",
+  "London Contract", "Chicago Contract", "Cameron Scott",
 ];
 
 const MONTH_ABBR = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];

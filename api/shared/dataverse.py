@@ -78,6 +78,8 @@ TERRITORY_IDS = {
     "New York":         "776699c0-5bae-f011-bbd2-000d3a0b968e",
     "London Contract":  "e5a8ae46-ffc4-ee11-9079-6045bd0c1d6a",
     "Chicago Contract": "34eed662-22b2-ef11-b8e8-6045bdfcb26b",
+    # Synthetic territory — no Dataverse territory record; UID used as unique key
+    "Cameron Scott":    "b835f278-3264-ee11-8def-6045bd0c1d6a",
 }
 
 FINANCE_TEAM_NAME = "Bristol Finance and Compliance"
@@ -99,11 +101,11 @@ def get_active_consultants() -> list[dict]:
         },
     )
 
-# "Saragossa House" accounts that have no territory assigned in Mercury.
-# We inject them into the Bristol territory so their placements appear in analytics.
-# Key = systemuserid, value = territory name to assign.
+# Users with no territory in Mercury that we inject into the analytics.
+# Key = systemuserid, value = territory name (must exist in TERRITORY_IDS).
 _UNASSIGNED_HOUSE_USERS = {
-    "cf6f0d98-2a7a-ee11-8179-002248c7244c": "Bristol",   # Saragossa House (generic)
+    "cf6f0d98-2a7a-ee11-8179-002248c7244c": "Bristol",        # Saragossa House (generic)
+    "b835f278-3264-ee11-8def-6045bd0c1d6a": "Cameron Scott",  # Director of Solution Sales
 }
 
 def get_all_territory_consultants() -> list[dict]:

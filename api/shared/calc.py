@@ -180,6 +180,7 @@ def build_admin_report(
         "Chicago":          "USD",
         "New York":         "USD",
         "Chicago Contract": "USD",
+        "Cameron Scott":    "GBP",
     }
 
     # Budget map for current year: {territory: {months: {1: amt, ...}, total: float}}
@@ -472,6 +473,7 @@ def build_report(
         "Chicago":          "USD",
         "New York":         "USD",
         "Chicago Contract": "USD",
+        "Cameron Scott":    "GBP",
     }
 
     # Default team ordering per territory (team → sort key)
