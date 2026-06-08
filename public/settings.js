@@ -12,8 +12,8 @@ const CONTRACT_TERRITORIES = new Set(["London Contract", "Chicago Contract"]);
 
 const TEAMS_BY_TERRITORY = {
   "Bristol":          ["Team Batt", "Team Charlie", "Team Sion", "Team Harry W"],
-  "London":           ["Team Data & Cyber", "Team Snoz"],
-  "Chicago":          ["Team JD", "Team Matty", "Team Adam"],
+  "London":           ["Team Data & Cyber", "Team Data and Cyber", "Team Snoz"],
+  "Chicago":          ["Team JD", "Team Matty", "Team Adam", "Team Adam W"],
   "New York":         [],
   "London Contract":  [],
   "Chicago Contract": [],

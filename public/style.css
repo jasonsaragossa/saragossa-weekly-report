@@ -527,8 +527,9 @@ thead .future-col {
   color: var(--border);
 }
 
-/* Territory total footer row */
-tfoot tr.territory-total-row td {
+/* Territory total footer row (tfoot for per-territory tables, tbody for Overall) */
+tfoot tr.territory-total-row td,
+tbody tr.territory-total-row td {
   background: var(--surface2);
   border-top: 1px solid var(--accent);
   padding-top: 10px;

@@ -31,8 +31,8 @@ def _build_fx_tables(rates_units_per_gbp: dict) -> tuple:
 
 TEAM_ORDER = {
     "Bristol":  ["Team Batt", "Team Charlie", "Team Sion", "Team Harry W"],
-    "London":   ["Team Data & Cyber", "Team Snoz"],
-    "Chicago":  ["Team JD", "Team Matty", "Team Adam"],
+    "London":   ["Team Data & Cyber", "Team Data and Cyber", "Team Snoz"],
+    "Chicago":  ["Team JD", "Team Matty", "Team Adam", "Team Adam W"],
 }
 
 TO_GBP = {

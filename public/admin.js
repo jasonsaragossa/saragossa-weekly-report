@@ -305,7 +305,21 @@ function buildBreakdownTabs() {
   const panelsEl = document.createElement("div");
   panelsEl.className = "panels";
 
-  let first = true;
+  // ── Overall tab (first, active by default) ────────────────────────────────
+  const overallTab = document.createElement("div");
+  overallTab.className = "tab active";
+  overallTab.textContent = "Overall";
+  overallTab.dataset.panel = "admin-panel-overall";
+  tabsEl.appendChild(overallTab);
+
+  const overallPanel = document.createElement("div");
+  overallPanel.className = "panel active";
+  overallPanel.id = "admin-panel-overall";
+  overallPanel.dataset.territory = "__overall__";
+  overallPanel.appendChild(buildOverallTable(false));
+  panelsEl.appendChild(overallPanel);
+
+  // ── Per-territory tabs ────────────────────────────────────────────────────
   for (const territory of TERRITORY_ORDER) {
     const tdata = reportData.territories[territory];
     if (!tdata) continue;
@@ -313,19 +327,17 @@ function buildBreakdownTabs() {
     const panelId = "admin-panel-" + territory.replace(/\s+/g, "-").replace(/&/g, "and");
 
     const tab = document.createElement("div");
-    tab.className = "tab" + (first ? " active" : "");
+    tab.className = "tab";
     tab.textContent = territory;
     tab.dataset.panel = panelId;
     tabsEl.appendChild(tab);
 
     const panel = document.createElement("div");
-    panel.className = "panel" + (first ? " active" : "");
+    panel.className = "panel";
     panel.id = panelId;
     panel.dataset.territory = territory;
     panel.appendChild(buildMonthlyTable(tdata, false));
     panelsEl.appendChild(panel);
-
-    first = false;
   }
 
   tabsEl.querySelectorAll(".tab").forEach(tab => {
@@ -345,10 +357,15 @@ function buildBreakdownTabs() {
         b.classList.toggle("active", b === btn)
       );
       panelsEl.querySelectorAll(".panel").forEach(panel => {
-        const tdata = reportData.territories[panel.dataset.territory];
-        if (!tdata) return;
-        panel.innerHTML = "";
-        panel.appendChild(buildMonthlyTable(tdata, showLastYear));
+        if (panel.dataset.territory === "__overall__") {
+          panel.innerHTML = "";
+          panel.appendChild(buildOverallTable(showLastYear));
+        } else {
+          const tdata = reportData.territories[panel.dataset.territory];
+          if (!tdata) return;
+          panel.innerHTML = "";
+          panel.appendChild(buildMonthlyTable(tdata, showLastYear));
+        }
       });
     });
   });
@@ -356,6 +373,109 @@ function buildBreakdownTabs() {
   wrapper.appendChild(tabsEl);
   wrapper.appendChild(panelsEl);
   return wrapper;
+}
+
+
+// ── Overall Table (all territories combined) ──────────────────────────────────
+
+function buildOverallTable(showLastYear = false) {
+  const compareLabel = showLastYear ? `${currentYear}` : `${currentYear - 1}`;
+  const yoyLabel     = showLastYear ? "vs This Year" : "YoY";
+  const isFuture     = i => !showLastYear && (i + 1 > currentMonth);
+
+  const monthHeaders = MONTH_ABBR.map((m, i) =>
+    `<th class="num${isFuture(i) ? " future-col" : ""}">${m}</th>`
+  ).join("");
+
+  const colCount = 2 + 12 + 3;
+
+  let html = `<table class="monthly-table">
+    <thead>
+      <tr>
+        <th>Consultant</th>
+        <th>Role</th>
+        ${monthHeaders}
+        <th class="num">Total</th>
+        <th class="num">${esc(compareLabel)}</th>
+        <th class="num">${esc(yoyLabel)}</th>
+      </tr>
+    </thead>
+    <tbody>`;
+
+  for (const territory of TERRITORY_ORDER) {
+    const tdata = reportData.territories[territory];
+    if (!tdata) continue;
+
+    // Flatten all members regardless of team grouping
+    const members = tdata.type === "teams"
+      ? tdata.groups.flatMap(g => g.members)
+      : (tdata.members || []);
+
+    if (!members.length) continue;
+
+    const sym           = tdata.sym;
+    const territoryMths = showLastYear ? tdata.territory_last_year_months : tdata.territory_months;
+    const territoryTot  = showLastYear ? tdata.territory_last_year        : tdata.territory_total;
+    const territoryCmp  = showLastYear ? tdata.territory_total            : tdata.territory_last_year;
+
+    // Territory header row
+    html += `<tr class="team-header"><td colspan="${colCount}">${esc(territory)}</td></tr>`;
+
+    for (const m of members) {
+      const mMonths = showLastYear ? (m.last_year_months || {}) : m.months;
+      const mTotal  = showLastYear ? m.last_year_total : m.total;
+      const mCmp    = showLastYear ? m.total : m.last_year_total;
+      const mSym    = m.sym || sym;
+
+      const monthCells = MONTH_ABBR.map((_, i) => {
+        const v   = mMonths[String(i + 1)] || 0;
+        const cls = isFuture(i) ? " future-col" : "";
+        return `<td class="num${cls}">${v > 0 ? fmt(v, mSym) : ""}</td>`;
+      }).join("");
+
+      const yoy    = mCmp > 0 ? (mTotal - mCmp) / mCmp * 100 : null;
+      const yoyCls = yoy !== null ? (yoy >= 0 ? " pos" : " neg") : "";
+      const inactiveCls = m.active === false ? " inactive-consultant" : "";
+      const badgeText   = m.note ? m.note : (m.active === false ? "left" : null);
+      const nameCell    = badgeText
+        ? `${esc(m.name)} <span class="inactive-badge">${esc(badgeText)}</span>`
+        : esc(m.name);
+
+      html += `<tr class="${inactiveCls}">
+        <td>${nameCell}</td>
+        <td class="role-cell">${esc(m.role)}</td>
+        ${monthCells}
+        <td class="num"><strong>${mTotal > 0 ? fmt(mTotal, mSym) : ""}</strong></td>
+        <td class="num dim">${mCmp > 0 ? fmt(mCmp, mSym) : "—"}</td>
+        <td class="num${yoyCls}">${yoy !== null ? fmtPct(yoy) : "—"}</td>
+      </tr>`;
+    }
+
+    // Territory subtotal row
+    const subtotalCells = MONTH_ABBR.map((_, i) => {
+      const v   = (territoryMths || {})[String(i + 1)] || 0;
+      const cls = isFuture(i) ? " future-col" : "";
+      return `<td class="num${cls}"><strong>${v > 0 ? fmt(v, sym) : ""}</strong></td>`;
+    }).join("");
+
+    const tYoy    = territoryCmp > 0 ? (territoryTot - territoryCmp) / territoryCmp * 100 : null;
+    const tYoyCls = tYoy !== null ? (tYoy >= 0 ? " pos" : " neg") : "";
+
+    html += `<tr class="territory-total-row">
+      <td colspan="2"><strong>${esc(territory)} Total</strong></td>
+      ${subtotalCells}
+      <td class="num"><strong>${fmt(territoryTot, sym)}</strong></td>
+      <td class="num dim"><strong>${territoryCmp > 0 ? fmt(territoryCmp, sym) : "—"}</strong></td>
+      <td class="num${tYoyCls}"><strong>${tYoy !== null ? fmtPct(tYoy) : "—"}</strong></td>
+    </tr>`;
+  }
+
+  html += `</tbody></table>`;
+
+  const wrap = document.createElement("div");
+  wrap.className = "table-wrap";
+  wrap.innerHTML = html;
+  return wrap;
 }
 
 

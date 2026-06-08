@@ -117,8 +117,8 @@ def get_all_territory_consultants() -> list[dict]:
 # Known report team names — must match Dataverse team names exactly
 _REPORT_TEAM_NAMES = [
     "Team Batt", "Team Charlie", "Team Sion", "Team Harry W",
-    "Team Data & Cyber", "Team Snoz",
-    "Team JD", "Team Matty", "Team Adam",
+    "Team Data & Cyber", "Team Data and Cyber", "Team Snoz",
+    "Team JD", "Team Matty", "Team Adam", "Team Adam W",
 ]
 
 def get_team_membership_map() -> dict:
