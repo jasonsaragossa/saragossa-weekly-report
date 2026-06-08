@@ -182,12 +182,12 @@ function buildSummarySection() {
   otherTr.style.cursor = "pointer";
   otherTr.innerHTML = `
     <td><strong><span class="other-toggle-arrow">▶</span> Other (GBP)</strong></td>
-    <td class="num"><strong>${fmt(oYtd, "£")}</strong></td>
+    <td class="num"><strong>${fmt(oYtd, "£") || "£0"}</strong></td>
     <td class="num dim"><strong>${oLastYtd > 0 ? fmt(oLastYtd, "£") : "—"}</strong></td>
     <td class="num${oYtdYoyCls}"><strong>${oYtdYoyPct !== null ? fmtPct(oYtdYoyPct) : "—"}</strong></td>
     <td class="num">—</td>
     <td class="num">—</td>
-    <td class="num"><strong>${fmt(oFullYear, "£")}</strong></td>
+    <td class="num"><strong>${fmt(oFullYear, "£") || "£0"}</strong></td>
     <td class="num dim"><strong>${oLastYear > 0 ? fmt(oLastYear, "£") : "—"}</strong></td>
     <td class="num${oFullYoyCls}"><strong>${oFullYoyPct !== null ? fmtPct(oFullYoyPct) : "—"}</strong></td>
     <td class="num">—</td>

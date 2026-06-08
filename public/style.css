@@ -595,7 +595,7 @@ tfoot tr.grand-total-row td {
 tbody tr.other-row td {
   background: var(--surface);
   border-top: 1px solid var(--border);
-  color: var(--muted);
+  color: var(--mid);
 }
 tbody tr.other-row:hover td {
   background: var(--surface2);
@@ -622,7 +622,7 @@ tbody tr.other-row:hover td {
 }
 .other-drilldown-table thead th {
   background: var(--surface2);
-  color: var(--muted);
+  color: var(--mid);
   font-weight: 600;
   text-transform: uppercase;
   font-size: 0.72rem;
@@ -655,7 +655,7 @@ tbody tr.other-row:hover td {
 }
 .other-empty {
   padding: 16px;
-  color: var(--muted);
+  color: var(--mid);
   font-size: 0.88rem;
   text-align: center;
 }
