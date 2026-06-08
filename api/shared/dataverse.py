@@ -327,15 +327,14 @@ def get_live_contract_placements(today_str: str) -> list[dict]:
 def get_placements_full_year(year: int) -> list[dict]:
     """
     Fetch all active or completed perm placements for a given calendar year.
-    statecode 0 = Active, 1 = Completed/Won — both valid for historical data.
-    statecode 2 = Cancelled — explicitly excluded here and via statuscode filters.
+    Includes expanded client name and owner names for the "Other" drilldown.
     """
     cancel_filter = " and ".join(f"statuscode ne {c}" for c in CANCEL_CODES)
     return odata_get_all(
         "crimson_placements",
         params={
             "$select": (
-                "crimson_placementid,recruit_truegrossprofit,"
+                "crimson_placementid,crimson_name,recruit_truegrossprofit,"
                 "crimson_startdate,crimson_specialinstructionsclient,"
                 "_mercury_clientrelationshipowner_value,"
                 "_crimson_consultant_value,"
@@ -348,7 +347,13 @@ def get_placements_full_year(year: int) -> list[dict]:
                 f" and crimson_startdate le {year}-12-31"
                 f" and {cancel_filter}"
             ),
-            "$expand": "recruit_truegrossprofitcurrency($select=isocurrencycode)",
+            "$expand": (
+                "recruit_truegrossprofitcurrency($select=isocurrencycode),"
+                "crimson_clientname($select=name),"
+                "mercury_clientrelationshipowner($select=fullname),"
+                "crimson_consultant($select=fullname),"
+                "mercury_assignmentowner($select=fullname)"
+            ),
         },
     )
 

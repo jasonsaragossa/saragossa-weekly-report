@@ -159,7 +159,42 @@ function buildSummarySection() {
     tbody.appendChild(tr);
   }
 
-  // ── Overall row (GBP) ───────────────────────────────────────────────────────
+  // ── Other row (GBP) — placements not attributed to any territory consultant ──
+  const otherData    = reportData.other || {};
+  const oMonthly     = otherData.monthly_gbp      || {};
+  const oMonthlyLast = otherData.last_monthly_gbp || {};
+  const oFullYear    = otherData.total_gbp         || 0;
+  const oLastYear    = otherData.last_year_gbp     || 0;
+
+  let oYtd = 0, oLastYtd = 0;
+  for (let m = 1; m <= currentMonth; m++) {
+    oYtd     += oMonthly[String(m)]     || 0;
+    oLastYtd += oMonthlyLast[String(m)] || 0;
+  }
+
+  const oYtdYoyPct  = oLastYtd  > 0 ? (oYtd     - oLastYtd)  / oLastYtd  * 100 : null;
+  const oFullYoyPct = oLastYear > 0 ? (oFullYear - oLastYear) / oLastYear * 100 : null;
+  const oYtdYoyCls  = oYtdYoyPct  !== null ? (oYtdYoyPct  >= 0 ? " pos" : " neg") : "";
+  const oFullYoyCls = oFullYoyPct !== null ? (oFullYoyPct >= 0 ? " pos" : " neg") : "";
+
+  const otherTr = document.createElement("tr");
+  otherTr.className = "territory-total-row other-row";
+  otherTr.style.cursor = "pointer";
+  otherTr.innerHTML = `
+    <td><strong><span class="other-toggle-arrow">▶</span> Other (GBP)</strong></td>
+    <td class="num"><strong>${fmt(oYtd, "£")}</strong></td>
+    <td class="num dim"><strong>${oLastYtd > 0 ? fmt(oLastYtd, "£") : "—"}</strong></td>
+    <td class="num${oYtdYoyCls}"><strong>${oYtdYoyPct !== null ? fmtPct(oYtdYoyPct) : "—"}</strong></td>
+    <td class="num">—</td>
+    <td class="num">—</td>
+    <td class="num"><strong>${fmt(oFullYear, "£")}</strong></td>
+    <td class="num dim"><strong>${oLastYear > 0 ? fmt(oLastYear, "£") : "—"}</strong></td>
+    <td class="num${oFullYoyCls}"><strong>${oFullYoyPct !== null ? fmtPct(oFullYoyPct) : "—"}</strong></td>
+    <td class="num">—</td>
+  `;
+  tbody.appendChild(otherTr);
+
+  // ── Overall row (GBP) — includes all territories + Other ──────────────────
   const gMonthly     = reportData.grand_monthly_gbp       || {};
   const gMonthlyLast = reportData.grand_monthly_last_gbp  || {};
   const gBudgetMths  = reportData.grand_budget_monthly_gbp || {};
@@ -200,6 +235,60 @@ function buildSummarySection() {
 
   table.appendChild(tbody);
   wrap.appendChild(table);
+
+  // ── Other drilldown panel (hidden by default) ──────────────────────────────
+  const otherPlacements = otherData.placements || [];
+  const drillWrap = document.createElement("div");
+  drillWrap.id = "other-drilldown";
+  drillWrap.className = "other-drilldown-wrap";
+  drillWrap.style.display = "none";
+
+  if (otherPlacements.length === 0) {
+    drillWrap.innerHTML = `<p class="other-empty">No unattributed placements found.</p>`;
+  } else {
+    const dtable = document.createElement("table");
+    dtable.className = "other-drilldown-table";
+    dtable.innerHTML = `
+      <thead><tr>
+        <th>Start Date</th>
+        <th>Job Title</th>
+        <th>Client</th>
+        <th class="num">Fee</th>
+        <th>Ccy</th>
+        <th class="num">GBP</th>
+        <th>CRO</th>
+        <th>Consultant</th>
+        <th>Assignment Owner</th>
+      </tr></thead>`;
+    const dtbody = document.createElement("tbody");
+    for (const p of otherPlacements) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td class="dim">${p.start_date || "—"}</td>
+        <td>${esc(p.title || "—")}</td>
+        <td>${esc(p.client || "—")}</td>
+        <td class="num">${fmt(p.fee || 0, p.currency === "GBP" ? "£" : p.currency === "USD" ? "$" : "")}</td>
+        <td class="dim">${esc(p.currency || "")}</td>
+        <td class="num">${p.currency !== "GBP" ? fmt(p.fee_gbp || 0, "£") : "—"}</td>
+        <td>${esc(p.cro || "—")}</td>
+        <td>${esc(p.consultant || "—")}</td>
+        <td>${esc(p.assignment_owner || "—")}</td>
+      `;
+      dtbody.appendChild(tr);
+    }
+    dtable.appendChild(dtbody);
+    drillWrap.appendChild(dtable);
+  }
+  wrap.appendChild(drillWrap);
+
+  // Toggle drilldown on Other row click
+  otherTr.addEventListener("click", () => {
+    const open = drillWrap.style.display !== "none";
+    drillWrap.style.display = open ? "none" : "block";
+    const arrow = otherTr.querySelector(".other-toggle-arrow");
+    if (arrow) arrow.textContent = open ? "▶" : "▼";
+  });
+
   section.appendChild(wrap);
   return section;
 }

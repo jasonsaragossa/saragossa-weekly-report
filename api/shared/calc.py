@@ -338,7 +338,59 @@ def build_admin_report(
         })
         report[territory] = result
 
-    # Grand totals, monthly totals, and budget totals converted to GBP
+    # ── "Other" placements: those where no tracked territory consultant is an owner ──
+    _OWNER_FIELDS = [
+        "_mercury_clientrelationshipowner_value",
+        "_crimson_consultant_value",
+        "_mercury_assignmentowner_value",
+        "_mercury_contractorrelationship_userid_value",
+    ]
+    tracked_uids = {c["systemuserid"] for c in consultants}
+
+    def _any_tracked(p):
+        return any(p.get(f) in tracked_uids for f in _OWNER_FIELDS)
+
+    other_this_pl = [p for p in placements_this if not _any_tracked(p)]
+    other_last_pl = [p for p in placements_last if not _any_tracked(p)]
+
+    other_monthly_gbp      = {str(m): 0.0 for m in range(1, 13)}
+    other_last_monthly_gbp = {str(m): 0.0 for m in range(1, 13)}
+    other_total_gbp        = 0.0
+    other_last_total_gbp   = 0.0
+    other_drilldown        = []
+
+    for p in other_this_pl:
+        gp    = p.get("recruit_truegrossprofit") or 0.0
+        ccy   = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode", "GBP")
+        gbp   = gp * to_gbp.get(ccy, 1.0)
+        d     = parse_date(p.get("crimson_startdate", f"{year}-01-01"))
+        m_str = str(d.month)
+        other_monthly_gbp[m_str] = round(other_monthly_gbp[m_str] + gbp, 2)
+        other_total_gbp += gbp
+        other_drilldown.append({
+            "title":            p.get("crimson_name") or "",
+            "client":           (p.get("crimson_clientname") or {}).get("name") or "",
+            "fee":              round(gp, 2),
+            "currency":         ccy,
+            "fee_gbp":          round(gbp, 2),
+            "cro":              (p.get("mercury_clientrelationshipowner") or {}).get("fullname") or "",
+            "consultant":       (p.get("crimson_consultant") or {}).get("fullname") or "",
+            "assignment_owner": (p.get("mercury_assignmentowner") or {}).get("fullname") or "",
+            "start_date":       (p.get("crimson_startdate") or "")[:10],
+        })
+
+    for p in other_last_pl:
+        gp    = p.get("recruit_truegrossprofit") or 0.0
+        ccy   = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode", "GBP")
+        gbp   = gp * to_gbp.get(ccy, 1.0)
+        d     = parse_date(p.get("crimson_startdate", f"{year - 1}-01-01"))
+        m_str = str(d.month)
+        other_last_monthly_gbp[m_str] = round(other_last_monthly_gbp[m_str] + gbp, 2)
+        other_last_total_gbp += gbp
+
+    other_drilldown.sort(key=lambda p: p["start_date"], reverse=True)
+
+    # Grand totals (territory rows + Other), all converted to GBP
     usd_to_gbp = to_gbp.get("USD", TO_GBP["USD"])
     USD_TERRITORIES = {"Chicago", "New York", "Chicago Contract"}
     grand_gbp              = 0.0
@@ -360,9 +412,24 @@ def build_admin_report(
             grand_budget_monthly[m_str] = round(grand_budget_monthly[m_str] + v * factor, 2)
         grand_budget_total = round(grand_budget_total + tdata.get("budget", {}).get("total", 0.0) * factor, 2)
 
+    # Include Other in grand totals
+    grand_gbp      = round(grand_gbp      + other_total_gbp,      2)
+    grand_gbp_last = round(grand_gbp_last + other_last_total_gbp, 2)
+    for m_str, v in other_monthly_gbp.items():
+        grand_monthly_gbp[m_str] = round(grand_monthly_gbp[m_str] + v, 2)
+    for m_str, v in other_last_monthly_gbp.items():
+        grand_monthly_last_gbp[m_str] = round(grand_monthly_last_gbp[m_str] + v, 2)
+
     return {
         "year":                    year,
         "territories":             report,
+        "other": {
+            "total_gbp":       round(other_total_gbp, 2),
+            "last_year_gbp":   round(other_last_total_gbp, 2),
+            "monthly_gbp":     other_monthly_gbp,
+            "last_monthly_gbp": other_last_monthly_gbp,
+            "placements":      other_drilldown,
+        },
         "grand_total_gbp":         round(grand_gbp, 2),
         "grand_total_last_gbp":    round(grand_gbp_last, 2),
         "grand_monthly_gbp":       grand_monthly_gbp,

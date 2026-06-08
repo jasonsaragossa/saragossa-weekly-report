@@ -590,3 +590,72 @@ tfoot tr.grand-total-row td {
   border-top: 2px solid var(--accent);
   color: var(--white);
 }
+
+/* Other row — muted so it doesn't compete with Overall */
+tbody tr.other-row td {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+}
+tbody tr.other-row:hover td {
+  background: var(--surface2);
+  color: var(--white);
+}
+.other-toggle-arrow {
+  font-size: 0.7em;
+  margin-right: 4px;
+  color: var(--accent);
+}
+
+/* Other drilldown panel */
+.other-drilldown-wrap {
+  margin-top: 2px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.other-drilldown-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.other-drilldown-table thead th {
+  background: var(--surface2);
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: .04em;
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.other-drilldown-table thead th.num {
+  text-align: right;
+}
+.other-drilldown-table tbody tr {
+  border-bottom: 1px solid var(--border);
+}
+.other-drilldown-table tbody tr:last-child {
+  border-bottom: none;
+}
+.other-drilldown-table tbody tr:hover td {
+  background: rgba(93,143,154,.06);
+}
+.other-drilldown-table tbody td {
+  padding: 7px 12px;
+  color: var(--text);
+  white-space: nowrap;
+}
+.other-drilldown-table tbody td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.other-empty {
+  padding: 16px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  text-align: center;
+}
