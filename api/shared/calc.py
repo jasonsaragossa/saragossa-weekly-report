@@ -18,8 +18,8 @@ def _build_fx_tables(rates_units_per_gbp: dict) -> tuple:
     for ccy, units in rates_units_per_gbp.items():
         if not units or ccy == "GBP":
             continue
-        to_gbp[ccy] = 1.0 / units
-        to_usd[ccy] = units / usd_per_gbp
+        to_gbp[ccy] = 1.0 / units          # 1 CCY → GBP:  divide by units-per-GBP
+        to_usd[ccy] = usd_per_gbp / units  # 1 CCY → USD:  (USD/GBP) ÷ (CCY/GBP)
     # Fill gaps with hardcoded fallback
     for ccy in TO_GBP:
         if ccy not in to_gbp:
