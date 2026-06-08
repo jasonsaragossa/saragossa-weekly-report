@@ -65,10 +65,13 @@ function render() {
     <p class="settings-desc">Monthly perm GP by consultant · admin only</p>`;
   container.appendChild(heading);
 
-  // 1. Territory summary + budget
+  // 1. Territory summary
   container.appendChild(buildSummarySection());
 
-  // 2. Monthly breakdown (tabbed per territory)
+  // 2. Monthly budget entry grid
+  container.appendChild(buildBudgetSection());
+
+  // 3. Monthly breakdown (tabbed per territory)
   const breakdownHeading = document.createElement("h2");
   breakdownHeading.className = "admin-section-title";
   breakdownHeading.textContent = "Monthly Breakdown";
@@ -99,13 +102,12 @@ function buildSummarySection() {
     <th class="num">Written YTD</th>
     <th class="num">Last Year YTD</th>
     <th class="num">YTD YoY</th>
-    <th class="num">YTD Budget</th>
+    <th class="num">Budget YTD</th>
     <th class="num">vs Budget</th>
     <th class="num">Full Year Written</th>
     <th class="num">Last Year Full</th>
     <th class="num">Full Year YoY</th>
     <th class="num">Annual Budget</th>
-    <th>Set Budget</th>
   </tr></thead>`;
 
   const tbody = document.createElement("tbody");
@@ -115,31 +117,32 @@ function buildSummarySection() {
     const tdata = territories[territory];
     if (!tdata) continue;
 
-    const sym          = tdata.sym;
-    const months       = tdata.territory_months;
-    const lastMonths   = tdata.territory_last_year_months || {};
-    const annualBudget = (tdata.budget && tdata.budget.amount) || 0;
+    const sym        = tdata.sym;
+    const months     = tdata.territory_months;
+    const lastMonths = tdata.territory_last_year_months || {};
+    const budget     = tdata.budget || {};
+    const budgetMths = budget.months || {};
+    const annualBudget = budget.total || 0;
 
     // YTD = months 1..currentMonth for this year and last year
-    let ytd = 0, lastYtd = 0;
+    let ytd = 0, lastYtd = 0, ytdBudget = 0;
     for (let m = 1; m <= currentMonth; m++) {
-      ytd     += months[String(m)]     || 0;
-      lastYtd += lastMonths[String(m)] || 0;
+      ytd        += months[String(m)]     || 0;
+      lastYtd    += lastMonths[String(m)] || 0;
+      ytdBudget  += budgetMths[String(m)] || 0;
     }
 
-    const fullYear     = tdata.territory_total;
-    const lastYear     = tdata.territory_last_year;
-    const ytdBudget    = annualBudget > 0 ? annualBudget * (currentMonth / 12) : 0;
-    const vsBudget     = ytdBudget > 0 ? ytd - ytdBudget : null;
-    const ytdYoyPct    = lastYtd   > 0 ? (ytd      - lastYtd)  / lastYtd  * 100 : null;
-    const fullYoyPct   = lastYear  > 0 ? (fullYear  - lastYear) / lastYear * 100 : null;
+    const fullYear   = tdata.territory_total;
+    const lastYear   = tdata.territory_last_year;
+    const vsBudget   = ytdBudget > 0 ? ytd - ytdBudget : null;
+    const ytdYoyPct  = lastYtd  > 0 ? (ytd      - lastYtd)  / lastYtd  * 100 : null;
+    const fullYoyPct = lastYear > 0 ? (fullYear  - lastYear) / lastYear * 100 : null;
 
-    const vsCls        = vsBudget    !== null ? (vsBudget    >= 0 ? " pos" : " neg") : "";
-    const ytdYoyCls    = ytdYoyPct   !== null ? (ytdYoyPct   >= 0 ? " pos" : " neg") : "";
-    const fullYoyCls   = fullYoyPct  !== null ? (fullYoyPct  >= 0 ? " pos" : " neg") : "";
+    const vsCls      = vsBudget    !== null ? (vsBudget    >= 0 ? " pos" : " neg") : "";
+    const ytdYoyCls  = ytdYoyPct   !== null ? (ytdYoyPct   >= 0 ? " pos" : " neg") : "";
+    const fullYoyCls = fullYoyPct  !== null ? (fullYoyPct  >= 0 ? " pos" : " neg") : "";
 
     const tr = document.createElement("tr");
-    tr.dataset.territory = territory;
     tr.innerHTML = `
       <td><strong>${esc(territory)}</strong></td>
       <td class="num">${fmt(ytd, sym)}</td>
@@ -151,19 +154,77 @@ function buildSummarySection() {
       <td class="num dim">${lastYear > 0 ? fmt(lastYear, sym) : "—"}</td>
       <td class="num${fullYoyCls}">${fullYoyPct !== null ? fmtPct(fullYoyPct) : "—"}</td>
       <td class="num">${annualBudget > 0 ? fmt(annualBudget, sym) : "—"}</td>
-      <td class="budget-edit-cell">
-        <input type="number" class="contract-input budget-input"
-               placeholder="Annual target"
-               value="${annualBudget > 0 ? Math.round(annualBudget) : ""}">
-        <button class="save-btn budget-save-btn">Save</button>
-      </td>
     `;
 
-    tr.querySelector(".budget-save-btn").addEventListener("click", async (e) => {
-      const input  = tr.querySelector(".budget-input");
-      const val    = parseFloat(input.value);
-      if (isNaN(val)) return;
-      await saveBudget(territory, val, e.currentTarget);
+    tbody.appendChild(tr);
+  }
+
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+  section.appendChild(wrap);
+  return section;
+}
+
+// ── Monthly Budget Grid ───────────────────────────────────────────────────────
+
+function buildBudgetSection() {
+  const section = document.createElement("div");
+  section.id = "budget-section";
+  section.className = "admin-section";
+
+  const h = document.createElement("h2");
+  h.className = "admin-section-title";
+  h.textContent = `${currentYear} Monthly Budgets`;
+  section.appendChild(h);
+
+  const wrap = document.createElement("div");
+  wrap.className = "table-wrap";
+
+  const monthHeaders = MONTH_ABBR.map(m => `<th class="num">${m}</th>`).join("");
+  const table = document.createElement("table");
+  table.className = "monthly-table budget-grid-table";
+  table.innerHTML = `<thead><tr>
+    <th>Territory</th>
+    ${monthHeaders}
+    <th class="num">Annual Total</th>
+    <th></th>
+  </tr></thead>`;
+
+  const tbody = document.createElement("tbody");
+
+  for (const territory of TERRITORY_ORDER) {
+    const tdata = reportData.territories[territory];
+    if (!tdata) continue;
+
+    const sym        = tdata.sym;
+    const budgetMths = (tdata.budget && tdata.budget.months) || {};
+
+    const tr = document.createElement("tr");
+    tr.dataset.territory = territory;
+
+    const monthCells = MONTH_ABBR.map((_, i) => {
+      const m   = i + 1;
+      const val = budgetMths[String(m)];
+      return `<td><input type="number" class="budget-month-input contract-input"
+               data-month="${m}" placeholder="0" step="1000"
+               value="${val != null ? Math.round(val) : ""}"></td>`;
+    }).join("");
+
+    const annualTotal = Object.values(budgetMths).reduce((s, v) => s + (v || 0), 0);
+
+    tr.innerHTML = `
+      <td><strong>${esc(territory)}</strong></td>
+      ${monthCells}
+      <td class="num annual-total">${annualTotal > 0 ? fmt(annualTotal, sym) : "—"}</td>
+      <td><button class="save-btn budget-row-save">Save</button></td>
+    `;
+
+    tr.querySelectorAll(".budget-month-input").forEach(inp => {
+      inp.addEventListener("input", () => updateAnnualTotal(tr, sym));
+    });
+
+    tr.querySelector(".budget-row-save").addEventListener("click", async (e) => {
+      await saveBudgetRow(territory, tr, e.currentTarget);
     });
 
     tbody.appendChild(tr);
@@ -175,26 +236,39 @@ function buildSummarySection() {
   return section;
 }
 
-async function saveBudget(territory, amount, btn) {
+function updateAnnualTotal(tr, sym) {
+  let total = 0;
+  tr.querySelectorAll(".budget-month-input").forEach(inp => {
+    const v = parseFloat(inp.value);
+    if (!isNaN(v)) total += v;
+  });
+  tr.querySelector(".annual-total").textContent = total > 0 ? fmt(total, sym) : "—";
+}
+
+async function saveBudgetRow(territory, tr, btn) {
+  const months = {};
+  tr.querySelectorAll(".budget-month-input").forEach(inp => {
+    const v = inp.value.trim();
+    if (v !== "") months[inp.dataset.month] = parseFloat(v);
+  });
+
   btn.textContent = "Saving…";
   btn.disabled = true;
+
   try {
     const resp = await fetch("/api/analytics-budget", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ year: currentYear, territory, amount }),
-
+      body: JSON.stringify({ year: currentYear, territory, months }),
     });
     const data = await resp.json();
     if (data.ok) {
-      // Update in-memory data and re-render summary
-      reportData.territories[territory].budget = {
-        amount: data.budget.amount ?? amount,
-        id:     data.budget.id,
-      };
-      // Replace summary section in-place
-      const old = document.getElementById("summary-section");
-      old.replaceWith(buildSummarySection());
+      const total = Object.values(months).reduce((s, v) => s + v, 0);
+      reportData.territories[territory].budget = { months, total };
+      // Re-render summary so YTD budget and vs-budget figures update
+      document.getElementById("summary-section").replaceWith(buildSummarySection());
+      btn.textContent = "Saved ✓";
+      setTimeout(() => { btn.textContent = "Save"; btn.disabled = false; }, 2000);
     } else {
       alert("Save failed: " + data.error);
       btn.textContent = "Save";
@@ -206,6 +280,8 @@ async function saveBudget(territory, amount, btn) {
     btn.disabled = false;
   }
 }
+
+function round2(n) { return Math.round(n * 100) / 100; }
 
 
 // ── Monthly Breakdown Tabs ────────────────────────────────────────────────────

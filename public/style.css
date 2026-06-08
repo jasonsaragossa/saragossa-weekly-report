@@ -439,6 +439,15 @@ tr.team-header:first-child td { border-top: none; }
   padding: 8px 10px;
 }
 
+/* Budget grid — narrow inputs to fit 12 months */
+.budget-grid-table td { padding: 5px 4px; }
+.budget-grid-table th { padding: 7px 4px; }
+.budget-grid-table .budget-month-input {
+  width: 72px;
+  padding: 4px 5px;
+  font-size: 11px;
+}
+
 /* Future months (haven't happened yet) */
 .future-col {
   color: var(--border);

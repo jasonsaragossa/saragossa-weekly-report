@@ -16,7 +16,7 @@ from shared.auth import require_auth, require_admin
 from shared.dataverse import (
     get_active_consultants, get_placements, get_overrides,
     get_team_membership_map, get_live_contract_placements, get_fx_rates,
-    get_placements_full_year, get_budgets, upsert_budget,
+    get_placements_full_year, get_budgets, upsert_monthly_budgets,
     upsert_override, delete_override, TERRITORY_IDS,
 )
 from shared.calc import build_report, build_admin_report
@@ -227,18 +227,18 @@ def analytics_budget_post(req: func.HttpRequest) -> func.HttpResponse:
         body = req.get_json()
         year      = body.get("year")
         territory = body.get("territory")
-        amount    = body.get("amount")
+        months    = body.get("months")   # {month_str: amount}
 
-        if not year or not territory or amount is None:
+        if not year or not territory or not months:
             return func.HttpResponse(
-                json.dumps({"ok": False, "error": "year, territory and amount are required"}),
+                json.dumps({"ok": False, "error": "year, territory and months are required"}),
                 mimetype="application/json",
                 status_code=400,
             )
 
-        result = upsert_budget(int(year), territory, float(amount))
+        upsert_monthly_budgets(int(year), territory, months)
         return func.HttpResponse(
-            json.dumps({"ok": True, "budget": result}),
+            json.dumps({"ok": True}),
             mimetype="application/json",
             status_code=200,
         )

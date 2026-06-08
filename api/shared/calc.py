@@ -175,15 +175,18 @@ def build_admin_report(
         "Chicago Contract": "USD",
     }
 
-    # Budget map for current year: {territory: {amount, id}}
+    # Budget map for current year: {territory: {months: {1: amt, ...}, total: float}}
     budget_map = {}
     for b in (budgets or []):
         if b.get("crbb7_year") == year:
-            t = b.get("crbb7_territory", "")
-            budget_map[t] = {
-                "amount": float(b.get("crbb7_amount") or 0),
-                "id":     b.get("crbb7_budgetid"),
-            }
+            t     = b.get("crbb7_territory", "")
+            month = b.get("crbb7_month")
+            amt   = float(b.get("crbb7_amount") or 0)
+            if t not in budget_map:
+                budget_map[t] = {"months": {}, "total": 0.0}
+            if month:
+                budget_map[t]["months"][str(month)] = amt
+                budget_map[t]["total"] = round(budget_map[t]["total"] + amt, 2)
 
     from collections import defaultdict
     by_territory = defaultdict(list)
@@ -260,7 +263,7 @@ def build_admin_report(
             "territory_last_year_months": t_last_months,
             "territory_total":          round(t_total, 2),
             "territory_last_year":      round(t_last, 2),
-            "budget":                   budget_map.get(territory, {"amount": 0, "id": None}),
+            "budget":                   budget_map.get(territory, {"months": {}, "total": 0.0}),
         })
         report[territory] = result
 

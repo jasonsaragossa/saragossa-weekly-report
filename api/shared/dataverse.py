@@ -315,26 +315,35 @@ def get_budgets() -> list[dict]:
         logging.warning(f"get_budgets failed (table may not exist yet): {e}")
         return []
 
-def upsert_budget(year: int, territory: str, amount: float) -> dict:
-    """Creates or updates the annual budget for a territory/year pair."""
-    existing = odata_get_all(
-        "crbb7_budgets",
-        params={
-            "$filter": f"crbb7_year eq {year} and crbb7_territory eq '{territory}'",
-        },
-    )
-    body = {
-        "crbb7_year":      year,
-        "crbb7_territory": territory,
-        "crbb7_amount":    amount,
-    }
-    if existing:
-        rid = existing[0]["crbb7_budgetid"]
-        odata_patch(f"crbb7_budgets({rid})", body)
-        return {"id": rid, "amount": amount, "territory": territory, "year": year}
-    else:
-        result = odata_post("crbb7_budgets", body)
-        return result
+def upsert_monthly_budgets(year: int, territory: str, monthly_amounts: dict) -> None:
+    """
+    Upserts one Dataverse record per month for a territory/year.
+    monthly_amounts: {month_int: amount}  e.g. {1: 50000, 2: 60000, ...}
+    """
+    for month, amount in monthly_amounts.items():
+        if amount is None:
+            continue
+        existing = odata_get_all(
+            "crbb7_budgets",
+            params={
+                "$filter": (
+                    f"crbb7_year eq {year}"
+                    f" and crbb7_territory eq '{territory}'"
+                    f" and crbb7_month eq {int(month)}"
+                ),
+            },
+        )
+        body = {
+            "crbb7_year":      year,
+            "crbb7_territory": territory,
+            "crbb7_month":     int(month),
+            "crbb7_amount":    float(amount),
+        }
+        if existing:
+            rid = existing[0]["crbb7_budgetid"]
+            odata_patch(f"crbb7_budgets({rid})", body)
+        else:
+            odata_post("crbb7_budgets", body)
 
 
 # ── Override table (crbb7_useroverride) ───────────────────────────────────────
