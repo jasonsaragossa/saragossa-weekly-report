@@ -338,13 +338,15 @@ def build_admin_report(
         })
         report[territory] = result
 
-    # Grand totals and monthly totals converted to GBP
+    # Grand totals, monthly totals, and budget totals converted to GBP
     usd_to_gbp = to_gbp.get("USD", TO_GBP["USD"])
     USD_TERRITORIES = {"Chicago", "New York", "Chicago Contract"}
-    grand_gbp            = 0.0
-    grand_gbp_last       = 0.0
+    grand_gbp              = 0.0
+    grand_gbp_last         = 0.0
     grand_monthly_gbp      = {str(m): 0.0 for m in range(1, 13)}
     grand_monthly_last_gbp = {str(m): 0.0 for m in range(1, 13)}
+    grand_budget_monthly   = {str(m): 0.0 for m in range(1, 13)}
+    grand_budget_total     = 0.0
     for t, tdata in report.items():
         factor = usd_to_gbp if t in USD_TERRITORIES else 1.0
         grand_gbp      += tdata["territory_total"]     * factor
@@ -353,6 +355,10 @@ def build_admin_report(
             grand_monthly_gbp[m_str] = round(grand_monthly_gbp[m_str] + v * factor, 2)
         for m_str, v in tdata["territory_last_year_months"].items():
             grand_monthly_last_gbp[m_str] = round(grand_monthly_last_gbp[m_str] + v * factor, 2)
+        budget_mths = tdata.get("budget", {}).get("months", {})
+        for m_str, v in budget_mths.items():
+            grand_budget_monthly[m_str] = round(grand_budget_monthly[m_str] + v * factor, 2)
+        grand_budget_total = round(grand_budget_total + tdata.get("budget", {}).get("total", 0.0) * factor, 2)
 
     return {
         "year":                    year,
@@ -361,6 +367,8 @@ def build_admin_report(
         "grand_total_last_gbp":    round(grand_gbp_last, 2),
         "grand_monthly_gbp":       grand_monthly_gbp,
         "grand_monthly_last_gbp":  grand_monthly_last_gbp,
+        "grand_budget_monthly_gbp": grand_budget_monthly,
+        "grand_budget_total_gbp":   grand_budget_total,
     }
 
 

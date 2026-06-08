@@ -159,6 +159,45 @@ function buildSummarySection() {
     tbody.appendChild(tr);
   }
 
+  // ── Overall row (GBP) ───────────────────────────────────────────────────────
+  const gMonthly     = reportData.grand_monthly_gbp       || {};
+  const gMonthlyLast = reportData.grand_monthly_last_gbp  || {};
+  const gBudgetMths  = reportData.grand_budget_monthly_gbp || {};
+  const gBudgetTotal = reportData.grand_budget_total_gbp  || 0;
+  const gFullYear    = reportData.grand_total_gbp         || 0;
+  const gLastYear    = reportData.grand_total_last_gbp    || 0;
+
+  let gYtd = 0, gLastYtd = 0, gYtdBudget = 0;
+  for (let m = 1; m <= currentMonth; m++) {
+    gYtd       += gMonthly[String(m)]     || 0;
+    gLastYtd   += gMonthlyLast[String(m)] || 0;
+    gYtdBudget += gBudgetMths[String(m)]  || 0;
+  }
+
+  const gVsBudget   = gYtdBudget > 0 ? gYtd - gYtdBudget : null;
+  const gYtdYoyPct  = gLastYtd  > 0 ? (gYtd      - gLastYtd)  / gLastYtd  * 100 : null;
+  const gFullYoyPct = gLastYear > 0  ? (gFullYear - gLastYear) / gLastYear * 100 : null;
+
+  const gVsCls      = gVsBudget   !== null ? (gVsBudget   >= 0 ? " pos" : " neg") : "";
+  const gYtdYoyCls  = gYtdYoyPct  !== null ? (gYtdYoyPct  >= 0 ? " pos" : " neg") : "";
+  const gFullYoyCls = gFullYoyPct !== null ? (gFullYoyPct >= 0 ? " pos" : " neg") : "";
+
+  const overallTr = document.createElement("tr");
+  overallTr.className = "territory-total-row";
+  overallTr.innerHTML = `
+    <td><strong>Overall (GBP)</strong></td>
+    <td class="num"><strong>${fmt(gYtd, "£")}</strong></td>
+    <td class="num dim"><strong>${gLastYtd > 0 ? fmt(gLastYtd, "£") : "—"}</strong></td>
+    <td class="num${gYtdYoyCls}"><strong>${gYtdYoyPct !== null ? fmtPct(gYtdYoyPct) : "—"}</strong></td>
+    <td class="num"><strong>${gYtdBudget > 0 ? fmt(gYtdBudget, "£") : "—"}</strong></td>
+    <td class="num${gVsCls}"><strong>${gVsBudget !== null ? fmtDelta(gVsBudget, "£") : "—"}</strong></td>
+    <td class="num"><strong>${fmt(gFullYear, "£")}</strong></td>
+    <td class="num dim"><strong>${gLastYear > 0 ? fmt(gLastYear, "£") : "—"}</strong></td>
+    <td class="num${gFullYoyCls}"><strong>${gFullYoyPct !== null ? fmtPct(gFullYoyPct) : "—"}</strong></td>
+    <td class="num"><strong>${gBudgetTotal > 0 ? fmt(gBudgetTotal, "£") : "—"}</strong></td>
+  `;
+  tbody.appendChild(overallTr);
+
   table.appendChild(tbody);
   wrap.appendChild(table);
   section.appendChild(wrap);
