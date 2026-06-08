@@ -292,8 +292,9 @@ def get_live_contract_placements(today_str: str) -> list[dict]:
 
 def get_placements_full_year(year: int) -> list[dict]:
     """
-    Fetch all non-cancelled perm placements for a given calendar year.
-    No statecode filter — completed placements from past years are statecode=1.
+    Fetch all active or completed perm placements for a given calendar year.
+    statecode 0 = Active, 1 = Completed/Won — both valid for historical data.
+    statecode 2 = Cancelled — explicitly excluded here and via statuscode filters.
     """
     cancel_filter = " and ".join(f"statuscode ne {c}" for c in CANCEL_CODES)
     return odata_get_all(
@@ -309,6 +310,7 @@ def get_placements_full_year(year: int) -> list[dict]:
             ),
             "$filter": (
                 f"crimson_type eq {PERM_TYPE}"
+                f" and (statecode eq 0 or statecode eq 1)"
                 f" and statuscode ne {CANCELLED_DIDNOTSTART}"
                 f" and crimson_startdate ge {year}-01-01"
                 f" and crimson_startdate le {year}-12-31"
