@@ -583,3 +583,10 @@ tbody tr.territory-total-row td {
   padding-top: 10px;
   padding-bottom: 10px;
 }
+
+/* Grand Total (GBP) row — stronger accent */
+tfoot tr.grand-total-row td {
+  background: rgba(93,143,154,.10);
+  border-top: 2px solid var(--accent);
+  color: var(--white);
+}

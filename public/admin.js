@@ -381,7 +381,6 @@ function buildBreakdownTabs() {
 function buildOverallTable(showLastYear = false) {
   const compareLabel = showLastYear ? `${currentYear}` : `${currentYear - 1}`;
   const yoyLabel     = showLastYear ? "vs This Year" : "YoY";
-  const isFuture     = i => !showLastYear && (i + 1 > currentMonth);
 
   // ── Summary totals bar ────────────────────────────────────────────────────
   const GBP_TERRITORIES = ["Bristol", "London", "London Contract"];
@@ -427,9 +426,7 @@ function buildOverallTable(showLastYear = false) {
     summaryBlock("USD Territories", "$", usd);
 
   // ── Main table ────────────────────────────────────────────────────────────
-  const monthHeaders = MONTH_ABBR.map((m, i) =>
-    `<th class="num${isFuture(i) ? " future-col" : ""}">${m}</th>`
-  ).join("");
+  const monthHeaders = MONTH_ABBR.map(m => `<th class="num">${m}</th>`).join("");
 
   const colCount = 2 + 12 + 3;
 
@@ -472,9 +469,8 @@ function buildOverallTable(showLastYear = false) {
       const mSym    = m.sym || sym;
 
       const monthCells = MONTH_ABBR.map((_, i) => {
-        const v   = mMonths[String(i + 1)] || 0;
-        const cls = isFuture(i) ? " future-col" : "";
-        return `<td class="num${cls}">${v > 0 ? fmt(v, mSym) : ""}</td>`;
+        const v = mMonths[String(i + 1)] || 0;
+        return `<td class="num">${v > 0 ? fmt(v, mSym) : ""}</td>`;
       }).join("");
 
       const yoy    = mCmp > 0 ? (mTotal - mCmp) / mCmp * 100 : null;
@@ -497,9 +493,8 @@ function buildOverallTable(showLastYear = false) {
 
     // Territory subtotal row
     const subtotalCells = MONTH_ABBR.map((_, i) => {
-      const v   = (territoryMths || {})[String(i + 1)] || 0;
-      const cls = isFuture(i) ? " future-col" : "";
-      return `<td class="num${cls}"><strong>${v > 0 ? fmt(v, sym) : ""}</strong></td>`;
+      const v = (territoryMths || {})[String(i + 1)] || 0;
+      return `<td class="num"><strong>${v > 0 ? fmt(v, sym) : ""}</strong></td>`;
     }).join("");
 
     const tYoy    = territoryCmp > 0 ? (territoryTot - territoryCmp) / territoryCmp * 100 : null;
@@ -514,7 +509,31 @@ function buildOverallTable(showLastYear = false) {
     </tr>`;
   }
 
-  html += `</tbody></table>`;
+  // GBP grand total footer
+  const grandMonthly    = showLastYear ? reportData.grand_monthly_last_gbp : reportData.grand_monthly_gbp;
+  const grandMonthlyCmp = showLastYear ? reportData.grand_monthly_gbp      : reportData.grand_monthly_last_gbp;
+  const grandTotFull    = showLastYear ? reportData.grand_total_last_gbp   : reportData.grand_total_gbp;
+  const grandCmpFull    = showLastYear ? reportData.grand_total_gbp        : reportData.grand_total_last_gbp;
+
+  const grandCells = MONTH_ABBR.map((_, i) => {
+    const v = (grandMonthly || {})[String(i + 1)] || 0;
+    return `<td class="num"><strong>${v > 0 ? fmt(v, "£") : ""}</strong></td>`;
+  }).join("");
+
+  const grandYoy    = grandCmpFull > 0 ? (grandTotFull - grandCmpFull) / grandCmpFull * 100 : null;
+  const grandYoyCls = grandYoy !== null ? (grandYoy >= 0 ? " pos" : " neg") : "";
+
+  html += `</tbody>
+    <tfoot>
+      <tr class="territory-total-row grand-total-row">
+        <td colspan="2"><strong>Grand Total (GBP)</strong></td>
+        ${grandCells}
+        <td class="num"><strong>${fmt(grandTotFull, "£")}</strong></td>
+        <td class="num dim"><strong>${grandCmpFull > 0 ? fmt(grandCmpFull, "£") : "—"}</strong></td>
+        <td class="num${grandYoyCls}"><strong>${grandYoy !== null ? fmtPct(grandYoy) : "—"}</strong></td>
+      </tr>
+    </tfoot>
+  </table>`;
 
   const wrap = document.createElement("div");
   wrap.className = "table-wrap";
@@ -545,12 +564,7 @@ function buildMonthlyTable(tdata, showLastYear = false) {
   const compareLabel    = showLastYear ? `${currentYear}` : `${currentYear - 1}`;
   const yoyLabel        = showLastYear ? "vs This Year" : "YoY";
 
-  // Future-month dimming only applies to current year view
-  const isFuture = i => !showLastYear && (i + 1 > currentMonth);
-
-  const monthHeaders = MONTH_ABBR.map((m, i) =>
-    `<th class="num${isFuture(i) ? " future-col" : ""}">${m}</th>`
-  ).join("");
+  const monthHeaders = MONTH_ABBR.map(m => `<th class="num">${m}</th>`).join("");
 
   const colCount = 2 + 12 + 3;
 
@@ -577,9 +591,8 @@ function buildMonthlyTable(tdata, showLastYear = false) {
       const mCmp    = compareTotal(m);
 
       const monthCells = MONTH_ABBR.map((_, i) => {
-        const v   = mMonths[String(i + 1)] || 0;
-        const cls = isFuture(i) ? " future-col" : "";
-        return `<td class="num${cls}">${v > 0 ? fmt(v, sym) : ""}</td>`;
+        const v = mMonths[String(i + 1)] || 0;
+        return `<td class="num">${v > 0 ? fmt(v, sym) : ""}</td>`;
       }).join("");
 
       const yoy    = mCmp > 0 ? (mTotal - mCmp) / mCmp * 100 : null;
@@ -603,9 +616,8 @@ function buildMonthlyTable(tdata, showLastYear = false) {
 
   // Territory total footer
   const totalCells = MONTH_ABBR.map((_, i) => {
-    const v   = (territoryMonths || {})[String(i + 1)] || 0;
-    const cls = isFuture(i) ? " future-col" : "";
-    return `<td class="num${cls}"><strong>${v > 0 ? fmt(v, sym) : ""}</strong></td>`;
+    const v = (territoryMonths || {})[String(i + 1)] || 0;
+    return `<td class="num"><strong>${v > 0 ? fmt(v, sym) : ""}</strong></td>`;
   }).join("");
 
   const tYoy    = territoryCompare > 0

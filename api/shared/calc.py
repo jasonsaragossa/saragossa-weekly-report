@@ -338,21 +338,29 @@ def build_admin_report(
         })
         report[territory] = result
 
-    # Grand totals converted to GBP
+    # Grand totals and monthly totals converted to GBP
     usd_to_gbp = to_gbp.get("USD", TO_GBP["USD"])
     USD_TERRITORIES = {"Chicago", "New York", "Chicago Contract"}
-    grand_gbp      = 0.0
-    grand_gbp_last = 0.0
+    grand_gbp            = 0.0
+    grand_gbp_last       = 0.0
+    grand_monthly_gbp      = {str(m): 0.0 for m in range(1, 13)}
+    grand_monthly_last_gbp = {str(m): 0.0 for m in range(1, 13)}
     for t, tdata in report.items():
         factor = usd_to_gbp if t in USD_TERRITORIES else 1.0
-        grand_gbp      += tdata["territory_total"]       * factor
-        grand_gbp_last += tdata["territory_last_year"]   * factor
+        grand_gbp      += tdata["territory_total"]     * factor
+        grand_gbp_last += tdata["territory_last_year"] * factor
+        for m_str, v in tdata["territory_months"].items():
+            grand_monthly_gbp[m_str] = round(grand_monthly_gbp[m_str] + v * factor, 2)
+        for m_str, v in tdata["territory_last_year_months"].items():
+            grand_monthly_last_gbp[m_str] = round(grand_monthly_last_gbp[m_str] + v * factor, 2)
 
     return {
-        "year":                   year,
-        "territories":            report,
-        "grand_total_gbp":        round(grand_gbp, 2),
-        "grand_total_last_gbp":   round(grand_gbp_last, 2),
+        "year":                    year,
+        "territories":             report,
+        "grand_total_gbp":         round(grand_gbp, 2),
+        "grand_total_last_gbp":    round(grand_gbp_last, 2),
+        "grand_monthly_gbp":       grand_monthly_gbp,
+        "grand_monthly_last_gbp":  grand_monthly_last_gbp,
     }
 
 
