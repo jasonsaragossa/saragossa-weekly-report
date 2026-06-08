@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analytics — Saragossa</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+
+<header class="header">
+  <a href="/"><img src="/logo.svg" alt="Saragossa" class="logo"></a>
+  <div class="header-right">
+    <span class="week-label">Analytics</span>
+    <a href="/settings" class="settings-link">⚙ Settings</a>
+    <a href="/settings" class="settings-link">⚙ Settings</a>
+    <a href="/.auth/logout" class="logout-link">Sign out</a>
+  </div>
+</header>
+
+<div class="admin-container" id="content">
+  <div class="loading-state">
+    <div class="spinner"></div>
+    <p>Loading analytics…</p>
+  </div>
+</div>
+
+<div class="footer">Saragossa · Admin Analytics</div>
+
+<script src="/admin.js"></script>
+</body>
+</html>

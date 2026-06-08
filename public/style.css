@@ -372,3 +372,77 @@ tr.team-header:first-child td { border-top: none; }
   text-align: right;
 }
 .contract-input:focus { outline: none; box-shadow: 0 0 0 1px var(--accent); }
+
+/* ── Admin analytics page ────────────────────────────────────────────────── */
+
+.admin-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+.admin-page-header {
+  margin-bottom: 32px;
+}
+.admin-page-header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--white);
+  margin-bottom: 8px;
+}
+
+.admin-section {
+  margin-bottom: 40px;
+}
+
+.admin-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .10em;
+  color: var(--mid);
+  margin-bottom: 14px;
+  margin-top: 40px;
+}
+.admin-section-title:first-child { margin-top: 0; }
+
+/* Summary table budget input */
+.budget-edit-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.budget-input {
+  width: 110px;
+}
+
+/* Delta colours */
+.pos { color: var(--green); }
+.neg { color: var(--red); }
+.dim { color: var(--mid); }
+
+/* Monthly breakdown table */
+.monthly-table {
+  font-size: 12px;
+}
+.monthly-table th, .monthly-table td {
+  padding: 9px 10px;
+  white-space: nowrap;
+}
+.monthly-table th { font-size: 9px; }
+
+/* Future months (haven't happened yet) */
+.future-col {
+  color: var(--border);
+}
+thead .future-col {
+  color: var(--border);
+}
+
+/* Territory total footer row */
+tfoot tr.territory-total-row td {
+  background: var(--surface2);
+  border-top: 1px solid var(--accent);
+  padding-top: 10px;
+  padding-bottom: 10px;
+}

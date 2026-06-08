@@ -105,7 +105,7 @@ function buildUserRow(u, territory) {
   const contractFields = isContract ? `
     <td><input type="number" class="contract-input" data-field="margin_ytd"
          placeholder="0" step="1"
-         value="${ov.crbb7_marginydt != null ? ov.crbb7_marginydt : ""}"></td>
+         value="${ov.crbb7_marginytd != null ? ov.crbb7_marginytd : ""}"></td>
     <td><input type="number" class="contract-input" data-field="contract_last12m"
          placeholder="0" step="1"
          value="${ov.crbb7_contractlast12m != null ? ov.crbb7_contractlast12m : ""}"></td>

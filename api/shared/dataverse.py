@@ -274,6 +274,69 @@ def get_live_contract_placements(today_str: str) -> list[dict]:
     )
 
 
+# ── Admin: full-year placements ───────────────────────────────────────────────
+
+def get_placements_full_year(year: int) -> list[dict]:
+    """
+    Fetch all non-cancelled perm placements for a given calendar year.
+    No statecode filter — completed placements from past years are statecode=1.
+    """
+    cancel_filter = " and ".join(f"statuscode ne {c}" for c in CANCEL_CODES)
+    return odata_get_all(
+        "crimson_placements",
+        params={
+            "$select": (
+                "crimson_placementid,recruit_truegrossprofit,"
+                "crimson_startdate,crimson_specialinstructionsclient,"
+                "_mercury_clientrelationshipowner_value,"
+                "_crimson_consultant_value,"
+                "_mercury_assignmentowner_value,"
+                "_mercury_contractorrelationship_userid_value"
+            ),
+            "$filter": (
+                f"crimson_type eq {PERM_TYPE}"
+                f" and statuscode ne {CANCELLED_DIDNOTSTART}"
+                f" and crimson_startdate ge {year}-01-01"
+                f" and crimson_startdate le {year}-12-31"
+                f" and {cancel_filter}"
+            ),
+            "$expand": "recruit_truegrossprofitcurrency($select=isocurrencycode)",
+        },
+    )
+
+
+# ── Budget table (crbb7_budget) ───────────────────────────────────────────────
+
+def get_budgets() -> list[dict]:
+    """Returns all budget records. Gracefully returns [] if table doesn't exist."""
+    try:
+        return odata_get_all("crbb7_budgets")
+    except Exception as e:
+        logging.warning(f"get_budgets failed (table may not exist yet): {e}")
+        return []
+
+def upsert_budget(year: int, territory: str, amount: float) -> dict:
+    """Creates or updates the annual budget for a territory/year pair."""
+    existing = odata_get_all(
+        "crbb7_budgets",
+        params={
+            "$filter": f"crbb7_year eq {year} and crbb7_territory eq '{territory}'",
+        },
+    )
+    body = {
+        "crbb7_year":      year,
+        "crbb7_territory": territory,
+        "crbb7_amount":    amount,
+    }
+    if existing:
+        rid = existing[0]["crbb7_budgetid"]
+        odata_patch(f"crbb7_budgets({rid})", body)
+        return {"id": rid, "amount": amount, "territory": territory, "year": year}
+    else:
+        result = odata_post("crbb7_budgets", body)
+        return result
+
+
 # ── Override table (crbb7_useroverride) ───────────────────────────────────────
 
 def get_overrides() -> list[dict]:

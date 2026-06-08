@@ -126,6 +126,142 @@ def compute_wnf(uid: str, live_contracts: list, display_ccy: str, to_gbp: dict =
     return round(total, 2)
 
 
+def compute_monthly_breakdown(
+    uid: str, placements: list, display_ccy: str, year: int,
+    to_gbp: dict = None, to_usd: dict = None,
+) -> dict:
+    """
+    Returns {1: val, 2: val, ..., 12: val} — GP split for uid in the given year.
+    """
+    fx = (to_gbp or TO_GBP) if display_ccy == "GBP" else (to_usd or TO_USD)
+    months = {m: 0.0 for m in range(1, 13)}
+    for p in placements:
+        factor = split_factor(p, uid)
+        if factor == 0:
+            continue
+        d = parse_date(p["crimson_startdate"])
+        if d.year != year:
+            continue
+        gp  = p.get("recruit_truegrossprofit") or 0.0
+        ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode")
+        months[d.month] += gp * factor * fx.get(ccy, 1.0)
+    return {str(k): round(v, 2) for k, v in months.items()}
+
+
+def build_admin_report(
+    consultants: list,
+    placements_this: list,
+    placements_last: list,
+    overrides: list,
+    today: date,
+    team_map: dict = None,
+    budgets: list = None,
+    fx_rates: dict = None,
+) -> dict:
+    """
+    Builds the admin analytics report: monthly breakdown per consultant,
+    territory totals, YoY comparison, and budget figures.
+    """
+    year = today.year
+    to_gbp, to_usd = _build_fx_tables(fx_rates) if fx_rates else (TO_GBP, TO_USD)
+    override_map = {o["crbb7_userid"]: o for o in overrides}
+
+    CCY = {
+        "Bristol":          "GBP",
+        "London":           "GBP",
+        "London Contract":  "GBP",
+        "Chicago":          "USD",
+        "New York":         "USD",
+        "Chicago Contract": "USD",
+    }
+
+    # Budget map for current year: {territory: {amount, id}}
+    budget_map = {}
+    for b in (budgets or []):
+        if b.get("crbb7_year") == year:
+            t = b.get("crbb7_territory", "")
+            budget_map[t] = {
+                "amount": float(b.get("crbb7_amount") or 0),
+                "id":     b.get("crbb7_budgetid"),
+            }
+
+    from collections import defaultdict
+    by_territory = defaultdict(list)
+
+    for c in consultants:
+        uid       = c["systemuserid"]
+        territory = _territory_name(c.get("_territoryid_value"))
+        if not territory:
+            continue
+        ov = override_map.get(uid, {})
+        if ov.get("crbb7_ishidden"):
+            continue
+
+        team = ov.get("crbb7_team") or _default_team(uid, territory, team_map or {})
+        role = _clean_role(c.get("title") or "")
+        ccy  = CCY.get(territory, "GBP")
+
+        months_this = compute_monthly_breakdown(uid, placements_this, ccy, year,     to_gbp, to_usd)
+        months_last = compute_monthly_breakdown(uid, placements_last, ccy, year - 1, to_gbp, to_usd)
+        total_this  = sum(months_this.values())
+        total_last  = sum(months_last.values())
+
+        by_territory[territory].append({
+            "uid":             uid,
+            "name":            c.get("fullname", ""),
+            "role":            role,
+            "team":            team,
+            "createdon":       c.get("createdon", ""),
+            "sym":             "£" if ccy == "GBP" else "$",
+            "months":          months_this,
+            "total":           round(total_this, 2),
+            "last_year_total": round(total_last, 2),
+        })
+
+    report = {}
+    for territory, members in by_territory.items():
+        order = TEAM_ORDER.get(territory)
+        ccy   = CCY.get(territory, "GBP")
+        sym   = "£" if ccy == "GBP" else "$"
+
+        # Territory-level monthly totals
+        t_months = {str(m): 0.0 for m in range(1, 13)}
+        t_last   = 0.0
+        for member in members:
+            for m_str, v in member["months"].items():
+                t_months[m_str] = round(t_months[m_str] + v, 2)
+            t_last += member.get("last_year_total", 0)
+        t_total = sum(t_months.values())
+
+        if order:
+            members.sort(key=lambda m: (
+                order.index(m["team"]) if m["team"] in order else 99,
+                m.get("createdon", "")
+            ))
+            groups = []
+            for m in members:
+                existing = next((g for g in groups if g["team"] == m["team"]), None)
+                if not existing:
+                    existing = {"team": m["team"], "members": []}
+                    groups.append(existing)
+                existing["members"].append(m)
+            result = {"type": "teams", "groups": groups}
+        else:
+            members.sort(key=lambda m: m.get("createdon", ""))
+            result = {"type": "flat", "members": members}
+
+        result.update({
+            "sym":               sym,
+            "territory_months":  t_months,
+            "territory_total":   round(t_total, 2),
+            "territory_last_year": round(t_last, 2),
+            "budget":            budget_map.get(territory, {"amount": 0, "id": None}),
+        })
+        report[territory] = result
+
+    return {"year": year, "territories": report}
+
+
 def build_report(
     consultants: list[dict],
     placements: list[dict],

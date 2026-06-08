@@ -16,9 +16,10 @@ from shared.auth import require_auth, require_admin
 from shared.dataverse import (
     get_active_consultants, get_placements, get_overrides,
     get_team_membership_map, get_live_contract_placements, get_fx_rates,
+    get_placements_full_year, get_budgets, upsert_budget,
     upsert_override, delete_override, TERRITORY_IDS,
 )
-from shared.calc import build_report
+from shared.calc import build_report, build_admin_report
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
@@ -162,6 +163,87 @@ def settings_delete(req: func.HttpRequest) -> func.HttpResponse:
         )
     except Exception as e:
         logging.exception("settings DELETE error")
+        return func.HttpResponse(
+            json.dumps({"ok": False, "error": str(e)}),
+            mimetype="application/json",
+            status_code=500,
+        )
+
+
+# ── /api/admin-report ─────────────────────────────────────────────────────────
+
+@app.route(route="admin-report", methods=["GET"])
+def admin_report(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_admin(req)
+    if err:
+        return err
+
+    try:
+        today = date.today()
+        year  = today.year
+
+        consultants      = get_active_consultants()
+        overrides        = get_overrides()
+        team_map         = get_team_membership_map()
+        placements_this  = get_placements_full_year(year)
+        placements_last  = get_placements_full_year(year - 1)
+        budgets          = get_budgets()
+
+        try:
+            fx_rates = get_fx_rates()
+        except Exception:
+            logging.warning("admin-report: could not fetch live FX rates, using fallback")
+            fx_rates = None
+
+        report = build_admin_report(
+            consultants, placements_this, placements_last,
+            overrides, today,
+            team_map=team_map, budgets=budgets, fx_rates=fx_rates,
+        )
+
+        return func.HttpResponse(
+            json.dumps({"ok": True, **report}),
+            mimetype="application/json",
+            status_code=200,
+        )
+    except Exception as e:
+        logging.exception("admin-report error")
+        return func.HttpResponse(
+            json.dumps({"ok": False, "error": str(e)}),
+            mimetype="application/json",
+            status_code=500,
+        )
+
+
+# ── /api/admin/budget (POST) ──────────────────────────────────────────────────
+
+@app.route(route="admin/budget", methods=["POST"])
+def admin_budget_post(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_admin(req)
+    if err:
+        return err
+
+    try:
+        body = req.get_json()
+        year      = body.get("year")
+        territory = body.get("territory")
+        amount    = body.get("amount")
+
+        if not year or not territory or amount is None:
+            return func.HttpResponse(
+                json.dumps({"ok": False, "error": "year, territory and amount are required"}),
+                mimetype="application/json",
+                status_code=400,
+            )
+
+        result = upsert_budget(int(year), territory, float(amount))
+        return func.HttpResponse(
+            json.dumps({"ok": True, "budget": result}),
+            mimetype="application/json",
+            status_code=200,
+        )
+    except Exception as e:
+        logging.exception("admin budget POST error")
         return func.HttpResponse(
             json.dumps({"ok": False, "error": str(e)}),
             mimetype="application/json",
