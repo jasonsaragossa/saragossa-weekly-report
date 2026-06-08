@@ -20,7 +20,7 @@ let currentMonth = new Date().getMonth() + 1; // 1-indexed
 (async () => {
   let resp, text, data;
   try {
-    resp = await fetch("/api/admin-report");
+    resp = await fetch("/api/analytics-report");
     if (resp.status === 401) {
       window.location.href = "/.auth/login/aad?post_login_redirect_uri=" + encodeURIComponent(window.location.pathname);
       return;
@@ -169,7 +169,7 @@ async function saveBudget(territory, amount, btn) {
   btn.textContent = "Saving…";
   btn.disabled = true;
   try {
-    const resp = await fetch("/api/admin-budget", {
+    const resp = await fetch("/api/analytics-budget", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ year: currentYear, territory, amount }),

@@ -172,8 +172,8 @@ def settings_delete(req: func.HttpRequest) -> func.HttpResponse:
 
 # ── /api/admin-report ─────────────────────────────────────────────────────────
 
-@app.route(route="admin-report", methods=["GET"])
-def admin_report(req: func.HttpRequest) -> func.HttpResponse:
+@app.route(route="analytics-report", methods=["GET"])
+def analytics_report(req: func.HttpRequest) -> func.HttpResponse:
     email, err = require_admin(req)
     if err:
         return err
@@ -217,8 +217,8 @@ def admin_report(req: func.HttpRequest) -> func.HttpResponse:
 
 # ── /api/admin/budget (POST) ──────────────────────────────────────────────────
 
-@app.route(route="admin-budget", methods=["POST"])
-def admin_budget_post(req: func.HttpRequest) -> func.HttpResponse:
+@app.route(route="analytics-budget", methods=["POST"])
+def analytics_budget_post(req: func.HttpRequest) -> func.HttpResponse:
     email, err = require_admin(req)
     if err:
         return err
