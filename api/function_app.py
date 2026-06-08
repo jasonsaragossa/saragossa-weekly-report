@@ -217,7 +217,7 @@ def admin_report(req: func.HttpRequest) -> func.HttpResponse:
 
 # ── /api/admin/budget (POST) ──────────────────────────────────────────────────
 
-@app.route(route="admin/budget", methods=["POST"])
+@app.route(route="admin-budget", methods=["POST"])
 def admin_budget_post(req: func.HttpRequest) -> func.HttpResponse:
     email, err = require_admin(req)
     if err:

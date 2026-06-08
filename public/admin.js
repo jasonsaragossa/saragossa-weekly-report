@@ -169,10 +169,11 @@ async function saveBudget(territory, amount, btn) {
   btn.textContent = "Saving…";
   btn.disabled = true;
   try {
-    const resp = await fetch("/api/admin/budget", {
+    const resp = await fetch("/api/admin-budget", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ year: currentYear, territory, amount }),
+
     });
     const data = await resp.json();
     if (data.ok) {
