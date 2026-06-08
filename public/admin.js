@@ -414,9 +414,14 @@ function buildOverallTable(showLastYear = false) {
       </div>`;
   }
 
+  const grandTotal  = showLastYear ? reportData.grand_total_last_gbp  : reportData.grand_total_gbp;
+  const grandCompare = showLastYear ? reportData.grand_total_gbp       : reportData.grand_total_last_gbp;
+
   const summaryBar = document.createElement("div");
   summaryBar.className = "overall-summary-bar";
   summaryBar.innerHTML =
+    summaryBlock("Total (GBP)", "£", { total: grandTotal, compare: grandCompare }) +
+    `<div class="overall-summary-divider"></div>` +
     summaryBlock("GBP Territories", "£", gbp) +
     `<div class="overall-summary-divider"></div>` +
     summaryBlock("USD Territories", "$", usd);

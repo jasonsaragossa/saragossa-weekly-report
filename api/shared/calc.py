@@ -338,7 +338,22 @@ def build_admin_report(
         })
         report[territory] = result
 
-    return {"year": year, "territories": report}
+    # Grand totals converted to GBP
+    usd_to_gbp = to_gbp.get("USD", TO_GBP["USD"])
+    USD_TERRITORIES = {"Chicago", "New York", "Chicago Contract"}
+    grand_gbp      = 0.0
+    grand_gbp_last = 0.0
+    for t, tdata in report.items():
+        factor = usd_to_gbp if t in USD_TERRITORIES else 1.0
+        grand_gbp      += tdata["territory_total"]       * factor
+        grand_gbp_last += tdata["territory_last_year"]   * factor
+
+    return {
+        "year":                   year,
+        "territories":            report,
+        "grand_total_gbp":        round(grand_gbp, 2),
+        "grand_total_last_gbp":   round(grand_gbp_last, 2),
+    }
 
 
 def build_report(
