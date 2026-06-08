@@ -99,12 +99,22 @@ def get_active_consultants() -> list[dict]:
         },
     )
 
+# "Saragossa House" accounts that have no territory assigned in Mercury.
+# We inject them into the Bristol territory so their placements appear in analytics.
+# Key = systemuserid, value = territory name to assign.
+_UNASSIGNED_HOUSE_USERS = {
+    "cf6f0d98-2a7a-ee11-8179-002248c7244c": "Bristol",   # Saragossa House (generic)
+}
+
 def get_all_territory_consultants() -> list[dict]:
-    """Returns active AND inactive users in the 6 territories, with isdisabled flag."""
+    """
+    Returns active AND inactive users in the 6 territories, with isdisabled flag.
+    Also injects any unassigned house users defined in _UNASSIGNED_HOUSE_USERS.
+    """
     territory_filter = " or ".join(
         f"_territoryid_value eq '{tid}'" for tid in TERRITORY_IDS.values()
     )
-    return odata_get_all(
+    results = odata_get_all(
         "systemusers",
         params={
             "$select": "systemuserid,fullname,title,createdon,_territoryid_value,isdisabled",
@@ -112,6 +122,22 @@ def get_all_territory_consultants() -> list[dict]:
             "$orderby": "createdon asc",
         },
     )
+    # Inject house users that have no territory in Mercury
+    existing_ids = {r["systemuserid"] for r in results}
+    for uid, territory in _UNASSIGNED_HOUSE_USERS.items():
+        if uid in existing_ids:
+            continue
+        house_users = odata_get_all(
+            "systemusers",
+            params={
+                "$select": "systemuserid,fullname,title,createdon,isdisabled",
+                "$filter": f"systemuserid eq '{uid}'",
+            },
+        )
+        for u in house_users:
+            u["_territoryid_value"] = TERRITORY_IDS[territory]
+            results.append(u)
+    return results
 
 
 # Known report team names — must match Dataverse team names exactly
@@ -194,10 +220,18 @@ def is_admin(user_email: str) -> bool:
 
 # ── Placement queries ─────────────────────────────────────────────────────────
 
-PERM_TYPE              = 143570000
-CONTRACT_TYPES         = [143570001, 143570002]   # Contract, Temporary
-CANCELLED_DIDNOTSTART  = 143570009
-CANCEL_CODES = [2, 4, 100001, 100002, 100003]  # adjust to your actual cancellation statecodes
+PERM_TYPE      = 143570000
+CONTRACT_TYPES = [143570001, 143570002]   # Contract, Temporary
+
+# All Mercury cancellation statuscodes (from crimson_placement schema)
+CANCEL_CODES = [
+    143570009,  # Cancelled - Candidate did not start
+    143570010,  # Cancelled - Client cancelled
+    939310015,  # Cancelled by us
+    939310016,  # Cancelled - Changed Client
+    975310000,  # Cancelled - Rebated
+]
+CANCELLED_DIDNOTSTART = 143570009  # kept as alias used elsewhere
 
 def get_placements(start_date: str, end_date: str) -> list[dict]:
     """
@@ -310,8 +344,6 @@ def get_placements_full_year(year: int) -> list[dict]:
             ),
             "$filter": (
                 f"crimson_type eq {PERM_TYPE}"
-                f" and (statecode eq 0 or statecode eq 1)"
-                f" and statuscode ne {CANCELLED_DIDNOTSTART}"
                 f" and crimson_startdate ge {year}-01-01"
                 f" and crimson_startdate le {year}-12-31"
                 f" and {cancel_filter}"
