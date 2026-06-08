@@ -383,6 +383,45 @@ function buildOverallTable(showLastYear = false) {
   const yoyLabel     = showLastYear ? "vs This Year" : "YoY";
   const isFuture     = i => !showLastYear && (i + 1 > currentMonth);
 
+  // ── Summary totals bar ────────────────────────────────────────────────────
+  const GBP_TERRITORIES = ["Bristol", "London", "London Contract"];
+  const USD_TERRITORIES = ["Chicago", "New York", "Chicago Contract"];
+
+  function sumTerritories(terrs) {
+    let total = 0, compare = 0;
+    for (const t of terrs) {
+      const td = reportData.territories[t];
+      if (!td) continue;
+      total   += showLastYear ? td.territory_last_year  : td.territory_total;
+      compare += showLastYear ? td.territory_total       : td.territory_last_year;
+    }
+    return { total, compare };
+  }
+
+  const gbp = sumTerritories(GBP_TERRITORIES);
+  const usd = sumTerritories(USD_TERRITORIES);
+
+  function summaryBlock(label, sym, { total, compare }) {
+    const yoy    = compare > 0 ? (total - compare) / compare * 100 : null;
+    const yoyCls = yoy !== null ? (yoy >= 0 ? "pos" : "neg") : "dim";
+    const yoyStr = yoy !== null ? fmtPct(yoy) : "—";
+    return `
+      <div class="overall-summary-block">
+        <span class="overall-summary-label">${label}</span>
+        <span class="overall-summary-total">${fmt(total, sym)}</span>
+        <span class="overall-summary-cmp dim">${compare > 0 ? fmt(compare, sym) : "—"}</span>
+        <span class="overall-summary-yoy ${yoyCls}">${yoyStr}</span>
+      </div>`;
+  }
+
+  const summaryBar = document.createElement("div");
+  summaryBar.className = "overall-summary-bar";
+  summaryBar.innerHTML =
+    summaryBlock("GBP Territories", "£", gbp) +
+    `<div class="overall-summary-divider"></div>` +
+    summaryBlock("USD Territories", "$", usd);
+
+  // ── Main table ────────────────────────────────────────────────────────────
   const monthHeaders = MONTH_ABBR.map((m, i) =>
     `<th class="num${isFuture(i) ? " future-col" : ""}">${m}</th>`
   ).join("");
@@ -475,7 +514,11 @@ function buildOverallTable(showLastYear = false) {
   const wrap = document.createElement("div");
   wrap.className = "table-wrap";
   wrap.innerHTML = html;
-  return wrap;
+
+  const container = document.createElement("div");
+  container.appendChild(summaryBar);
+  container.appendChild(wrap);
+  return container;
 }
 
 

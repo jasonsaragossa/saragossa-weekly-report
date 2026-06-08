@@ -519,6 +519,54 @@ tr.inactive-consultant:hover td { opacity: 0.65; }
 }
 .budget-grid-table .annual-total { text-align: right; }
 
+/* Overall tab summary bar */
+.overall-summary-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 20px;
+  margin-bottom: 12px;
+}
+.overall-summary-block {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex: 1;
+}
+.overall-summary-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--mid);
+  min-width: 110px;
+}
+.overall-summary-total {
+  font-family: var(--mono);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--white);
+}
+.overall-summary-cmp {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.overall-summary-yoy {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+}
+.overall-summary-divider {
+  width: 1px;
+  height: 36px;
+  background: var(--border);
+  margin: 0 24px;
+  flex-shrink: 0;
+}
+
 /* Future months (haven't happened yet) */
 .future-col {
   color: var(--border);
