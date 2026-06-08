@@ -384,7 +384,7 @@ def upsert_override(data: dict, updated_by: str) -> dict:
         "crbb7_team":     data.get("team", ""),
         "crbb7_ishidden": data.get("is_hidden", False),
     }
-    # Contract manual fields — only included once the Dataverse columns exist
+    # Contract manual fields
     for api_key, dv_key in [
         ("margin_ytd",       "crbb7_marginytd"),
         ("contract_last12m", "crbb7_contractlast12m"),
@@ -392,6 +392,17 @@ def upsert_override(data: dict, updated_by: str) -> dict:
     ]:
         if api_key in data and data[api_key] is not None:
             body[dv_key] = data[api_key]
+
+    # History / dates — only write if non-empty (avoids overwriting existing values with null)
+    for api_key, dv_key in [
+        ("date_joined",        "crbb7_datejoined"),
+        ("date_joined_team",   "crbb7_datejoinedteam"),
+        ("previous_team",      "crbb7_previousteam"),
+        ("previous_territory", "crbb7_previousterritory"),
+    ]:
+        if api_key in data:
+            val = data[api_key]
+            body[dv_key] = val if val not in (None, "") else None
     if existing:
         rid = existing[0]["crbb7_useroverrideid"]
         odata_patch(f"crbb7_useroverrides({rid})", body)

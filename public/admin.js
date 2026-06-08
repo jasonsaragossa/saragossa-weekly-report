@@ -417,8 +417,9 @@ function buildMonthlyTable(tdata, showLastYear = false) {
       const yoy    = mCmp > 0 ? (mTotal - mCmp) / mCmp * 100 : null;
       const yoyCls = yoy !== null ? (yoy >= 0 ? " pos" : " neg") : "";
       const inactiveCls = m.active === false ? " inactive-consultant" : "";
-      const nameCell = m.active === false
-        ? `${esc(m.name)} <span class="inactive-badge">left</span>`
+      const badgeText   = m.note ? m.note : (m.active === false ? "left" : null);
+      const nameCell    = badgeText
+        ? `${esc(m.name)} <span class="inactive-badge">${esc(badgeText)}</span>`
         : esc(m.name);
 
       html += `<tr class="${inactiveCls}">

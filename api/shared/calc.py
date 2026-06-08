@@ -129,9 +129,12 @@ def compute_wnf(uid: str, live_contracts: list, display_ccy: str, to_gbp: dict =
 def compute_monthly_breakdown(
     uid: str, placements: list, display_ccy: str, year: int,
     to_gbp: dict = None, to_usd: dict = None,
+    after_date: date = None, before_date: date = None,
 ) -> dict:
     """
     Returns {1: val, 2: val, ..., 12: val} — GP split for uid in the given year.
+    after_date:  only include placements with start_date >= after_date
+    before_date: only include placements with start_date <  before_date
     """
     fx = (to_gbp or TO_GBP) if display_ccy == "GBP" else (to_usd or TO_USD)
     months = {m: 0.0 for m in range(1, 13)}
@@ -141,6 +144,10 @@ def compute_monthly_breakdown(
             continue
         d = parse_date(p["crimson_startdate"])
         if d.year != year:
+            continue
+        if after_date  and d < after_date:
+            continue
+        if before_date and d >= before_date:
             continue
         gp  = p.get("recruit_truegrossprofit") or 0.0
         ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode")
@@ -204,29 +211,87 @@ def build_admin_report(
         role = _clean_role(c.get("title") or "")
         ccy  = CCY.get(territory, "GBP")
 
-        is_active   = not c.get("isdisabled", False)
-        months_this = compute_monthly_breakdown(uid, placements_this, ccy, year,     to_gbp, to_usd)
-        months_last = compute_monthly_breakdown(uid, placements_last, ccy, year - 1, to_gbp, to_usd)
-        total_this  = sum(months_this.values())
-        total_last  = sum(months_last.values())
+        is_active = not c.get("isdisabled", False)
 
-        # Skip inactive consultants who have no data in either year
-        if not is_active and total_this == 0 and total_last == 0:
-            continue
+        # Check for a historical territory/team move
+        dj_str        = ov.get("crbb7_datejoinedteam")
+        prev_territory = ov.get("crbb7_previousterritory") or ""
+        prev_team_name = ov.get("crbb7_previousteam") or ""
+        move_date = None
+        if dj_str:
+            try:
+                move_date = parse_date(dj_str)
+            except Exception:
+                pass
 
-        by_territory[territory].append({
-            "uid":               uid,
-            "name":              c.get("fullname", ""),
-            "role":              role,
-            "team":              team,
-            "createdon":         c.get("createdon", ""),
-            "active":            is_active,
-            "sym":               "£" if ccy == "GBP" else "$",
-            "months":            months_this,
-            "last_year_months":  months_last,
-            "total":             round(total_this, 2),
-            "last_year_total":   round(total_last, 2),
-        })
+        if move_date and prev_territory:
+            # ── Current territory: placements from move_date onwards ──────────
+            m_this_cur = compute_monthly_breakdown(uid, placements_this, ccy, year,     to_gbp, to_usd, after_date=move_date)
+            m_last_cur = compute_monthly_breakdown(uid, placements_last, ccy, year - 1, to_gbp, to_usd, after_date=move_date)
+            tot_this_cur = sum(m_this_cur.values())
+            tot_last_cur = sum(m_last_cur.values())
+            if is_active or tot_this_cur > 0 or tot_last_cur > 0:
+                by_territory[territory].append({
+                    "uid":              uid,
+                    "name":             c.get("fullname", ""),
+                    "role":             role,
+                    "team":             team,
+                    "createdon":        c.get("createdon", ""),
+                    "active":           is_active,
+                    "sym":              "£" if ccy == "GBP" else "$",
+                    "months":           m_this_cur,
+                    "last_year_months": m_last_cur,
+                    "total":            round(tot_this_cur, 2),
+                    "last_year_total":  round(tot_last_cur, 2),
+                    "note":             None,
+                })
+
+            # ── Previous territory: placements before move_date ──────────────
+            prev_ccy  = CCY.get(prev_territory, "GBP")
+            prev_sym  = "£" if prev_ccy == "GBP" else "$"
+            m_this_prev = compute_monthly_breakdown(uid, placements_this, prev_ccy, year,     to_gbp, to_usd, before_date=move_date)
+            m_last_prev = compute_monthly_breakdown(uid, placements_last, prev_ccy, year - 1, to_gbp, to_usd, before_date=move_date)
+            tot_this_prev = sum(m_this_prev.values())
+            tot_last_prev = sum(m_last_prev.values())
+            if tot_this_prev > 0 or tot_last_prev > 0:
+                by_territory[prev_territory].append({
+                    "uid":              uid + "__hist",
+                    "name":             c.get("fullname", ""),
+                    "role":             role,
+                    "team":             prev_team_name or team,
+                    "createdon":        c.get("createdon", ""),
+                    "active":           False,
+                    "sym":              prev_sym,
+                    "months":           m_this_prev,
+                    "last_year_months": m_last_prev,
+                    "total":            round(tot_this_prev, 2),
+                    "last_year_total":  round(tot_last_prev, 2),
+                    "note":             f"now in {territory}",
+                })
+        else:
+            # ── No move — use all placements ─────────────────────────────────
+            months_this = compute_monthly_breakdown(uid, placements_this, ccy, year,     to_gbp, to_usd)
+            months_last = compute_monthly_breakdown(uid, placements_last, ccy, year - 1, to_gbp, to_usd)
+            total_this  = sum(months_this.values())
+            total_last  = sum(months_last.values())
+
+            if not is_active and total_this == 0 and total_last == 0:
+                continue
+
+            by_territory[territory].append({
+                "uid":              uid,
+                "name":             c.get("fullname", ""),
+                "role":             role,
+                "team":             team,
+                "createdon":        c.get("createdon", ""),
+                "active":           is_active,
+                "sym":              "£" if ccy == "GBP" else "$",
+                "months":           months_this,
+                "last_year_months": months_last,
+                "total":            round(total_this, 2),
+                "last_year_total":  round(total_last, 2),
+                "note":             None,
+            })
 
     report = {}
     for territory, members in by_territory.items():

@@ -76,6 +76,10 @@ function renderSettings() {
       <th>Role (Mercury)</th>
       <th>Team</th>
       <th>Hidden</th>
+      <th>Date Joined</th>
+      <th>Joined Team</th>
+      <th>Prev Team</th>
+      <th>Prev Territory</th>
       ${isContract ? "<th>Total Margin YTD</th><th>Contract Last 12M</th><th>Rolling 3M</th>" : ""}
       <th></th>
     </tr></thead>`;
@@ -90,10 +94,16 @@ function renderSettings() {
 
 function buildUserRow(u, territory) {
   const ov = overrideMap[u.uid] || {};
-  const isHidden = ov.crbb7_ishidden || false;
-  const currentTeam = ov.crbb7_team || "";
-  const teams = TEAMS_BY_TERRITORY[territory] || [];
-  const isContract = CONTRACT_TERRITORIES.has(territory);
+  const isHidden     = ov.crbb7_ishidden || false;
+  const currentTeam  = ov.crbb7_team || "";
+  const teams        = TEAMS_BY_TERRITORY[territory] || [];
+  const isContract   = CONTRACT_TERRITORIES.has(territory);
+
+  // Date / history fields — Dataverse Date Only comes back as "2024-10-01" or "2024-10-01T00:00:00Z"
+  const dateJoined     = ov.crbb7_datejoined     ? ov.crbb7_datejoined.split("T")[0]     : "";
+  const dateJoinedTeam = ov.crbb7_datejoinedteam ? ov.crbb7_datejoinedteam.split("T")[0] : "";
+  const prevTeam       = ov.crbb7_previousteam       || "";
+  const prevTerritory  = ov.crbb7_previousterritory  || "";
 
   const tr = document.createElement("tr");
   if (isHidden) tr.classList.add("hidden-user");
@@ -101,6 +111,22 @@ function buildUserRow(u, territory) {
   const teamOptions = ["", ...teams]
     .map(t => `<option value="${esc(t)}" ${t === currentTeam ? "selected" : ""}>${t || "— Mercury default —"}</option>`)
     .join("");
+
+  const prevTerritoryOptions = ["", "Bristol", "London", "Chicago", "New York", "London Contract", "Chicago Contract"]
+    .map(t => `<option value="${esc(t)}" ${t === prevTerritory ? "selected" : ""}>${t || "—"}</option>`)
+    .join("");
+
+  const historyFields = `
+    <td><input type="date" class="date-input" data-field="date_joined"
+         value="${esc(dateJoined)}"></td>
+    <td><input type="date" class="date-input" data-field="date_joined_team"
+         value="${esc(dateJoinedTeam)}"></td>
+    <td><input type="text" class="contract-input prev-team-input" data-field="previous_team"
+         placeholder="e.g. Team Batt" value="${esc(prevTeam)}"></td>
+    <td><select class="team-select" data-field="previous_territory">
+         ${prevTerritoryOptions}
+        </select></td>
+  `;
 
   const contractFields = isContract ? `
     <td><input type="number" class="contract-input" data-field="margin_ytd"
@@ -128,6 +154,7 @@ function buildUserRow(u, territory) {
         <span class="toggle-label">Hide</span>
       </label>
     </td>
+    ${historyFields}
     ${contractFields}
     <td>
       <button class="save-btn" data-uid="${esc(u.uid)}"
@@ -148,11 +175,17 @@ function buildUserRow(u, territory) {
     const team = tr.querySelector(".team-select").value;
     const hidden = tr.querySelector(".hidden-toggle").checked;
     const contractData = {};
-    tr.querySelectorAll(".contract-input").forEach(inp => {
+    tr.querySelectorAll(".contract-input:not(.prev-team-input)").forEach(inp => {
       const v = inp.value.trim();
       contractData[inp.dataset.field] = v !== "" ? parseFloat(v) : null;
     });
-    await saveOverride(uid, btn.dataset.name, btn.dataset.territory, team, hidden, contractData, tr);
+    const moveData = {
+      date_joined:        tr.querySelector("[data-field=date_joined]").value        || null,
+      date_joined_team:   tr.querySelector("[data-field=date_joined_team]").value   || null,
+      previous_team:      tr.querySelector("[data-field=previous_team]").value      || null,
+      previous_territory: tr.querySelector("[data-field=previous_territory]").value || null,
+    };
+    await saveOverride(uid, btn.dataset.name, btn.dataset.territory, team, hidden, contractData, moveData, tr);
   });
 
   // Clear override
@@ -167,7 +200,7 @@ function buildUserRow(u, territory) {
   return tr;
 }
 
-async function saveOverride(uid, name, territory, team, isHidden, contractData, tr) {
+async function saveOverride(uid, name, territory, team, isHidden, contractData, moveData, tr) {
   const btn = tr.querySelector(".save-btn");
   btn.textContent = "Saving…";
   btn.disabled = true;
@@ -176,7 +209,7 @@ async function saveOverride(uid, name, territory, team, isHidden, contractData, 
     const resp = await fetch("/api/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userid: uid, name, territory, team, is_hidden: isHidden, ...contractData }),
+      body: JSON.stringify({ userid: uid, name, territory, team, is_hidden: isHidden, ...contractData, ...moveData }),
     });
     const data = await resp.json();
     if (data.ok) {

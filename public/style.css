@@ -373,6 +373,26 @@ tr.team-header:first-child td { border-top: none; }
 }
 .contract-input:focus { outline: none; box-shadow: 0 0 0 1px var(--accent); }
 
+.date-input {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--light);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-family: var(--font);
+  width: 130px;
+  cursor: pointer;
+}
+.date-input:focus { outline: none; box-shadow: 0 0 0 1px var(--accent); }
+/* Make the calendar icon visible on dark backgrounds */
+.date-input::-webkit-calendar-picker-indicator {
+  filter: invert(0.6);
+  cursor: pointer;
+}
+
+.prev-team-input { width: 110px; }
+
 /* ── Admin analytics page ────────────────────────────────────────────────── */
 
 .admin-container {
