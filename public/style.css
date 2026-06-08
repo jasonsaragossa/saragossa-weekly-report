@@ -502,14 +502,22 @@ tr.inactive-consultant:hover td { opacity: 0.65; }
   border-color: var(--accent);
 }
 
-/* Budget grid — narrow inputs to fit 12 months */
-.budget-grid-table td { padding: 5px 4px; }
-.budget-grid-table th { padding: 7px 4px; }
+/* Budget grid — pin column widths so headers align with inputs */
+.budget-grid-table { table-layout: fixed; width: 100%; }
+.budget-grid-table td { padding: 5px 4px; text-align: center; }
+.budget-grid-table th { padding: 7px 4px; text-align: center; }
+.budget-grid-table td:first-child,
+.budget-grid-table th:first-child { width: 120px; text-align: left; }
+.budget-grid-table td:last-child,
+.budget-grid-table th:last-child  { width: 70px; }
 .budget-grid-table .budget-month-input {
-  width: 72px;
+  width: 100%;
+  max-width: 80px;
   padding: 4px 5px;
   font-size: 11px;
+  text-align: right;
 }
+.budget-grid-table .annual-total { text-align: right; }
 
 /* Future months (haven't happened yet) */
 .future-col {
