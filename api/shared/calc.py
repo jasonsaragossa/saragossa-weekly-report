@@ -204,10 +204,15 @@ def build_admin_report(
         role = _clean_role(c.get("title") or "")
         ccy  = CCY.get(territory, "GBP")
 
+        is_active   = not c.get("isdisabled", False)
         months_this = compute_monthly_breakdown(uid, placements_this, ccy, year,     to_gbp, to_usd)
         months_last = compute_monthly_breakdown(uid, placements_last, ccy, year - 1, to_gbp, to_usd)
         total_this  = sum(months_this.values())
         total_last  = sum(months_last.values())
+
+        # Skip inactive consultants who have no data in either year
+        if not is_active and total_this == 0 and total_last == 0:
+            continue
 
         by_territory[territory].append({
             "uid":               uid,
@@ -215,6 +220,7 @@ def build_admin_report(
             "role":              role,
             "team":              team,
             "createdon":         c.get("createdon", ""),
+            "active":            is_active,
             "sym":               "£" if ccy == "GBP" else "$",
             "months":            months_this,
             "last_year_months":  months_last,

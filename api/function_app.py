@@ -17,6 +17,7 @@ from shared.dataverse import (
     get_active_consultants, get_placements, get_overrides,
     get_team_membership_map, get_live_contract_placements, get_fx_rates,
     get_placements_full_year, get_budgets, upsert_monthly_budgets,
+    get_all_territory_consultants,
     upsert_override, delete_override, TERRITORY_IDS,
 )
 from shared.calc import build_report, build_admin_report
@@ -182,7 +183,7 @@ def analytics_report(req: func.HttpRequest) -> func.HttpResponse:
         today = date.today()
         year  = today.year
 
-        consultants      = get_active_consultants()
+        consultants      = get_all_territory_consultants()   # active + inactive
         overrides        = get_overrides()
         team_map         = get_team_membership_map()
         placements_this  = get_placements_full_year(year)

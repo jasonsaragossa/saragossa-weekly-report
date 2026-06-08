@@ -439,6 +439,49 @@ tr.team-header:first-child td { border-top: none; }
   padding: 8px 10px;
 }
 
+/* Inactive consultant rows */
+tr.inactive-consultant td { opacity: 0.45; }
+tr.inactive-consultant:hover td { opacity: 0.65; }
+.inactive-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--mid);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 4px;
+  margin-left: 5px;
+  vertical-align: middle;
+}
+
+/* Year toggle for monthly breakdown */
+.breakdown-toggle {
+  display: flex;
+  gap: 6px;
+  padding: 12px 0 0;
+}
+.year-toggle-btn {
+  font-size: 11px;
+  font-family: var(--font);
+  font-weight: 500;
+  padding: 5px 14px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--mid);
+  cursor: pointer;
+  transition: .15s;
+  letter-spacing: .04em;
+}
+.year-toggle-btn:hover { color: var(--light); border-color: var(--mid); }
+.year-toggle-btn.active {
+  background: rgba(93,143,154,.15);
+  color: var(--white);
+  border-color: var(--accent);
+}
+
 /* Budget grid — narrow inputs to fit 12 months */
 .budget-grid-table td { padding: 5px 4px; }
 .budget-grid-table th { padding: 7px 4px; }

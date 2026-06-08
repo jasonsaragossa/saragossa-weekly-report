@@ -289,6 +289,16 @@ function round2(n) { return Math.round(n * 100) / 100; }
 function buildBreakdownTabs() {
   const wrapper = document.createElement("div");
 
+  // Year toggle
+  let showLastYear = false;
+  const toggleBar = document.createElement("div");
+  toggleBar.className = "breakdown-toggle";
+  toggleBar.innerHTML = `
+    <button class="year-toggle-btn active" data-year="this">${currentYear}</button>
+    <button class="year-toggle-btn" data-year="last">${currentYear - 1}</button>
+  `;
+  wrapper.appendChild(toggleBar);
+
   const tabsEl  = document.createElement("nav");
   tabsEl.className = "tabs";
 
@@ -311,7 +321,8 @@ function buildBreakdownTabs() {
     const panel = document.createElement("div");
     panel.className = "panel" + (first ? " active" : "");
     panel.id = panelId;
-    panel.appendChild(buildMonthlyTable(tdata));
+    panel.dataset.territory = territory;
+    panel.appendChild(buildMonthlyTable(tdata, false));
     panelsEl.appendChild(panel);
 
     first = false;
@@ -326,6 +337,22 @@ function buildBreakdownTabs() {
     });
   });
 
+  // Year toggle handler — re-render all panels
+  toggleBar.querySelectorAll(".year-toggle-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      showLastYear = btn.dataset.year === "last";
+      toggleBar.querySelectorAll(".year-toggle-btn").forEach(b =>
+        b.classList.toggle("active", b === btn)
+      );
+      panelsEl.querySelectorAll(".panel").forEach(panel => {
+        const tdata = reportData.territories[panel.dataset.territory];
+        if (!tdata) return;
+        panel.innerHTML = "";
+        panel.appendChild(buildMonthlyTable(tdata, showLastYear));
+      });
+    });
+  });
+
   wrapper.appendChild(tabsEl);
   wrapper.appendChild(panelsEl);
   return wrapper;
@@ -334,18 +361,30 @@ function buildBreakdownTabs() {
 
 // ── Monthly Table ─────────────────────────────────────────────────────────────
 
-function buildMonthlyTable(tdata) {
+function buildMonthlyTable(tdata, showLastYear = false) {
   const sym    = tdata.sym;
   const groups = tdata.type === "teams"
     ? tdata.groups
     : [{ team: null, members: tdata.members }];
 
-  // Header row
+  // Which year's data to show as primary
+  const primaryMonths   = m => showLastYear ? (m.last_year_months || {}) : m.months;
+  const primaryTotal    = m => showLastYear ? m.last_year_total : m.total;
+  const compareTotal    = m => showLastYear ? m.total : m.last_year_total;
+  const territoryMonths = showLastYear ? tdata.territory_last_year_months : tdata.territory_months;
+  const territoryTotal  = showLastYear ? tdata.territory_last_year : tdata.territory_total;
+  const territoryCompare = showLastYear ? tdata.territory_total : tdata.territory_last_year;
+  const compareLabel    = showLastYear ? `${currentYear}` : `${currentYear - 1}`;
+  const yoyLabel        = showLastYear ? "vs This Year" : "YoY";
+
+  // Future-month dimming only applies to current year view
+  const isFuture = i => !showLastYear && (i + 1 > currentMonth);
+
   const monthHeaders = MONTH_ABBR.map((m, i) =>
-    `<th class="num${i + 1 > currentMonth ? " future-col" : ""}">${m}</th>`
+    `<th class="num${isFuture(i) ? " future-col" : ""}">${m}</th>`
   ).join("");
 
-  const colCount = 2 + 12 + 3; // name+role + 12 months + total+last+yoy
+  const colCount = 2 + 12 + 3;
 
   let html = `<table class="monthly-table">
     <thead>
@@ -354,8 +393,8 @@ function buildMonthlyTable(tdata) {
         <th>Role</th>
         ${monthHeaders}
         <th class="num">Total</th>
-        <th class="num">Last Year</th>
-        <th class="num">YoY</th>
+        <th class="num">${esc(compareLabel)}</th>
+        <th class="num">${esc(yoyLabel)}</th>
       </tr>
     </thead>
     <tbody>`;
@@ -365,38 +404,43 @@ function buildMonthlyTable(tdata) {
       html += `<tr class="team-header"><td colspan="${colCount}">${esc(g.team)}</td></tr>`;
     }
     for (const m of g.members) {
+      const mMonths = primaryMonths(m);
+      const mTotal  = primaryTotal(m);
+      const mCmp    = compareTotal(m);
+
       const monthCells = MONTH_ABBR.map((_, i) => {
-        const v   = m.months[String(i + 1)] || 0;
-        const cls = i + 1 > currentMonth ? " future-col" : "";
+        const v   = mMonths[String(i + 1)] || 0;
+        const cls = isFuture(i) ? " future-col" : "";
         return `<td class="num${cls}">${v > 0 ? fmt(v, sym) : ""}</td>`;
       }).join("");
 
-      const yoy    = m.last_year_total > 0
-        ? (m.total - m.last_year_total) / m.last_year_total * 100
-        : null;
+      const yoy    = mCmp > 0 ? (mTotal - mCmp) / mCmp * 100 : null;
       const yoyCls = yoy !== null ? (yoy >= 0 ? " pos" : " neg") : "";
+      const inactiveCls = m.active === false ? " inactive-consultant" : "";
+      const nameCell = m.active === false
+        ? `${esc(m.name)} <span class="inactive-badge">left</span>`
+        : esc(m.name);
 
-      html += `<tr>
-        <td>${esc(m.name)}</td>
+      html += `<tr class="${inactiveCls}">
+        <td>${nameCell}</td>
         <td class="role-cell">${esc(m.role)}</td>
         ${monthCells}
-        <td class="num"><strong>${m.total > 0 ? fmt(m.total, sym) : ""}</strong></td>
-        <td class="num dim">${m.last_year_total > 0 ? fmt(m.last_year_total, sym) : "—"}</td>
+        <td class="num"><strong>${mTotal > 0 ? fmt(mTotal, sym) : ""}</strong></td>
+        <td class="num dim">${mCmp > 0 ? fmt(mCmp, sym) : "—"}</td>
         <td class="num${yoyCls}">${yoy !== null ? fmtPct(yoy) : "—"}</td>
       </tr>`;
     }
   }
 
   // Territory total footer
-  const tm = tdata.territory_months;
   const totalCells = MONTH_ABBR.map((_, i) => {
-    const v   = tm[String(i + 1)] || 0;
-    const cls = i + 1 > currentMonth ? " future-col" : "";
+    const v   = (territoryMonths || {})[String(i + 1)] || 0;
+    const cls = isFuture(i) ? " future-col" : "";
     return `<td class="num${cls}"><strong>${v > 0 ? fmt(v, sym) : ""}</strong></td>`;
   }).join("");
 
-  const tYoy    = tdata.territory_last_year > 0
-    ? (tdata.territory_total - tdata.territory_last_year) / tdata.territory_last_year * 100
+  const tYoy    = territoryCompare > 0
+    ? (territoryTotal - territoryCompare) / territoryCompare * 100
     : null;
   const tYoyCls = tYoy !== null ? (tYoy >= 0 ? " pos" : " neg") : "";
 
@@ -405,8 +449,8 @@ function buildMonthlyTable(tdata) {
       <tr class="territory-total-row">
         <td colspan="2"><strong>Territory Total</strong></td>
         ${totalCells}
-        <td class="num"><strong>${fmt(tdata.territory_total, sym)}</strong></td>
-        <td class="num dim"><strong>${tdata.territory_last_year > 0 ? fmt(tdata.territory_last_year, sym) : "—"}</strong></td>
+        <td class="num"><strong>${fmt(territoryTotal, sym)}</strong></td>
+        <td class="num dim"><strong>${territoryCompare > 0 ? fmt(territoryCompare, sym) : "—"}</strong></td>
         <td class="num${tYoyCls}"><strong>${tYoy !== null ? fmtPct(tYoy) : "—"}</strong></td>
       </tr>
     </tfoot>

@@ -99,6 +99,20 @@ def get_active_consultants() -> list[dict]:
         },
     )
 
+def get_all_territory_consultants() -> list[dict]:
+    """Returns active AND inactive users in the 6 territories, with isdisabled flag."""
+    territory_filter = " or ".join(
+        f"_territoryid_value eq '{tid}'" for tid in TERRITORY_IDS.values()
+    )
+    return odata_get_all(
+        "systemusers",
+        params={
+            "$select": "systemuserid,fullname,title,createdon,_territoryid_value,isdisabled",
+            "$filter": f"({territory_filter})",
+            "$orderby": "createdon asc",
+        },
+    )
+
 
 # Known report team names — must match Dataverse team names exactly
 _REPORT_TEAM_NAMES = [
