@@ -204,8 +204,8 @@ def build_admin_report(
         if not territory:
             continue
         ov = override_map.get(uid, {})
-        if ov.get("crbb7_ishidden"):
-            continue
+        # Note: hidden flag is intentionally NOT checked here — analytics shows everyone.
+        # crbb7_ishidden only suppresses users from the weekly report (build_report).
 
         team = ov.get("crbb7_team") or _default_team(uid, territory, team_map or {})
         role = _clean_role(c.get("title") or "")
