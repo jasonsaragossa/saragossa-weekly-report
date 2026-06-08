@@ -18,7 +18,7 @@ let currentMonth = new Date().getMonth() + 1; // 1-indexed
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 (async () => {
-  let resp;
+  let resp, text, data;
   try {
     resp = await fetch("/api/admin-report");
     if (resp.status === 401) {
@@ -30,10 +30,17 @@ let currentMonth = new Date().getMonth() + 1; // 1-indexed
         '<div class="error-state"><p>⚠ Admin access required.</p></div>';
       return;
     }
-    const data = await resp.json();
+    text = await resp.text();
+    try {
+      data = JSON.parse(text);
+    } catch (_) {
+      document.getElementById("content").innerHTML =
+        `<div class="error-state"><p>⚠ API returned non-JSON (HTTP ${resp.status}): ${esc(text.slice(0, 400))}</p></div>`;
+      return;
+    }
     if (!data.ok) {
       document.getElementById("content").innerHTML =
-        `<div class="error-state"><p>⚠ ${esc(data.error || "Unknown error")}</p></div>`;
+        `<div class="error-state"><p>⚠ ${esc(data.error || "Unknown error from API")}</p></div>`;
       return;
     }
     reportData   = data;
@@ -41,7 +48,7 @@ let currentMonth = new Date().getMonth() + 1; // 1-indexed
     render();
   } catch (e) {
     document.getElementById("content").innerHTML =
-      `<div class="error-state"><p>⚠ Could not load analytics: ${esc(e.message)}</p></div>`;
+      `<div class="error-state"><p>⚠ Could not reach API: ${esc(e.message)}</p></div>`;
   }
 })();
 
