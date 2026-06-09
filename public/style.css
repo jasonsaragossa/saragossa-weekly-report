@@ -591,6 +591,101 @@ tfoot tr.grand-total-row td {
   color: var(--white);
 }
 
+/* ── Clickable month cells ───────────────────────────────────────────────── */
+td.clickable-cell {
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+td.clickable-cell:hover {
+  background: rgba(93,143,154,.18) !important;
+  color: var(--white) !important;
+}
+
+/* ── Placement drilldown modal ───────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(3px);
+}
+.modal-box {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  width: min(760px, 92vw);
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.55);
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.modal-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--white);
+}
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--mid);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: background 0.1s, color 0.1s;
+}
+.modal-close:hover { background: var(--border); color: var(--white); }
+.modal-body {
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+.modal-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+.modal-table thead th {
+  text-align: left;
+  color: var(--mid);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  font-weight: 600;
+  padding: 0 16px 8px 0;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.modal-table thead th.num,
+.modal-table tbody td.num { text-align: right; }
+.modal-table thead th:last-child,
+.modal-table tbody td:last-child { padding-right: 0; }
+.modal-table tbody tr { border-bottom: 1px solid rgba(255,255,255,.04); }
+.modal-table tbody tr:last-child { border-bottom: none; }
+.modal-table tbody tr:hover td { background: rgba(255,255,255,.03); }
+.modal-table tbody td {
+  padding: 9px 16px 9px 0;
+  color: var(--light);
+  white-space: nowrap;
+}
+.modal-empty {
+  color: var(--mid);
+  font-size: 0.88rem;
+  text-align: center;
+  padding: 24px 0;
+}
+
 /* Other row — muted so it doesn't compete with Overall */
 tbody tr.other-row td {
   background: var(--surface);

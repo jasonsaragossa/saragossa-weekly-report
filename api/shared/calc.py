@@ -126,6 +126,46 @@ def compute_wnf(uid: str, live_contracts: list, display_ccy: str, to_gbp: dict =
     return round(total, 2)
 
 
+def _consultant_placement_details(
+    uid: str, placements: list, display_ccy: str, year: int,
+    to_gbp: dict = None, to_usd: dict = None,
+    after_date=None, before_date=None,
+) -> list:
+    """
+    Returns per-placement contribution details for a consultant in the given year.
+    Used for the monthly drilldown click-through in the admin analytics UI.
+    Each entry: {month, title, client, own_fee, full_fee, currency, start_date}
+    own_fee / full_fee are in display_ccy (converted).
+    """
+    fx = (to_gbp or TO_GBP) if display_ccy == "GBP" else (to_usd or TO_USD)
+    details = []
+    for p in placements:
+        factor = split_factor(p, uid)
+        if factor == 0:
+            continue
+        d = parse_date(p["crimson_startdate"])
+        if d.year != year:
+            continue
+        if after_date  and d < after_date:
+            continue
+        if before_date and d >= before_date:
+            continue
+        gp    = p.get("recruit_truegrossprofit") or 0.0
+        p_ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode", display_ccy)
+        rate  = fx.get(p_ccy, 1.0)
+        details.append({
+            "month":      d.month,
+            "title":      p.get("crimson_name") or "",
+            "client":     (p.get("crimson_clientname") or {}).get("name") or "",
+            "own_fee":    round(gp * factor * rate, 2),
+            "full_fee":   round(gp * rate, 2),
+            "currency":   p_ccy,
+            "start_date": p["crimson_startdate"][:10],
+        })
+    details.sort(key=lambda x: x["start_date"])
+    return details
+
+
 def compute_monthly_breakdown(
     uid: str, placements: list, display_ccy: str, year: int,
     to_gbp: dict = None, to_usd: dict = None,
@@ -245,6 +285,8 @@ def build_admin_report(
                     "total":            round(tot_this_cur, 2),
                     "last_year_total":  round(tot_last_cur, 2),
                     "note":             None,
+                    "placements":       _consultant_placement_details(uid, placements_this, ccy, year,     to_gbp, to_usd, after_date=move_date),
+                    "last_placements":  _consultant_placement_details(uid, placements_last, ccy, year - 1, to_gbp, to_usd, after_date=move_date),
                 })
 
             # ── Previous territory: placements before move_date ──────────────
@@ -268,6 +310,8 @@ def build_admin_report(
                     "total":            round(tot_this_prev, 2),
                     "last_year_total":  round(tot_last_prev, 2),
                     "note":             f"now in {territory}",
+                    "placements":       _consultant_placement_details(uid, placements_this, prev_ccy, year,     to_gbp, to_usd, before_date=move_date),
+                    "last_placements":  _consultant_placement_details(uid, placements_last, prev_ccy, year - 1, to_gbp, to_usd, before_date=move_date),
                 })
         else:
             # ── No move — use all placements ─────────────────────────────────
@@ -292,6 +336,8 @@ def build_admin_report(
                 "total":            round(total_this, 2),
                 "last_year_total":  round(total_last, 2),
                 "note":             None,
+                "placements":       _consultant_placement_details(uid, placements_this, ccy, year,     to_gbp, to_usd),
+                "last_placements":  _consultant_placement_details(uid, placements_last, ccy, year - 1, to_gbp, to_usd),
             })
 
     report = {}

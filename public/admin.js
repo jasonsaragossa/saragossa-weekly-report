@@ -558,6 +558,15 @@ function buildOverallTable(showLastYear = false) {
 
   const colCount = 2 + 12 + 3;
 
+  // Build overall member lookup for click handlers
+  const overallMemberLookup = {};
+  for (const territory of TERRITORY_ORDER) {
+    const td2 = reportData.territories[territory];
+    if (!td2) continue;
+    const mbs = td2.type === "teams" ? td2.groups.flatMap(g => g.members) : (td2.members || []);
+    for (const m of mbs) overallMemberLookup[m.uid] = { member: m, sym: td2.sym };
+  }
+
   let html = `<table class="monthly-table">
     <thead>
       <tr>
@@ -598,7 +607,10 @@ function buildOverallTable(showLastYear = false) {
 
       const monthCells = MONTH_ABBR.map((_, i) => {
         const v = mMonths[String(i + 1)] || 0;
-        return `<td class="num">${v > 0 ? fmt(v, mSym) : ""}</td>`;
+        if (v > 0) {
+          return `<td class="num clickable-cell" data-uid="${m.uid}" data-month="${i+1}" data-lastyear="${showLastYear?1:0}">${fmt(v, mSym)}</td>`;
+        }
+        return `<td class="num"></td>`;
       }).join("");
 
       const yoy    = mCmp > 0 ? (mTotal - mCmp) / mCmp * 100 : null;
@@ -667,6 +679,21 @@ function buildOverallTable(showLastYear = false) {
   wrap.className = "table-wrap";
   wrap.innerHTML = html;
 
+  // Attach click handlers for the overall table
+  wrap.querySelectorAll(".clickable-cell").forEach(td => {
+    td.addEventListener("click", () => {
+      const uid    = td.dataset.uid;
+      const month  = parseInt(td.dataset.month);
+      const isLast = td.dataset.lastyear === "1";
+      const entry  = overallMemberLookup[uid];
+      if (!entry) return;
+      const { member, sym: tSym } = entry;
+      const pls = ((isLast ? member.last_placements : member.placements) || [])
+        .filter(p => p.month === month);
+      showPlacementModal(member.name, month, isLast ? currentYear - 1 : currentYear, pls, member.sym || tSym);
+    });
+  });
+
   const container = document.createElement("div");
   container.appendChild(summaryBar);
   container.appendChild(wrap);
@@ -687,6 +714,12 @@ function buildMonthlyTable(tdata, showLastYear = false) {
   const primaryTotal    = m => showLastYear ? m.last_year_total : m.total;
   const compareTotal    = m => showLastYear ? m.total : m.last_year_total;
   const territoryMonths = showLastYear ? tdata.territory_last_year_months : tdata.territory_months;
+
+  // Build uid → member lookup for click handlers (scoped to this table render)
+  const memberLookup = {};
+  for (const g of groups) {
+    for (const m of g.members) memberLookup[m.uid] = m;
+  }
   const territoryTotal  = showLastYear ? tdata.territory_last_year : tdata.territory_total;
   const territoryCompare = showLastYear ? tdata.territory_total : tdata.territory_last_year;
   const compareLabel    = showLastYear ? `${currentYear}` : `${currentYear - 1}`;
@@ -717,10 +750,14 @@ function buildMonthlyTable(tdata, showLastYear = false) {
       const mMonths = primaryMonths(m);
       const mTotal  = primaryTotal(m);
       const mCmp    = compareTotal(m);
+      const mSym    = m.sym || sym;
 
       const monthCells = MONTH_ABBR.map((_, i) => {
         const v = mMonths[String(i + 1)] || 0;
-        return `<td class="num">${v > 0 ? fmt(v, sym) : ""}</td>`;
+        if (v > 0) {
+          return `<td class="num clickable-cell" data-uid="${m.uid}" data-month="${i+1}" data-lastyear="${showLastYear?1:0}">${fmt(v, mSym)}</td>`;
+        }
+        return `<td class="num"></td>`;
       }).join("");
 
       const yoy    = mCmp > 0 ? (mTotal - mCmp) / mCmp * 100 : null;
@@ -735,8 +772,8 @@ function buildMonthlyTable(tdata, showLastYear = false) {
         <td>${nameCell}</td>
         <td class="role-cell">${esc(m.role)}</td>
         ${monthCells}
-        <td class="num"><strong>${mTotal > 0 ? fmt(mTotal, sym) : ""}</strong></td>
-        <td class="num dim">${mCmp > 0 ? fmt(mCmp, sym) : "—"}</td>
+        <td class="num"><strong>${mTotal > 0 ? fmt(mTotal, mSym) : ""}</strong></td>
+        <td class="num dim">${mCmp > 0 ? fmt(mCmp, mSym) : "—"}</td>
         <td class="num${yoyCls}">${yoy !== null ? fmtPct(yoy) : "—"}</td>
       </tr>`;
     }
@@ -768,7 +805,83 @@ function buildMonthlyTable(tdata, showLastYear = false) {
   const wrap = document.createElement("div");
   wrap.className = "table-wrap";
   wrap.innerHTML = html;
+
+  // Attach click handlers to non-zero month cells
+  wrap.querySelectorAll(".clickable-cell").forEach(td => {
+    td.addEventListener("click", () => {
+      const uid      = td.dataset.uid;
+      const month    = parseInt(td.dataset.month);
+      const isLast   = td.dataset.lastyear === "1";
+      const member   = memberLookup[uid];
+      if (!member) return;
+      const pls = ((isLast ? member.last_placements : member.placements) || [])
+        .filter(p => p.month === month);
+      showPlacementModal(member.name, month, isLast ? currentYear - 1 : currentYear, pls, member.sym || sym);
+    });
+  });
+
   return wrap;
+}
+
+
+// ── Placement drilldown modal ─────────────────────────────────────────────────
+
+function showPlacementModal(consultantName, month, year, placements, sym) {
+  // Create modal DOM once and reuse
+  let modal = document.getElementById("placement-modal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "placement-modal";
+    modal.className = "modal-overlay";
+    modal.innerHTML = `
+      <div class="modal-box">
+        <div class="modal-header">
+          <span class="modal-title" id="modal-title"></span>
+          <button class="modal-close" id="modal-close" aria-label="Close">✕</button>
+        </div>
+        <div class="modal-body" id="modal-body"></div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener("click", e => { if (e.target === modal) modal.style.display = "none"; });
+    document.getElementById("modal-close").addEventListener("click", () => { modal.style.display = "none"; });
+    document.addEventListener("keydown", e => { if (e.key === "Escape") modal.style.display = "none"; });
+  }
+
+  document.getElementById("modal-title").textContent =
+    `${consultantName} — ${MONTH_ABBR[month - 1]} ${year}`;
+
+  const body = document.getElementById("modal-body");
+
+  if (!placements.length) {
+    body.innerHTML = `<p class="modal-empty">No placements found for this month.</p>`;
+  } else {
+    let html = `<table class="modal-table">
+      <thead><tr>
+        <th>Job Title</th>
+        <th>Client</th>
+        <th class="num">Your Share</th>
+        <th class="num">Full Fee</th>
+        <th class="num">Share</th>
+        <th>Start Date</th>
+      </tr></thead><tbody>`;
+    for (const p of placements) {
+      const sharePct = p.full_fee > 0 ? Math.round(p.own_fee / p.full_fee * 100) : 0;
+      const origNote = p.currency !== (sym === "£" ? "GBP" : "USD")
+        ? ` <span class="dim">${p.currency}</span>` : "";
+      html += `<tr>
+        <td>${esc(p.title || "—")}</td>
+        <td>${esc(p.client || "—")}</td>
+        <td class="num"><strong>${fmt(p.own_fee, sym) || (sym + "0")}</strong></td>
+        <td class="num dim">${fmt(p.full_fee, sym) || (sym + "0")}${origNote}</td>
+        <td class="num dim">${sharePct}%</td>
+        <td class="dim">${p.start_date || "—"}</td>
+      </tr>`;
+    }
+    html += `</tbody></table>`;
+    body.innerHTML = html;
+  }
+
+  modal.style.display = "flex";
 }
 
 
