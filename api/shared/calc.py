@@ -285,6 +285,7 @@ def build_admin_report(
                     "total":            round(tot_this_cur, 2),
                     "last_year_total":  round(tot_last_cur, 2),
                     "note":             None,
+                    "target":           round(float(ov["crbb7_target"]), 2) if ov.get("crbb7_target") is not None else None,
                     "placements":       _consultant_placement_details(uid, placements_this, ccy, year,     to_gbp, to_usd, after_date=move_date),
                     "last_placements":  _consultant_placement_details(uid, placements_last, ccy, year - 1, to_gbp, to_usd, after_date=move_date),
                 })
@@ -310,6 +311,7 @@ def build_admin_report(
                     "total":            round(tot_this_prev, 2),
                     "last_year_total":  round(tot_last_prev, 2),
                     "note":             f"now in {territory}",
+                    "target":           round(float(ov["crbb7_target"]), 2) if ov.get("crbb7_target") is not None else None,
                     "placements":       _consultant_placement_details(uid, placements_this, prev_ccy, year,     to_gbp, to_usd, before_date=move_date),
                     "last_placements":  _consultant_placement_details(uid, placements_last, prev_ccy, year - 1, to_gbp, to_usd, before_date=move_date),
                 })
@@ -336,6 +338,7 @@ def build_admin_report(
                 "total":            round(total_this, 2),
                 "last_year_total":  round(total_last, 2),
                 "note":             None,
+                "target":           round(float(ov["crbb7_target"]), 2) if ov.get("crbb7_target") is not None else None,
                 "placements":       _consultant_placement_details(uid, placements_this, ccy, year,     to_gbp, to_usd),
                 "last_placements":  _consultant_placement_details(uid, placements_last, ccy, year - 1, to_gbp, to_usd),
             })

@@ -425,11 +425,12 @@ def upsert_override(data: dict, updated_by: str) -> dict:
         "crbb7_team":     data.get("team", ""),
         "crbb7_ishidden": data.get("is_hidden", False),
     }
-    # Contract manual fields
+    # Numeric override fields
     for api_key, dv_key in [
         ("margin_ytd",       "crbb7_marginytd"),
         ("contract_last12m", "crbb7_contractlast12m"),
         ("rolling_3m",       "crbb7_rolling3m"),
+        ("target",           "crbb7_target"),
     ]:
         if api_key in data and data[api_key] is not None:
             body[dv_key] = data[api_key]

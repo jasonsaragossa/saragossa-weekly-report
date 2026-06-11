@@ -5,7 +5,7 @@
 
 const TERRITORY_ORDER = [
   "Bristol", "London", "Chicago", "New York",
-  "London Contract", "Chicago Contract",
+  "London Contract", "Chicago Contract", "Cameron Scott",
 ];
 
 const CONTRACT_TERRITORIES = new Set(["London Contract", "Chicago Contract"]);
@@ -81,6 +81,7 @@ function renderSettings() {
       <th>Prev Team</th>
       <th>Prev Territory</th>
       ${isContract ? "<th>Total Margin YTD</th><th>Contract Last 12M</th><th>Rolling 3M</th>" : ""}
+      <th>Annual Target</th>
       <th></th>
     </tr></thead>`;
 
@@ -140,6 +141,9 @@ function buildUserRow(u, territory) {
          value="${ov.crbb7_rolling3m != null ? ov.crbb7_rolling3m : ""}"></td>
   ` : "";
 
+  const targetVal = ov.crbb7_target != null ? ov.crbb7_target : "";
+  const sym = (territory === "Chicago" || territory === "New York" || territory === "Chicago Contract") ? "$" : "£";
+
   tr.innerHTML = `
     <td>${esc(u.name)}</td>
     <td class="role-cell">${esc(u.role)}</td>
@@ -156,6 +160,11 @@ function buildUserRow(u, territory) {
     </td>
     ${historyFields}
     ${contractFields}
+    <td>
+      <input type="number" class="contract-input target-input" data-field="target"
+             placeholder="${sym}0" step="1000" min="0"
+             value="${targetVal}">
+    </td>
     <td>
       <button class="save-btn" data-uid="${esc(u.uid)}"
               data-name="${esc(u.name)}"

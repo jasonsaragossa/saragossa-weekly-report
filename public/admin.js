@@ -556,7 +556,7 @@ function buildOverallTable(showLastYear = false) {
   // ── Main table ────────────────────────────────────────────────────────────
   const monthHeaders = MONTH_ABBR.map(m => `<th class="num">${m}</th>`).join("");
 
-  const colCount = 2 + 12 + 3;
+  const colCount = 2 + 12 + 5;
 
   // Build overall member lookup for click handlers
   const overallMemberLookup = {};
@@ -574,6 +574,8 @@ function buildOverallTable(showLastYear = false) {
         <th>Role</th>
         ${monthHeaders}
         <th class="num">Total</th>
+        <th class="num">vs Target</th>
+        <th class="num">% Target</th>
         <th class="num">${esc(compareLabel)}</th>
         <th class="num">${esc(yoyLabel)}</th>
       </tr>
@@ -615,6 +617,13 @@ function buildOverallTable(showLastYear = false) {
 
       const yoy    = mCmp > 0 ? (mTotal - mCmp) / mCmp * 100 : null;
       const yoyCls = yoy !== null ? (yoy >= 0 ? " pos" : " neg") : "";
+
+      const target    = m.target != null ? m.target : null;
+      const vsTgt     = target != null ? mTotal - target : null;
+      const tgtPct    = target != null && target > 0 ? (mTotal - target) / target * 100 : null;
+      const vsTgtCls  = vsTgt  !== null ? (vsTgt  >= 0 ? " pos" : " neg") : "";
+      const tgtPctCls = tgtPct !== null ? (tgtPct >= 0 ? " pos" : " neg") : "";
+
       const inactiveCls = m.active === false ? " inactive-consultant" : "";
       const badgeText   = m.note ? m.note : (m.active === false ? "left" : null);
       const nameCell    = badgeText
@@ -626,12 +635,22 @@ function buildOverallTable(showLastYear = false) {
         <td class="role-cell">${esc(m.role)}</td>
         ${monthCells}
         <td class="num"><strong>${mTotal > 0 ? fmt(mTotal, mSym) : ""}</strong></td>
+        <td class="num${vsTgtCls}">${vsTgt !== null ? fmtDelta(vsTgt, mSym) : "—"}</td>
+        <td class="num${tgtPctCls}">${tgtPct !== null ? fmtPct(tgtPct) : "—"}</td>
         <td class="num dim">${mCmp > 0 ? fmt(mCmp, mSym) : "—"}</td>
         <td class="num${yoyCls}">${yoy !== null ? fmtPct(yoy) : "—"}</td>
       </tr>`;
     }
 
-    // Territory subtotal row
+    // Territory subtotal row — sum targets across members
+    const tgtSum     = members.some(m => m.target != null)
+      ? members.reduce((s, m) => s + (m.target != null ? m.target : 0), 0)
+      : null;
+    const tVsTgt     = tgtSum != null ? territoryTot - tgtSum : null;
+    const tTgtPct    = tgtSum != null && tgtSum > 0 ? (territoryTot - tgtSum) / tgtSum * 100 : null;
+    const tVsTgtCls  = tVsTgt  !== null ? (tVsTgt  >= 0 ? " pos" : " neg") : "";
+    const tTgtPctCls = tTgtPct !== null ? (tTgtPct >= 0 ? " pos" : " neg") : "";
+
     const subtotalCells = MONTH_ABBR.map((_, i) => {
       const v = (territoryMths || {})[String(i + 1)] || 0;
       return `<td class="num"><strong>${v > 0 ? fmt(v, sym) : ""}</strong></td>`;
@@ -644,6 +663,8 @@ function buildOverallTable(showLastYear = false) {
       <td colspan="2"><strong>${esc(territory)} Total</strong></td>
       ${subtotalCells}
       <td class="num"><strong>${fmt(territoryTot, sym)}</strong></td>
+      <td class="num${tVsTgtCls}"><strong>${tVsTgt !== null ? fmtDelta(tVsTgt, sym) : "—"}</strong></td>
+      <td class="num${tTgtPctCls}"><strong>${tTgtPct !== null ? fmtPct(tTgtPct) : "—"}</strong></td>
       <td class="num dim"><strong>${territoryCmp > 0 ? fmt(territoryCmp, sym) : "—"}</strong></td>
       <td class="num${tYoyCls}"><strong>${tYoy !== null ? fmtPct(tYoy) : "—"}</strong></td>
     </tr>`;
@@ -669,6 +690,8 @@ function buildOverallTable(showLastYear = false) {
         <td colspan="2"><strong>Grand Total (GBP)</strong></td>
         ${grandCells}
         <td class="num"><strong>${fmt(grandTotFull, "£")}</strong></td>
+        <td class="num">—</td>
+        <td class="num">—</td>
         <td class="num dim"><strong>${grandCmpFull > 0 ? fmt(grandCmpFull, "£") : "—"}</strong></td>
         <td class="num${grandYoyCls}"><strong>${grandYoy !== null ? fmtPct(grandYoy) : "—"}</strong></td>
       </tr>
@@ -727,7 +750,7 @@ function buildMonthlyTable(tdata, showLastYear = false) {
 
   const monthHeaders = MONTH_ABBR.map(m => `<th class="num">${m}</th>`).join("");
 
-  const colCount = 2 + 12 + 3;
+  const colCount = 2 + 12 + 5;
 
   let html = `<table class="monthly-table">
     <thead>
@@ -736,6 +759,8 @@ function buildMonthlyTable(tdata, showLastYear = false) {
         <th>Role</th>
         ${monthHeaders}
         <th class="num">Total</th>
+        <th class="num">vs Target</th>
+        <th class="num">% Target</th>
         <th class="num">${esc(compareLabel)}</th>
         <th class="num">${esc(yoyLabel)}</th>
       </tr>
@@ -762,6 +787,13 @@ function buildMonthlyTable(tdata, showLastYear = false) {
 
       const yoy    = mCmp > 0 ? (mTotal - mCmp) / mCmp * 100 : null;
       const yoyCls = yoy !== null ? (yoy >= 0 ? " pos" : " neg") : "";
+
+      const target    = m.target != null ? m.target : null;
+      const vsTgt     = target != null ? mTotal - target : null;
+      const tgtPct    = target != null && target > 0 ? (mTotal - target) / target * 100 : null;
+      const vsTgtCls  = vsTgt  !== null ? (vsTgt  >= 0 ? " pos" : " neg") : "";
+      const tgtPctCls = tgtPct !== null ? (tgtPct >= 0 ? " pos" : " neg") : "";
+
       const inactiveCls = m.active === false ? " inactive-consultant" : "";
       const badgeText   = m.note ? m.note : (m.active === false ? "left" : null);
       const nameCell    = badgeText
@@ -773,13 +805,24 @@ function buildMonthlyTable(tdata, showLastYear = false) {
         <td class="role-cell">${esc(m.role)}</td>
         ${monthCells}
         <td class="num"><strong>${mTotal > 0 ? fmt(mTotal, mSym) : ""}</strong></td>
+        <td class="num${vsTgtCls}">${vsTgt !== null ? fmtDelta(vsTgt, mSym) : "—"}</td>
+        <td class="num${tgtPctCls}">${tgtPct !== null ? fmtPct(tgtPct) : "—"}</td>
         <td class="num dim">${mCmp > 0 ? fmt(mCmp, mSym) : "—"}</td>
         <td class="num${yoyCls}">${yoy !== null ? fmtPct(yoy) : "—"}</td>
       </tr>`;
     }
   }
 
-  // Territory total footer
+  // Territory total footer — sum targets across all members for territory-level vs target
+  const allMembers  = groups.flatMap(g => g.members);
+  const tgtSum      = allMembers.some(m => m.target != null)
+    ? allMembers.reduce((s, m) => s + (m.target != null ? m.target : 0), 0)
+    : null;
+  const tVsTgt      = tgtSum != null ? territoryTotal - tgtSum : null;
+  const tTgtPct     = tgtSum != null && tgtSum > 0 ? (territoryTotal - tgtSum) / tgtSum * 100 : null;
+  const tVsTgtCls   = tVsTgt  !== null ? (tVsTgt  >= 0 ? " pos" : " neg") : "";
+  const tTgtPctCls  = tTgtPct !== null ? (tTgtPct >= 0 ? " pos" : " neg") : "";
+
   const totalCells = MONTH_ABBR.map((_, i) => {
     const v = (territoryMonths || {})[String(i + 1)] || 0;
     return `<td class="num"><strong>${v > 0 ? fmt(v, sym) : ""}</strong></td>`;
@@ -796,6 +839,8 @@ function buildMonthlyTable(tdata, showLastYear = false) {
         <td colspan="2"><strong>Territory Total</strong></td>
         ${totalCells}
         <td class="num"><strong>${fmt(territoryTotal, sym)}</strong></td>
+        <td class="num${tVsTgtCls}"><strong>${tVsTgt !== null ? fmtDelta(tVsTgt, sym) : "—"}</strong></td>
+        <td class="num${tTgtPctCls}"><strong>${tTgtPct !== null ? fmtPct(tTgtPct) : "—"}</strong></td>
         <td class="num dim"><strong>${territoryCompare > 0 ? fmt(territoryCompare, sym) : "—"}</strong></td>
         <td class="num${tYoyCls}"><strong>${tYoy !== null ? fmtPct(tYoy) : "—"}</strong></td>
       </tr>
