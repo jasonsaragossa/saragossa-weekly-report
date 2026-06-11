@@ -68,6 +68,9 @@ function render() {
   // 1. Territory summary
   container.appendChild(buildSummarySection());
 
+  // 1b. Retained Business
+  container.appendChild(buildRetainedSection());
+
   // 2. Monthly budget entry grid
   container.appendChild(buildBudgetSection());
 
@@ -292,6 +295,49 @@ function buildSummarySection() {
   section.appendChild(wrap);
   return section;
 }
+
+// ── Retained Business ─────────────────────────────────────────────────────────
+
+function buildRetainedSection() {
+  const section = document.createElement("div");
+  section.className = "admin-section retained-section";
+
+  const h = document.createElement("h2");
+  h.className = "admin-section-title";
+  h.textContent = "Retained Business";
+  section.appendChild(h);
+
+  const ret      = reportData.retained || {};
+  const count    = ret.count      || 0;
+  const total    = ret.total_gbp  || 0;
+  const cLast    = ret.count_last || 0;
+  const tLast    = ret.last_gbp   || 0;
+
+  const countYoy = cLast > 0 ? ((count - cLast) / cLast * 100) : null;
+  const valYoy   = tLast > 0 ? ((total - tLast) / tLast * 100) : null;
+  const countYoyCls = countYoy !== null ? (countYoy >= 0 ? "pos" : "neg") : "dim";
+  const valYoyCls   = valYoy   !== null ? (valYoy   >= 0 ? "pos" : "neg") : "dim";
+
+  const cards = document.createElement("div");
+  cards.className = "retained-cards";
+  cards.innerHTML = `
+    <div class="retained-card">
+      <div class="retained-card-label">Retainers Sold (${currentYear})</div>
+      <div class="retained-card-value">${count}</div>
+      <div class="retained-card-sub dim">${cLast > 0 ? `${cLast} last year` : "—"}</div>
+      <div class="retained-card-yoy ${countYoyCls}">${countYoy !== null ? fmtPct(countYoy) : "—"}</div>
+    </div>
+    <div class="retained-card">
+      <div class="retained-card-label">Total Value (GBP, ${currentYear})</div>
+      <div class="retained-card-value">${total > 0 ? fmt(total, "£") : "£0"}</div>
+      <div class="retained-card-sub dim">${tLast > 0 ? fmt(tLast, "£") + " last year" : "—"}</div>
+      <div class="retained-card-yoy ${valYoyCls}">${valYoy !== null ? fmtPct(valYoy) : "—"}</div>
+    </div>
+  `;
+  section.appendChild(cards);
+  return section;
+}
+
 
 // ── Monthly Budget Grid ───────────────────────────────────────────────────────
 

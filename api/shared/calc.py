@@ -440,6 +440,27 @@ def build_admin_report(
 
     other_drilldown.sort(key=lambda p: p["start_date"], reverse=True)
 
+    # ── Retained Business — placements whose candidate contact is RETAINER CANDIDATE ──
+    from shared.dataverse import RETAINER_CANDIDATE_CONTACT_ID as _RETAINER_ID
+    def _is_retainer(p):
+        return p.get("_recruit_candidatecontact_value") == _RETAINER_ID
+
+    retained_this = [p for p in placements_this if _is_retainer(p)]
+    retained_last = [p for p in placements_last if _is_retainer(p)]
+
+    retained_count      = len(retained_this)
+    retained_count_last = len(retained_last)
+    retained_total_gbp  = 0.0
+    retained_last_gbp   = 0.0
+    for p in retained_this:
+        gp  = p.get("recruit_truegrossprofit") or 0.0
+        ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode", "GBP")
+        retained_total_gbp += gp * to_gbp.get(ccy, 1.0)
+    for p in retained_last:
+        gp  = p.get("recruit_truegrossprofit") or 0.0
+        ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode", "GBP")
+        retained_last_gbp += gp * to_gbp.get(ccy, 1.0)
+
     # Grand totals (territory rows + Other), all converted to GBP
     usd_to_gbp = to_gbp.get("USD", TO_GBP["USD"])
     USD_TERRITORIES = {"Chicago", "New York", "Chicago Contract"}
@@ -486,6 +507,12 @@ def build_admin_report(
         "grand_monthly_last_gbp":  grand_monthly_last_gbp,
         "grand_budget_monthly_gbp": grand_budget_monthly,
         "grand_budget_total_gbp":   grand_budget_total,
+        "retained": {
+            "count":      retained_count,
+            "total_gbp":  round(retained_total_gbp, 2),
+            "count_last": retained_count_last,
+            "last_gbp":   round(retained_last_gbp, 2),
+        },
     }
 
 

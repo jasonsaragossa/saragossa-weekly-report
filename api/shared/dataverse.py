@@ -225,6 +225,9 @@ def is_admin(user_email: str) -> bool:
 PERM_TYPE      = 143570000
 CONTRACT_TYPES = [143570001, 143570002]   # Contract, Temporary
 
+# Contact ID for the "RETAINER CANDIDATE" placeholder used on all retained placements
+RETAINER_CANDIDATE_CONTACT_ID = "7aa8cfa4-d1f2-f011-8406-7c1e52796145"
+
 # All Mercury cancellation statuscodes (from crimson_placement schema)
 CANCEL_CODES = [
     143570009,  # Cancelled - Candidate did not start
@@ -338,6 +341,7 @@ def get_placements_full_year(year: int) -> list[dict]:
             "$select": (
                 "crimson_placementid,crimson_name,recruit_truegrossprofit,"
                 "crimson_startdate,crimson_specialinstructionsclient,"
+                "_recruit_candidatecontact_value,"
                 "_mercury_clientrelationshipowner_value,"
                 "_crimson_consultant_value,"
                 "_mercury_assignmentowner_value,"

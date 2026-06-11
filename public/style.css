@@ -754,3 +754,44 @@ tbody tr.other-row:hover td {
   font-size: 0.88rem;
   text-align: center;
 }
+
+/* Retained Business section */
+.retained-section {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+.retained-cards {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.retained-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px 24px;
+  min-width: 200px;
+}
+.retained-card-label {
+  font-size: 0.78rem;
+  color: var(--mid);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+.retained-card-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--white);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 4px;
+}
+.retained-card-sub {
+  font-size: 0.82rem;
+  margin-bottom: 2px;
+}
+.retained-card-yoy {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
