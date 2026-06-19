@@ -176,17 +176,17 @@ def get_territory_name(tid: str) -> str:
 
 def is_admin(user_email: str) -> bool:
     """
-    Admin = Director job title OR member of Bristol Finance and Compliance team.
+    Admin = Director title OR member of Bristol Finance and Compliance team.
     """
-    # Check job title
+    # Check title (Mercury stores role here, e.g. "Regional Director - London")
     users = odata_get_all(
         "systemusers",
         params={
-            "$select": "jobtitle",
+            "$select": "title",
             "$filter": f"internalemailaddress eq '{user_email}' and isdisabled eq false",
         },
     )
-    if users and "director" in (users[0].get("jobtitle") or "").lower():
+    if users and "director" in (users[0].get("title") or "").lower():
         return True
 
     # Check team membership
