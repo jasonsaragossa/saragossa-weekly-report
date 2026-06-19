@@ -212,6 +212,20 @@ tr.team-header:first-child td { border-top: none; }
   font-size: 11px;
 }
 
+/* Contract table — 8 wordy columns; keep it on the page */
+.contract-table { table-layout: fixed; }
+.contract-table th,
+.contract-table td {
+  padding: 10px 8px;
+  white-space: normal;       /* let headers wrap instead of overflowing */
+  overflow-wrap: break-word;
+}
+.contract-table th { font-size: 9px; line-height: 1.3; }
+.contract-table td.num { font-size: 11px; }
+/* Give the text columns room, keep the numeric columns compact */
+.contract-table th:nth-child(1) { width: 18%; }
+.contract-table th:nth-child(2) { width: 12%; }
+
 /* Contract table editable cells */
 .manual-cell[contenteditable=true] { cursor: text; outline: none; }
 .manual-cell[contenteditable=true]:focus {
