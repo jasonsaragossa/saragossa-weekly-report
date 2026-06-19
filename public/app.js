@@ -179,7 +179,7 @@ function buildContractTable(tdata) {
 
   const body = members.map(m => {
     const yearBilling = m.wnf > 0
-      ? m.sym + Math.round(m.wnf * 52).toLocaleString("en-GB")
+      ? m.sym + Math.round(m.wnf * 48).toLocaleString("en-GB")
       : "—";
     return `<tr>
       <td>${esc(m.name)}</td>
