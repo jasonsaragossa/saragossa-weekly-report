@@ -88,7 +88,11 @@ function renderSettings() {
     const tbody = document.createElement("tbody");
     users.forEach(u => tbody.appendChild(buildUserRow(u, territory)));
     table.appendChild(tbody);
-    section.appendChild(table);
+
+    const wrap = document.createElement("div");
+    wrap.className = "settings-table-wrap";
+    wrap.appendChild(table);
+    section.appendChild(wrap);
     container.appendChild(section);
   }
 }
