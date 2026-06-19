@@ -80,8 +80,7 @@ function renderSettings() {
       <th>Joined Team</th>
       <th>Prev Team</th>
       <th>Prev Territory</th>
-      ${isContract ? "<th>Total Margin YTD</th><th>Contract Last 12M</th><th>Rolling 3M</th>" : ""}
-      <th>Annual Target</th>
+      ${isContract ? "<th>Total Margin YTD</th><th>Contract Last 12M</th><th>Rolling 3M</th>" : "<th>Annual Target</th>"}
       <th></th>
     </tr></thead>`;
 
@@ -134,13 +133,13 @@ function buildUserRow(u, territory) {
   `;
 
   const contractFields = isContract ? `
-    <td><input type="number" class="contract-input" data-field="margin_ytd"
+    <td><input type="number" class="contract-input contract-figure" data-field="margin_ytd"
          placeholder="0" step="1"
          value="${ov.crbb7_marginytd != null ? ov.crbb7_marginytd : ""}"></td>
-    <td><input type="number" class="contract-input" data-field="contract_last12m"
+    <td><input type="number" class="contract-input contract-figure" data-field="contract_last12m"
          placeholder="0" step="1"
          value="${ov.crbb7_contractlast12m != null ? ov.crbb7_contractlast12m : ""}"></td>
-    <td><input type="number" class="contract-input" data-field="rolling_3m"
+    <td><input type="number" class="contract-input contract-figure" data-field="rolling_3m"
          placeholder="0" step="1"
          value="${ov.crbb7_rolling3m != null ? ov.crbb7_rolling3m : ""}"></td>
   ` : "";
@@ -164,11 +163,11 @@ function buildUserRow(u, territory) {
     </td>
     ${historyFields}
     ${contractFields}
-    <td>
+    ${isContract ? "" : `<td>
       <input type="number" class="contract-input target-input" data-field="target"
              placeholder="${sym}0" step="1000" min="0"
              value="${targetVal}">
-    </td>
+    </td>`}
     <td>
       <button class="save-btn" data-uid="${esc(u.uid)}"
               data-name="${esc(u.name)}"

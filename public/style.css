@@ -413,6 +413,9 @@ tr.team-header:first-child td { border-top: none; }
 
 .prev-team-input { width: 110px; }
 
+/* Contract figure inputs hold large numbers (8–10 digits) — give them room */
+.contract-figure { width: 130px; }
+
 /* ── Admin analytics page ────────────────────────────────────────────────── */
 
 .admin-container {
