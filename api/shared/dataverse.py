@@ -340,7 +340,7 @@ def get_placements_full_year(year: int) -> list[dict]:
         params={
             "$select": (
                 "crimson_placementid,crimson_name,recruit_truegrossprofit,"
-                "crimson_startdate,crimson_specialinstructionsclient,"
+                "crimson_startdate,crimson_specialinstructionsclient,createdon,"
                 "_recruit_candidatecontact_value,"
                 "_mercury_clientrelationshipowner_value,"
                 "_crimson_consultant_value,"

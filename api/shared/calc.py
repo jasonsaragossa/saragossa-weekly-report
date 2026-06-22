@@ -195,6 +195,41 @@ def compute_monthly_breakdown(
     return {str(k): round(v, 2) for k, v in months.items()}
 
 
+def compute_written_by_created(
+    uid: str, placements: list, display_ccy: str, year: int,
+    created_cutoff: date, to_gbp: dict = None, to_usd: dict = None,
+    after_date: date = None, before_date: date = None,
+) -> float:
+    """
+    Sum of GP (split + FX) for placements with a start date in `year` that were
+    *created* on or before `created_cutoff` (inclusive).
+
+    Used for the "Full Year Written Last YTD" column: last year's whole-year
+    book exactly as it stood at this same point in the year — i.e. everything
+    starting in the year that had already been written by this date.
+    """
+    fx = (to_gbp or TO_GBP) if display_ccy == "GBP" else (to_usd or TO_USD)
+    total = 0.0
+    for p in placements:
+        factor = split_factor(p, uid)
+        if factor == 0:
+            continue
+        d = parse_date(p["crimson_startdate"])
+        if d.year != year:
+            continue
+        if after_date  and d < after_date:
+            continue
+        if before_date and d >= before_date:
+            continue
+        created = p.get("createdon")
+        if not created or parse_date(created) > created_cutoff:
+            continue
+        gp  = p.get("recruit_truegrossprofit") or 0.0
+        ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode")
+        total += gp * factor * fx.get(ccy, 1.0)
+    return round(total, 2)
+
+
 def build_admin_report(
     consultants: list,
     placements_this: list,
@@ -212,6 +247,13 @@ def build_admin_report(
     year = today.year
     to_gbp, to_usd = _build_fx_tables(fx_rates) if fx_rates else (TO_GBP, TO_USD)
     override_map = {o["crbb7_userid"]: o for o in overrides}
+
+    # "Full Year Written Last YTD" cut-off: the same calendar date one year ago.
+    # A placement created on this date last year counts; the day after does not.
+    try:
+        last_ytd_cutoff = date(year - 1, today.month, today.day)
+    except ValueError:  # 29 Feb in a non-leap previous year
+        last_ytd_cutoff = date(year - 1, today.month, 28)
 
     CCY = {
         "Bristol":          "GBP",
@@ -284,6 +326,7 @@ def build_admin_report(
                     "last_year_months": m_last_cur,
                     "total":            round(tot_this_cur, 2),
                     "last_year_total":  round(tot_last_cur, 2),
+                    "last_year_ytd":    compute_written_by_created(uid, placements_last, ccy, year - 1, last_ytd_cutoff, to_gbp, to_usd, after_date=move_date),
                     "note":             None,
                     "target":           round(float(ov["crbb7_target"]), 2) if ov.get("crbb7_target") is not None else None,
                     "placements":       _consultant_placement_details(uid, placements_this, ccy, year,     to_gbp, to_usd, after_date=move_date),
@@ -310,6 +353,7 @@ def build_admin_report(
                     "last_year_months": m_last_prev,
                     "total":            round(tot_this_prev, 2),
                     "last_year_total":  round(tot_last_prev, 2),
+                    "last_year_ytd":    compute_written_by_created(uid, placements_last, prev_ccy, year - 1, last_ytd_cutoff, to_gbp, to_usd, before_date=move_date),
                     "note":             f"now in {territory}",
                     "target":           round(float(ov["crbb7_target"]), 2) if ov.get("crbb7_target") is not None else None,
                     "placements":       _consultant_placement_details(uid, placements_this, prev_ccy, year,     to_gbp, to_usd, before_date=move_date),
@@ -337,6 +381,7 @@ def build_admin_report(
                 "last_year_months": months_last,
                 "total":            round(total_this, 2),
                 "last_year_total":  round(total_last, 2),
+                "last_year_ytd":    compute_written_by_created(uid, placements_last, ccy, year - 1, last_ytd_cutoff, to_gbp, to_usd),
                 "note":             None,
                 "target":           round(float(ov["crbb7_target"]), 2) if ov.get("crbb7_target") is not None else None,
                 "placements":       _consultant_placement_details(uid, placements_this, ccy, year,     to_gbp, to_usd),
@@ -353,12 +398,14 @@ def build_admin_report(
         t_months      = {str(m): 0.0 for m in range(1, 13)}
         t_last_months = {str(m): 0.0 for m in range(1, 13)}
         t_last        = 0.0
+        t_last_ytd    = 0.0
         for member in members:
             for m_str, v in member["months"].items():
                 t_months[m_str] = round(t_months[m_str] + v, 2)
             for m_str, v in member.get("last_year_months", {}).items():
                 t_last_months[m_str] = round(t_last_months[m_str] + v, 2)
-            t_last += member.get("last_year_total", 0)
+            t_last     += member.get("last_year_total", 0)
+            t_last_ytd += member.get("last_year_ytd", 0)
         t_total = sum(t_months.values())
 
         if order:
@@ -384,6 +431,7 @@ def build_admin_report(
             "territory_last_year_months": t_last_months,
             "territory_total":          round(t_total, 2),
             "territory_last_year":      round(t_last, 2),
+            "territory_last_year_ytd":  round(t_last_ytd, 2),
             "budget":                   budget_map.get(territory, {"months": {}, "total": 0.0}),
         })
         report[territory] = result
@@ -407,6 +455,7 @@ def build_admin_report(
     other_last_monthly_gbp = {str(m): 0.0 for m in range(1, 13)}
     other_total_gbp        = 0.0
     other_last_total_gbp   = 0.0
+    other_last_ytd_gbp     = 0.0
     other_drilldown        = []
 
     for p in other_this_pl:
@@ -437,6 +486,9 @@ def build_admin_report(
         m_str = str(d.month)
         other_last_monthly_gbp[m_str] = round(other_last_monthly_gbp[m_str] + gbp, 2)
         other_last_total_gbp += gbp
+        created = p.get("createdon")
+        if created and parse_date(created) <= last_ytd_cutoff:
+            other_last_ytd_gbp += gbp
 
     other_drilldown.sort(key=lambda p: p["start_date"], reverse=True)
 
@@ -466,14 +518,16 @@ def build_admin_report(
     USD_TERRITORIES = {"Chicago", "New York", "Chicago Contract"}
     grand_gbp              = 0.0
     grand_gbp_last         = 0.0
+    grand_gbp_last_ytd     = 0.0
     grand_monthly_gbp      = {str(m): 0.0 for m in range(1, 13)}
     grand_monthly_last_gbp = {str(m): 0.0 for m in range(1, 13)}
     grand_budget_monthly   = {str(m): 0.0 for m in range(1, 13)}
     grand_budget_total     = 0.0
     for t, tdata in report.items():
         factor = usd_to_gbp if t in USD_TERRITORIES else 1.0
-        grand_gbp      += tdata["territory_total"]     * factor
-        grand_gbp_last += tdata["territory_last_year"] * factor
+        grand_gbp          += tdata["territory_total"]         * factor
+        grand_gbp_last     += tdata["territory_last_year"]     * factor
+        grand_gbp_last_ytd += tdata["territory_last_year_ytd"] * factor
         for m_str, v in tdata["territory_months"].items():
             grand_monthly_gbp[m_str] = round(grand_monthly_gbp[m_str] + v * factor, 2)
         for m_str, v in tdata["territory_last_year_months"].items():
@@ -484,8 +538,9 @@ def build_admin_report(
         grand_budget_total = round(grand_budget_total + tdata.get("budget", {}).get("total", 0.0) * factor, 2)
 
     # Include Other in grand totals
-    grand_gbp      = round(grand_gbp      + other_total_gbp,      2)
-    grand_gbp_last = round(grand_gbp_last + other_last_total_gbp, 2)
+    grand_gbp          = round(grand_gbp          + other_total_gbp,      2)
+    grand_gbp_last     = round(grand_gbp_last     + other_last_total_gbp, 2)
+    grand_gbp_last_ytd = round(grand_gbp_last_ytd + other_last_ytd_gbp,   2)
     for m_str, v in other_monthly_gbp.items():
         grand_monthly_gbp[m_str] = round(grand_monthly_gbp[m_str] + v, 2)
     for m_str, v in other_last_monthly_gbp.items():
@@ -495,14 +550,16 @@ def build_admin_report(
         "year":                    year,
         "territories":             report,
         "other": {
-            "total_gbp":       round(other_total_gbp, 2),
-            "last_year_gbp":   round(other_last_total_gbp, 2),
+            "total_gbp":         round(other_total_gbp, 2),
+            "last_year_gbp":     round(other_last_total_gbp, 2),
+            "last_year_ytd_gbp": round(other_last_ytd_gbp, 2),
             "monthly_gbp":     other_monthly_gbp,
             "last_monthly_gbp": other_last_monthly_gbp,
             "placements":      other_drilldown,
         },
         "grand_total_gbp":         round(grand_gbp, 2),
         "grand_total_last_gbp":    round(grand_gbp_last, 2),
+        "grand_total_last_ytd_gbp": round(grand_gbp_last_ytd, 2),
         "grand_monthly_gbp":       grand_monthly_gbp,
         "grand_monthly_last_gbp":  grand_monthly_last_gbp,
         "grand_budget_monthly_gbp": grand_budget_monthly,

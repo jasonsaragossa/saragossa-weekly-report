@@ -102,12 +102,10 @@ function buildSummarySection() {
   const table = document.createElement("table");
   table.innerHTML = `<thead><tr>
     <th>Territory</th>
-    <th class="num">Written YTD</th>
-    <th class="num">Last Year YTD</th>
-    <th class="num">YTD YoY</th>
+    <th class="num">Full Year Written</th>
+    <th class="num">Full Year Written Last YTD</th>
     <th class="num">Budget YTD</th>
     <th class="num">vs Budget</th>
-    <th class="num">Full Year Written</th>
     <th class="num">Last Year Full</th>
     <th class="num">Full Year YoY</th>
     <th class="num">Annual Budget</th>
@@ -122,38 +120,33 @@ function buildSummarySection() {
 
     const sym        = tdata.sym;
     const months     = tdata.territory_months;
-    const lastMonths = tdata.territory_last_year_months || {};
     const budget     = tdata.budget || {};
     const budgetMths = budget.months || {};
     const annualBudget = budget.total || 0;
 
-    // YTD = months 1..currentMonth for this year and last year
-    let ytd = 0, lastYtd = 0, ytdBudget = 0;
+    // Written YTD (this year, by start date) — kept internally for vs-Budget
+    let ytd = 0, ytdBudget = 0;
     for (let m = 1; m <= currentMonth; m++) {
       ytd        += months[String(m)]     || 0;
-      lastYtd    += lastMonths[String(m)] || 0;
       ytdBudget  += budgetMths[String(m)] || 0;
     }
 
-    const fullYear   = tdata.territory_total;
-    const lastYear   = tdata.territory_last_year;
-    const vsBudget   = ytdBudget > 0 ? ytd - ytdBudget : null;
-    const ytdYoyPct  = lastYtd  > 0 ? (ytd      - lastYtd)  / lastYtd  * 100 : null;
-    const fullYoyPct = lastYear > 0 ? (fullYear  - lastYear) / lastYear * 100 : null;
+    const fullYear     = tdata.territory_total;
+    const lastYearYtd  = tdata.territory_last_year_ytd || 0;
+    const lastYear     = tdata.territory_last_year;
+    const vsBudget     = ytdBudget > 0 ? ytd - ytdBudget : null;
+    const fullYoyPct   = lastYear > 0 ? (fullYear - lastYear) / lastYear * 100 : null;
 
     const vsCls      = vsBudget    !== null ? (vsBudget    >= 0 ? " pos" : " neg") : "";
-    const ytdYoyCls  = ytdYoyPct   !== null ? (ytdYoyPct   >= 0 ? " pos" : " neg") : "";
     const fullYoyCls = fullYoyPct  !== null ? (fullYoyPct  >= 0 ? " pos" : " neg") : "";
 
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td><strong>${esc(territory)}</strong></td>
-      <td class="num">${fmt(ytd, sym)}</td>
-      <td class="num dim">${lastYtd > 0 ? fmt(lastYtd, sym) : "—"}</td>
-      <td class="num${ytdYoyCls}">${ytdYoyPct !== null ? fmtPct(ytdYoyPct) : "—"}</td>
+      <td class="num">${fmt(fullYear, sym)}</td>
+      <td class="num dim">${lastYearYtd > 0 ? fmt(lastYearYtd, sym) : "—"}</td>
       <td class="num">${ytdBudget > 0 ? fmt(ytdBudget, sym) : "—"}</td>
       <td class="num${vsCls}">${vsBudget !== null ? fmtDelta(vsBudget, sym) : "—"}</td>
-      <td class="num">${fmt(fullYear, sym)}</td>
       <td class="num dim">${lastYear > 0 ? fmt(lastYear, sym) : "—"}</td>
       <td class="num${fullYoyCls}">${fullYoyPct !== null ? fmtPct(fullYoyPct) : "—"}</td>
       <td class="num">${annualBudget > 0 ? fmt(annualBudget, sym) : "—"}</td>
@@ -164,20 +157,11 @@ function buildSummarySection() {
 
   // ── Other row (GBP) — placements not attributed to any territory consultant ──
   const otherData    = reportData.other || {};
-  const oMonthly     = otherData.monthly_gbp      || {};
-  const oMonthlyLast = otherData.last_monthly_gbp || {};
   const oFullYear    = otherData.total_gbp         || 0;
   const oLastYear    = otherData.last_year_gbp     || 0;
+  const oLastYearYtd = otherData.last_year_ytd_gbp || 0;
 
-  let oYtd = 0, oLastYtd = 0;
-  for (let m = 1; m <= currentMonth; m++) {
-    oYtd     += oMonthly[String(m)]     || 0;
-    oLastYtd += oMonthlyLast[String(m)] || 0;
-  }
-
-  const oYtdYoyPct  = oLastYtd  > 0 ? (oYtd     - oLastYtd)  / oLastYtd  * 100 : null;
   const oFullYoyPct = oLastYear > 0 ? (oFullYear - oLastYear) / oLastYear * 100 : null;
-  const oYtdYoyCls  = oYtdYoyPct  !== null ? (oYtdYoyPct  >= 0 ? " pos" : " neg") : "";
   const oFullYoyCls = oFullYoyPct !== null ? (oFullYoyPct >= 0 ? " pos" : " neg") : "";
 
   const otherTr = document.createElement("tr");
@@ -185,12 +169,10 @@ function buildSummarySection() {
   otherTr.style.cursor = "pointer";
   otherTr.innerHTML = `
     <td><strong><span class="other-toggle-arrow">▶</span> Other (GBP)</strong></td>
-    <td class="num"><strong>${fmt(oYtd, "£") || "£0"}</strong></td>
-    <td class="num dim"><strong>${oLastYtd > 0 ? fmt(oLastYtd, "£") : "—"}</strong></td>
-    <td class="num${oYtdYoyCls}"><strong>${oYtdYoyPct !== null ? fmtPct(oYtdYoyPct) : "—"}</strong></td>
-    <td class="num">—</td>
-    <td class="num">—</td>
     <td class="num"><strong>${fmt(oFullYear, "£") || "£0"}</strong></td>
+    <td class="num dim"><strong>${oLastYearYtd > 0 ? fmt(oLastYearYtd, "£") : "—"}</strong></td>
+    <td class="num">—</td>
+    <td class="num">—</td>
     <td class="num dim"><strong>${oLastYear > 0 ? fmt(oLastYear, "£") : "—"}</strong></td>
     <td class="num${oFullYoyCls}"><strong>${oFullYoyPct !== null ? fmtPct(oFullYoyPct) : "—"}</strong></td>
     <td class="num">—</td>
@@ -199,37 +181,32 @@ function buildSummarySection() {
 
   // ── Overall row (GBP) — includes all territories + Other ──────────────────
   const gMonthly     = reportData.grand_monthly_gbp       || {};
-  const gMonthlyLast = reportData.grand_monthly_last_gbp  || {};
   const gBudgetMths  = reportData.grand_budget_monthly_gbp || {};
   const gBudgetTotal = reportData.grand_budget_total_gbp  || 0;
-  const gFullYear    = reportData.grand_total_gbp         || 0;
-  const gLastYear    = reportData.grand_total_last_gbp    || 0;
+  const gFullYear    = reportData.grand_total_gbp          || 0;
+  const gLastYear    = reportData.grand_total_last_gbp     || 0;
+  const gLastYearYtd = reportData.grand_total_last_ytd_gbp || 0;
 
-  let gYtd = 0, gLastYtd = 0, gYtdBudget = 0;
+  let gYtd = 0, gYtdBudget = 0;
   for (let m = 1; m <= currentMonth; m++) {
     gYtd       += gMonthly[String(m)]     || 0;
-    gLastYtd   += gMonthlyLast[String(m)] || 0;
     gYtdBudget += gBudgetMths[String(m)]  || 0;
   }
 
   const gVsBudget   = gYtdBudget > 0 ? gYtd - gYtdBudget : null;
-  const gYtdYoyPct  = gLastYtd  > 0 ? (gYtd      - gLastYtd)  / gLastYtd  * 100 : null;
   const gFullYoyPct = gLastYear > 0  ? (gFullYear - gLastYear) / gLastYear * 100 : null;
 
   const gVsCls      = gVsBudget   !== null ? (gVsBudget   >= 0 ? " pos" : " neg") : "";
-  const gYtdYoyCls  = gYtdYoyPct  !== null ? (gYtdYoyPct  >= 0 ? " pos" : " neg") : "";
   const gFullYoyCls = gFullYoyPct !== null ? (gFullYoyPct >= 0 ? " pos" : " neg") : "";
 
   const overallTr = document.createElement("tr");
   overallTr.className = "territory-total-row";
   overallTr.innerHTML = `
     <td><strong>Overall (GBP)</strong></td>
-    <td class="num"><strong>${fmt(gYtd, "£")}</strong></td>
-    <td class="num dim"><strong>${gLastYtd > 0 ? fmt(gLastYtd, "£") : "—"}</strong></td>
-    <td class="num${gYtdYoyCls}"><strong>${gYtdYoyPct !== null ? fmtPct(gYtdYoyPct) : "—"}</strong></td>
+    <td class="num"><strong>${fmt(gFullYear, "£")}</strong></td>
+    <td class="num dim"><strong>${gLastYearYtd > 0 ? fmt(gLastYearYtd, "£") : "—"}</strong></td>
     <td class="num"><strong>${gYtdBudget > 0 ? fmt(gYtdBudget, "£") : "—"}</strong></td>
     <td class="num${gVsCls}"><strong>${gVsBudget !== null ? fmtDelta(gVsBudget, "£") : "—"}</strong></td>
-    <td class="num"><strong>${fmt(gFullYear, "£")}</strong></td>
     <td class="num dim"><strong>${gLastYear > 0 ? fmt(gLastYear, "£") : "—"}</strong></td>
     <td class="num${gFullYoyCls}"><strong>${gFullYoyPct !== null ? fmtPct(gFullYoyPct) : "—"}</strong></td>
     <td class="num"><strong>${gBudgetTotal > 0 ? fmt(gBudgetTotal, "£") : "—"}</strong></td>
