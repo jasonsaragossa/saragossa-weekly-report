@@ -103,6 +103,7 @@ function buildSummarySection() {
   table.innerHTML = `<thead><tr>
     <th>Territory</th>
     <th class="num">Full Year Written</th>
+    <th class="num">YoY %</th>
     <th class="num">Full Year Written Last YTD</th>
     <th class="num">Budget YTD</th>
     <th class="num">vs Budget</th>
@@ -135,15 +136,18 @@ function buildSummarySection() {
     const lastYearYtd  = tdata.territory_last_year_ytd || 0;
     const lastYear     = tdata.territory_last_year;
     const vsBudget     = ytdBudget > 0 ? ytd - ytdBudget : null;
+    const ytdYoyPct    = lastYearYtd > 0 ? (fullYear - lastYearYtd) / lastYearYtd * 100 : null;
     const fullYoyPct   = lastYear > 0 ? (fullYear - lastYear) / lastYear * 100 : null;
 
     const vsCls      = vsBudget    !== null ? (vsBudget    >= 0 ? " pos" : " neg") : "";
+    const ytdYoyCls  = ytdYoyPct   !== null ? (ytdYoyPct   >= 0 ? " pos" : " neg") : "";
     const fullYoyCls = fullYoyPct  !== null ? (fullYoyPct  >= 0 ? " pos" : " neg") : "";
 
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td><strong>${esc(territory)}</strong></td>
       <td class="num">${fmt(fullYear, sym)}</td>
+      <td class="num${ytdYoyCls}">${ytdYoyPct !== null ? fmtPct(ytdYoyPct) : "—"}</td>
       <td class="num dim">${lastYearYtd > 0 ? fmt(lastYearYtd, sym) : "—"}</td>
       <td class="num">${ytdBudget > 0 ? fmt(ytdBudget, sym) : "—"}</td>
       <td class="num${vsCls}">${vsBudget !== null ? fmtDelta(vsBudget, sym) : "—"}</td>
@@ -161,6 +165,8 @@ function buildSummarySection() {
   const oLastYear    = otherData.last_year_gbp     || 0;
   const oLastYearYtd = otherData.last_year_ytd_gbp || 0;
 
+  const oYtdYoyPct  = oLastYearYtd > 0 ? (oFullYear - oLastYearYtd) / oLastYearYtd * 100 : null;
+  const oYtdYoyCls  = oYtdYoyPct  !== null ? (oYtdYoyPct  >= 0 ? " pos" : " neg") : "";
   const oFullYoyPct = oLastYear > 0 ? (oFullYear - oLastYear) / oLastYear * 100 : null;
   const oFullYoyCls = oFullYoyPct !== null ? (oFullYoyPct >= 0 ? " pos" : " neg") : "";
 
@@ -170,6 +176,7 @@ function buildSummarySection() {
   otherTr.innerHTML = `
     <td><strong><span class="other-toggle-arrow">▶</span> Other (GBP)</strong></td>
     <td class="num"><strong>${fmt(oFullYear, "£") || "£0"}</strong></td>
+    <td class="num${oYtdYoyCls}"><strong>${oYtdYoyPct !== null ? fmtPct(oYtdYoyPct) : "—"}</strong></td>
     <td class="num dim"><strong>${oLastYearYtd > 0 ? fmt(oLastYearYtd, "£") : "—"}</strong></td>
     <td class="num">—</td>
     <td class="num">—</td>
@@ -194,9 +201,11 @@ function buildSummarySection() {
   }
 
   const gVsBudget   = gYtdBudget > 0 ? gYtd - gYtdBudget : null;
+  const gYtdYoyPct  = gLastYearYtd > 0 ? (gFullYear - gLastYearYtd) / gLastYearYtd * 100 : null;
   const gFullYoyPct = gLastYear > 0  ? (gFullYear - gLastYear) / gLastYear * 100 : null;
 
   const gVsCls      = gVsBudget   !== null ? (gVsBudget   >= 0 ? " pos" : " neg") : "";
+  const gYtdYoyCls  = gYtdYoyPct  !== null ? (gYtdYoyPct  >= 0 ? " pos" : " neg") : "";
   const gFullYoyCls = gFullYoyPct !== null ? (gFullYoyPct >= 0 ? " pos" : " neg") : "";
 
   const overallTr = document.createElement("tr");
@@ -204,6 +213,7 @@ function buildSummarySection() {
   overallTr.innerHTML = `
     <td><strong>Overall (GBP)</strong></td>
     <td class="num"><strong>${fmt(gFullYear, "£")}</strong></td>
+    <td class="num${gYtdYoyCls}"><strong>${gYtdYoyPct !== null ? fmtPct(gYtdYoyPct) : "—"}</strong></td>
     <td class="num dim"><strong>${gLastYearYtd > 0 ? fmt(gLastYearYtd, "£") : "—"}</strong></td>
     <td class="num"><strong>${gYtdBudget > 0 ? fmt(gYtdBudget, "£") : "—"}</strong></td>
     <td class="num${gVsCls}"><strong>${gVsBudget !== null ? fmtDelta(gVsBudget, "£") : "—"}</strong></td>
