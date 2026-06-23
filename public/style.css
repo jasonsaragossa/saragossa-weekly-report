@@ -151,9 +151,19 @@ html, body {
 /* ── Tables ──────────────────────────────────────────────────────────────── */
 
 .table-wrap {
-  overflow-x: auto;
+  overflow: auto;
+  max-height: calc(100vh - 80px);
   border-radius: 8px;
   border: 1px solid var(--border);
+}
+
+/* Freeze column headers while scrolling a table */
+.table-wrap thead th,
+.settings-table-wrap thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface2);
 }
 
 table {
@@ -281,7 +291,8 @@ tr.team-header:first-child td { border-top: none; }
 /* Keep wide settings tables (esp. contract, 13 cols) inside the card
    instead of pushing the whole page sideways */
 .settings-table-wrap {
-  overflow-x: auto;
+  overflow: auto;
+  max-height: calc(100vh - 80px);
   border-radius: 8px;
   border: 1px solid var(--border);
 }
