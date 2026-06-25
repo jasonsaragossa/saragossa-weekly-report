@@ -295,31 +295,44 @@ def build_hpb(consultants: list, placements: list, override_map: dict,
     team total for team leads (their own billings capped at HPB_TEAM_LEAD_CAP).
     """
     from collections import defaultdict
-    year   = today.year
-    people = []
+    year            = today.year
+    current_quarter = (today.month - 1) // 3 + 1
+    people          = []
     for c in consultants:
         if c.get("isdisabled", False):
             continue
         territory = _territory_name(c.get("_territoryid_value"))
         if territory not in HPB_TERRITORIES:
             continue
-        uid       = c["systemuserid"]
-        ov        = override_map.get(uid, {})
-        title     = c.get("title") or ""
-        grade     = _hpb_grade(title, ov.get("crbb7_hpbgrade"))
-        team      = ov.get("crbb7_team") or team_map.get(uid, "")
-        tl_ov     = ov.get("crbb7_isteamlead")
-        is_lead   = bool(tl_ov) if tl_ov is not None else ("team lead" in title.lower())
-        qualifies = grade in HPB_INDIVIDUAL_GRADES
+        uid        = c["systemuserid"]
+        ov         = override_map.get(uid, {})
+        title      = c.get("title") or ""
+        auto_grade = _hpb_grade(title, None)   # grade implied by current title
+        team       = ov.get("crbb7_team") or team_map.get(uid, "")
+        tl_ov      = ov.get("crbb7_isteamlead")
+        is_lead    = bool(tl_ov) if tl_ov is not None else ("team lead" in title.lower())
+
+        # Grade can differ per quarter (title at the start of each quarter).
+        # Blank/unset override quarter falls back to the current-title grade.
+        q_grades = {}
+        for q in ("1", "2", "3", "4"):
+            ovg = ov.get("crbb7_hpbgradeq" + q)
+            ovg = ovg.strip().lower() if isinstance(ovg, str) else ""
+            q_grades[q] = ovg if (ovg and ovg != "auto") else auto_grade
+        q_targets = {
+            q: (HPB_TARGETS[g] if g in HPB_INDIVIDUAL_GRADES else None)
+            for q, g in q_grades.items()
+        }
+        current_grade = q_grades[str(current_quarter)]
         people.append({
             "uid":          uid,
             "name":         c.get("fullname", ""),
-            "grade":        grade,
-            "grade_label":  HPB_GRADE_LABELS.get(grade, "—"),
+            "grade":        current_grade,
+            "grade_label":  HPB_GRADE_LABELS.get(current_grade, "—"),
             "team":         team,
             "is_team_lead": is_lead,
-            "qualifies":    qualifies,
-            "target_100":   HPB_TARGETS[grade] if qualifies else None,
+            "q_grades":     q_grades,
+            "q_targets":    q_targets,
             "quarters":     _hpb_quarter_billings(uid, placements, to_usd, today, year),
         })
 
@@ -330,26 +343,28 @@ def build_hpb(consultants: list, placements: list, override_map: dict,
 
     for lead in people:
         if not lead["is_team_lead"]:
-            lead["team_quarters"]   = None
-            lead["team_target_100"] = None
+            lead["team_quarters"]    = None
+            lead["team_q_targets"]   = None
             continue
         members = [m for m in by_team.get(lead["team"], []) if m["uid"] != lead["uid"]]
-        tq = {}
+        tq, ttarg = {}, {}
         for q in ("1", "2", "3", "4"):
             member_sum  = sum(m["quarters"][q] for m in members)
             lead_capped = min(lead["quarters"][q], HPB_TEAM_LEAD_CAP)
             tq[q] = round(member_sum + lead_capped, 2)
-        member_target = sum(HPB_TARGETS.get(m["grade"], 0) for m in members)
-        lead_target   = HPB_TARGETS.get(lead["grade"], 100000)
+            # Team target uses each member's grade at the start of that quarter.
+            member_target = sum(HPB_TARGETS.get(m["q_grades"][q], 0) for m in members)
+            lead_target   = HPB_TARGETS.get(lead["q_grades"][q], 100000)
+            ttarg[q] = member_target + lead_target
         lead["team_quarters"]     = tq
-        lead["team_target_100"]   = member_target + lead_target
+        lead["team_q_targets"]    = ttarg
         lead["team_member_count"] = len(members)
 
     people.sort(key=lambda p: (p["team"] or "zzzz", not p["is_team_lead"], p["name"]))
     return {
         "people":          people,
         "team_lead_cap":   HPB_TEAM_LEAD_CAP,
-        "current_quarter": (today.month - 1) // 3 + 1,
+        "current_quarter": current_quarter,
         "year":            year,
     }
 

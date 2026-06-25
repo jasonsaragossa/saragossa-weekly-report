@@ -126,10 +126,10 @@ function buildHpbSection() {
   const desc = document.createElement("p");
   desc.className = "settings-desc";
   desc.style.marginBottom = "14px";
-  desc.innerHTML = `Quarterly billings (gross profit, USD) vs role target — tiers 100% / 150% / 200%. ` +
+  desc.innerHTML = `Quarterly billings (gross profit, USD) vs the target for the grade held at the start of each quarter — tiers 100% / 150% / 200%. ` +
     `Includes all placements with a start date in the quarter, started or not (Q${hpb.current_quarter} highlighted). ` +
     `Associates don't earn an individual bonus but count toward their team. ` +
-    `Set grades and team leads in <a href="/settings" class="settings-link">Settings</a>.`;
+    `Set per-quarter grades and team leads in <a href="/settings" class="settings-link">Settings</a>.`;
   section.appendChild(desc);
 
   if (!hpb.people || !hpb.people.length) {
@@ -150,7 +150,7 @@ function buildHpbSection() {
   for (const p of hpb.people) {
     iBody += `<tr><td>${esc(p.name)}</td><td class="role-cell">${esc(p.grade_label)}</td>`;
     for (let q = 1; q <= 4; q++) {
-      iBody += hpbCell(p.quarters[String(q)], p.target_100, q === hpb.current_quarter);
+      iBody += hpbCell(p.quarters[String(q)], p.q_targets[String(q)], q === hpb.current_quarter);
     }
     iBody += `</tr>`;
   }
@@ -170,7 +170,7 @@ function buildHpbSection() {
     for (const p of leads) {
       tBody += `<tr><td>${esc(p.name)}</td><td class="role-cell">${esc(p.team || "—")}</td>`;
       for (let q = 1; q <= 4; q++) {
-        tBody += hpbCell(p.team_quarters[String(q)], p.team_target_100, q === hpb.current_quarter);
+        tBody += hpbCell(p.team_quarters[String(q)], p.team_q_targets[String(q)], q === hpb.current_quarter);
       }
       tBody += `</tr>`;
     }

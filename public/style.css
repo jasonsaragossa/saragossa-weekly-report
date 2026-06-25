@@ -498,6 +498,12 @@ tr.team-header:first-child td { border-top: none; }
 }
 .hpb-current { background: rgba(200,168,75,.08); }
 
+/* Settings: per-quarter HPB grade pickers */
+.hpb-grade-grid { display: flex; gap: 6px; flex-wrap: wrap; }
+.hpb-q { display: flex; flex-direction: column; gap: 2px; }
+.hpb-q span { font-size: 9px; color: var(--mid); text-transform: uppercase; letter-spacing: .06em; }
+.hpb-grade-select { width: 104px; }
+
 /* Tighten the panels/tabs inside the admin breakdown section */
 .admin-container .panels { padding: 16px 0; }
 

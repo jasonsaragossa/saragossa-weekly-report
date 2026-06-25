@@ -82,7 +82,7 @@ function renderSettings() {
       <th>Prev Team</th>
       <th>Prev Territory</th>
       ${isContract ? "<th>Total Margin YTD</th><th>Contract Last 12M</th><th>Rolling 3M</th>" : "<th>Annual Target</th>"}
-      ${isUsPerm ? "<th>Team Lead</th><th>HPB Grade</th>" : ""}
+      ${isUsPerm ? "<th>Team Lead</th><th>HPB Grade (Q1–Q4)</th>" : ""}
       <th></th>
     </tr></thead>`;
 
@@ -154,9 +154,8 @@ function buildUserRow(u, territory) {
   // Team Lead defaults to the title when never explicitly set.
   const tlOv       = ov.crbb7_isteamlead;
   const isTeamLead = tlOv === true || (tlOv == null && /team lead/i.test(u.role || ""));
-  const hpbGradeVal = ov.crbb7_hpbgrade || "";
-  const hpbGradeOptions = [
-    ["", "Auto (by title)"],
+  const HPB_GRADE_CHOICES = [
+    ["", "Auto"],
     ["none", "Doesn't qualify"],
     ["associate", "Associate"],
     ["consultant", "Consultant"],
@@ -165,12 +164,20 @@ function buildUserRow(u, territory) {
     ["eic", "EIC"],
     ["sales_leader", "Sales Leader"],
     ["team_lead", "Team Lead"],
-  ].map(([v, l]) => `<option value="${v}" ${hpbGradeVal === v ? "selected" : ""}>${l}</option>`).join("");
+  ];
+  const quarterGradeSelect = (q) => {
+    const val = ov["crbb7_hpbgradeq" + q] || "";
+    const opts = HPB_GRADE_CHOICES
+      .map(([v, l]) => `<option value="${v}" ${val === v ? "selected" : ""}>${l}</option>`)
+      .join("");
+    return `<label class="hpb-q"><span>Q${q}</span>
+      <select class="hpb-grade-select" data-field="hpb_grade_q${q}">${opts}</select></label>`;
+  };
   const hpbFields = isUsPerm ? `
     <td style="text-align:center">
       <input type="checkbox" class="hpb-teamlead-toggle" data-field="is_team_lead" ${isTeamLead ? "checked" : ""}>
     </td>
-    <td><select class="team-select hpb-grade-select" data-field="hpb_grade">${hpbGradeOptions}</select></td>
+    <td><div class="hpb-grade-grid">${["1","2","3","4"].map(quarterGradeSelect).join("")}</div></td>
   ` : "";
 
   tr.innerHTML = `
@@ -227,8 +234,9 @@ function buildUserRow(u, territory) {
     const hpbData = {};
     const tlToggle = tr.querySelector(".hpb-teamlead-toggle");
     if (tlToggle) hpbData.is_team_lead = tlToggle.checked;
-    const gradeSel = tr.querySelector(".hpb-grade-select");
-    if (gradeSel) hpbData.hpb_grade = gradeSel.value || null;
+    tr.querySelectorAll(".hpb-grade-select").forEach(sel => {
+      hpbData[sel.dataset.field] = sel.value || null;   // hpb_grade_q1 … q4
+    });
     await saveOverride(uid, btn.dataset.name, btn.dataset.territory, team, hidden, contractData, moveData, hpbData, tr);
   });
 
