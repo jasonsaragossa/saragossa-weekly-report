@@ -449,6 +449,13 @@ def upsert_override(data: dict, updated_by: str) -> dict:
         if api_key in data:
             val = data[api_key]
             body[dv_key] = val if val not in (None, "") else None
+
+    # HPB (High Performance Bonus) fields — US perm only
+    if "is_team_lead" in data:
+        body["crbb7_isteamlead"] = bool(data["is_team_lead"])
+    if "hpb_grade" in data:
+        v = data["hpb_grade"]
+        body["crbb7_hpbgrade"] = v if v not in (None, "") else None
     if existing:
         rid = existing[0]["crbb7_useroverrideid"]
         odata_patch(f"crbb7_useroverrides({rid})", body)

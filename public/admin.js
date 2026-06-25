@@ -81,6 +81,111 @@ function render() {
   container.appendChild(breakdownHeading);
 
   container.appendChild(buildBreakdownTabs());
+
+  // 4. High Performance Bonus (US perm)
+  if (reportData.hpb) container.appendChild(buildHpbSection());
+}
+
+
+// ── High Performance Bonus (US) ─────────────────────────────────────────────
+
+function hpbTier(billings, target100) {
+  if (target100 == null || target100 <= 0) return { label: "N/A", cls: "dim" };
+  if (billings >= 2.0 * target100) return { label: "200%", cls: "pos" };
+  if (billings >= 1.5 * target100) return { label: "150%", cls: "pos" };
+  if (billings >= 1.0 * target100) return { label: "100%", cls: "pos" };
+  return { label: "NO", cls: "neg" };
+}
+
+function hpbCell(billings, target100, isCurrent, isFuture) {
+  const t = isFuture ? { label: "—", cls: "dim" } : hpbTier(billings, target100);
+  return `<td class="num${isCurrent ? " hpb-current" : ""}">
+    <span class="hpb-amt">${fmt(billings || 0, "$")}</span>
+    <span class="hpb-tier ${t.cls}">${t.label}</span>
+  </td>`;
+}
+
+function hpbQuarterHeaders(currentQ) {
+  let h = "";
+  for (let q = 1; q <= 4; q++) {
+    h += `<th class="num${q === currentQ ? " hpb-current" : ""}">Q${q}</th>`;
+  }
+  return h;
+}
+
+function buildHpbSection() {
+  const hpb = reportData.hpb;
+  const section = document.createElement("div");
+  section.className = "admin-section";
+
+  const h = document.createElement("h2");
+  h.className = "admin-section-title";
+  h.textContent = "High Performance Bonus (US)";
+  section.appendChild(h);
+
+  const desc = document.createElement("p");
+  desc.className = "settings-desc";
+  desc.style.marginBottom = "14px";
+  desc.innerHTML = `Quarterly billings (gross profit, USD) vs role target — tiers 100% / 150% / 200%. ` +
+    `Q${hpb.current_quarter} is quarter-to-date. Associates don't earn an individual bonus but count toward their team. ` +
+    `Set grades and team leads in <a href="/settings" class="settings-link">Settings</a>.`;
+  section.appendChild(desc);
+
+  if (!hpb.people || !hpb.people.length) {
+    const none = document.createElement("p");
+    none.className = "settings-desc";
+    none.textContent = "No US perm consultants found.";
+    section.appendChild(none);
+    return section;
+  }
+
+  // Individual
+  section.appendChild(hpbSubheading("Individual"));
+  const iWrap = document.createElement("div");
+  iWrap.className = "table-wrap";
+  const iTable = document.createElement("table");
+  iTable.className = "hpb-table";
+  let iBody = "";
+  for (const p of hpb.people) {
+    iBody += `<tr><td>${esc(p.name)}</td><td class="role-cell">${esc(p.grade_label)}</td>`;
+    for (let q = 1; q <= 4; q++) {
+      iBody += hpbCell(p.quarters[String(q)], p.target_100, q === hpb.current_quarter, q > hpb.current_quarter);
+    }
+    iBody += `</tr>`;
+  }
+  iTable.innerHTML = `<thead><tr><th>Consultant</th><th>Grade</th>${hpbQuarterHeaders(hpb.current_quarter)}</tr></thead><tbody>${iBody}</tbody>`;
+  iWrap.appendChild(iTable);
+  section.appendChild(iWrap);
+
+  // Team (team leads only)
+  const leads = hpb.people.filter(p => p.is_team_lead && p.team_quarters);
+  if (leads.length) {
+    section.appendChild(hpbSubheading(`Team (lead's own billings capped at ${fmt(hpb.team_lead_cap, "$")}/qtr)`));
+    const tWrap = document.createElement("div");
+    tWrap.className = "table-wrap";
+    const tTable = document.createElement("table");
+    tTable.className = "hpb-table";
+    let tBody = "";
+    for (const p of leads) {
+      tBody += `<tr><td>${esc(p.name)}</td><td class="role-cell">${esc(p.team || "—")}</td>`;
+      for (let q = 1; q <= 4; q++) {
+        tBody += hpbCell(p.team_quarters[String(q)], p.team_target_100, q === hpb.current_quarter, q > hpb.current_quarter);
+      }
+      tBody += `</tr>`;
+    }
+    tTable.innerHTML = `<thead><tr><th>Team Lead</th><th>Team</th>${hpbQuarterHeaders(hpb.current_quarter)}</tr></thead><tbody>${tBody}</tbody>`;
+    tWrap.appendChild(tTable);
+    section.appendChild(tWrap);
+  }
+
+  return section;
+}
+
+function hpbSubheading(text) {
+  const h = document.createElement("h3");
+  h.className = "hpb-subheading";
+  h.textContent = text;
+  return h;
 }
 
 

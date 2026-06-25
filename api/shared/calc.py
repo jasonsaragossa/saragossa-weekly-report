@@ -230,6 +230,127 @@ def compute_written_by_created(
     return round(total, 2)
 
 
+# ── High Performance Bonus (US perm) ──────────────────────────────────────────
+# Quarterly invoiced billings (= gross profit, USD) vs role target. US perm only.
+HPB_TERRITORIES   = {"Chicago", "New York"}
+HPB_TEAM_LEAD_CAP = 75000   # max of a team lead's own billings counted toward team
+
+# 100% targets in USD; 150% = 1.5x, 200% = 2x.
+HPB_TARGETS = {
+    "associate":    30000,   # no individual bonus, but counts toward the team
+    "consultant":   60000,
+    "senior":       90000,
+    "principal":   100000,
+    "team_lead":   100000,
+    "eic":         100000,
+    "sales_leader":100000,
+}
+# Grades that earn an individual bonus (associate / unmapped do not)
+HPB_INDIVIDUAL_GRADES = {"consultant", "senior", "principal", "team_lead", "eic", "sales_leader"}
+HPB_GRADE_LABELS = {
+    "associate": "Associate", "consultant": "Consultant", "senior": "Senior",
+    "principal": "Principal", "team_lead": "Team Lead", "eic": "EIC",
+    "sales_leader": "Sales Leader", "none": "—",
+}
+
+
+def _hpb_grade(title: str, override_grade) -> str:
+    """Resolve a consultant's HPB grade from an explicit override, else their title."""
+    if override_grade:
+        g = str(override_grade).strip().lower()
+        if g and g != "auto":
+            return g
+    t = (title or "").lower()
+    if "team lead" in t:  return "team_lead"
+    if "associate" in t:  return "associate"
+    if "senior" in t:     return "senior"
+    if "principal" in t:  return "principal"
+    if "consultant" in t: return "consultant"
+    return "none"
+
+
+def _hpb_quarter_billings(uid: str, placements: list, to_usd: dict, today: date, year: int) -> dict:
+    """Per-quarter USD billings for a consultant, counting placements once started (QTD)."""
+    q = {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0}
+    for p in placements:
+        factor = split_factor(p, uid)
+        if factor == 0:
+            continue
+        d = parse_date(p["crimson_startdate"])
+        if d.year != year or d > today:
+            continue
+        gp  = p.get("recruit_truegrossprofit") or 0.0
+        ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode")
+        q[(d.month - 1) // 3 + 1] += gp * factor * to_usd.get(ccy, 1.0)
+    return {str(k): round(v, 2) for k, v in q.items()}
+
+
+def build_hpb(consultants: list, placements: list, override_map: dict,
+              team_map: dict, to_usd: dict, today: date) -> dict:
+    """
+    US perm High Performance Bonus: per-quarter billings vs role target, plus a
+    team total for team leads (their own billings capped at HPB_TEAM_LEAD_CAP).
+    """
+    from collections import defaultdict
+    year   = today.year
+    people = []
+    for c in consultants:
+        if c.get("isdisabled", False):
+            continue
+        territory = _territory_name(c.get("_territoryid_value"))
+        if territory not in HPB_TERRITORIES:
+            continue
+        uid       = c["systemuserid"]
+        ov        = override_map.get(uid, {})
+        title     = c.get("title") or ""
+        grade     = _hpb_grade(title, ov.get("crbb7_hpbgrade"))
+        team      = ov.get("crbb7_team") or team_map.get(uid, "")
+        tl_ov     = ov.get("crbb7_isteamlead")
+        is_lead   = bool(tl_ov) if tl_ov is not None else ("team lead" in title.lower())
+        qualifies = grade in HPB_INDIVIDUAL_GRADES
+        people.append({
+            "uid":          uid,
+            "name":         c.get("fullname", ""),
+            "grade":        grade,
+            "grade_label":  HPB_GRADE_LABELS.get(grade, "—"),
+            "team":         team,
+            "is_team_lead": is_lead,
+            "qualifies":    qualifies,
+            "target_100":   HPB_TARGETS[grade] if qualifies else None,
+            "quarters":     _hpb_quarter_billings(uid, placements, to_usd, today, year),
+        })
+
+    by_team = defaultdict(list)
+    for p in people:
+        if p["team"]:
+            by_team[p["team"]].append(p)
+
+    for lead in people:
+        if not lead["is_team_lead"]:
+            lead["team_quarters"]   = None
+            lead["team_target_100"] = None
+            continue
+        members = [m for m in by_team.get(lead["team"], []) if m["uid"] != lead["uid"]]
+        tq = {}
+        for q in ("1", "2", "3", "4"):
+            member_sum  = sum(m["quarters"][q] for m in members)
+            lead_capped = min(lead["quarters"][q], HPB_TEAM_LEAD_CAP)
+            tq[q] = round(member_sum + lead_capped, 2)
+        member_target = sum(HPB_TARGETS.get(m["grade"], 0) for m in members)
+        lead_target   = HPB_TARGETS.get(lead["grade"], 100000)
+        lead["team_quarters"]     = tq
+        lead["team_target_100"]   = member_target + lead_target
+        lead["team_member_count"] = len(members)
+
+    people.sort(key=lambda p: (p["team"] or "zzzz", not p["is_team_lead"], p["name"]))
+    return {
+        "people":          people,
+        "team_lead_cap":   HPB_TEAM_LEAD_CAP,
+        "current_quarter": (today.month - 1) // 3 + 1,
+        "year":            year,
+    }
+
+
 def build_admin_report(
     consultants: list,
     placements_this: list,
@@ -570,6 +691,7 @@ def build_admin_report(
             "count_last": retained_count_last,
             "last_gbp":   round(retained_last_gbp, 2),
         },
+        "hpb": build_hpb(consultants, placements_this, override_map, team_map or {}, to_usd, today),
     }
 
 

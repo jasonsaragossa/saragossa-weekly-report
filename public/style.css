@@ -474,6 +474,30 @@ tr.team-header:first-child td { border-top: none; }
 .neg { color: var(--red); }
 .dim { color: var(--mid); }
 
+/* ── High Performance Bonus (US) ─────────────────────────────────────────── */
+.hpb-subheading {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--mid);
+  margin: 20px 0 8px;
+}
+.hpb-table td.num { padding: 8px 14px; }
+.hpb-amt {
+  display: block;
+  font-size: 11px;
+  color: var(--mid);
+  font-family: var(--mono);
+}
+.hpb-tier {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 2px;
+}
+.hpb-current { background: rgba(200,168,75,.08); }
+
 /* Tighten the panels/tabs inside the admin breakdown section */
 .admin-container .panels { padding: 16px 0; }
 

@@ -69,6 +69,7 @@ function renderSettings() {
     section.innerHTML = `<h2 class="settings-territory">${territory}</h2>`;
 
     const isContract = CONTRACT_TERRITORIES.has(territory);
+    const isUsPerm   = territory === "Chicago" || territory === "New York";
     const table = document.createElement("table");
     table.className = "settings-table";
     table.innerHTML = `<thead><tr>
@@ -81,6 +82,7 @@ function renderSettings() {
       <th>Prev Team</th>
       <th>Prev Territory</th>
       ${isContract ? "<th>Total Margin YTD</th><th>Contract Last 12M</th><th>Rolling 3M</th>" : "<th>Annual Target</th>"}
+      ${isUsPerm ? "<th>Team Lead</th><th>HPB Grade</th>" : ""}
       <th></th>
     </tr></thead>`;
 
@@ -102,6 +104,7 @@ function buildUserRow(u, territory) {
   const currentTeam  = ov.crbb7_team || "";
   const teams        = TEAMS_BY_TERRITORY[territory] || [];
   const isContract   = CONTRACT_TERRITORIES.has(territory);
+  const isUsPerm     = territory === "Chicago" || territory === "New York";
 
   // Date / history fields — Dataverse Date Only comes back as "2024-10-01" or "2024-10-01T00:00:00Z"
   const dateJoined     = ov.crbb7_datejoined     ? ov.crbb7_datejoined.split("T")[0]     : "";
@@ -147,6 +150,29 @@ function buildUserRow(u, territory) {
   const targetVal = ov.crbb7_target != null ? ov.crbb7_target : "";
   const sym = (territory === "Chicago" || territory === "New York" || territory === "Chicago Contract") ? "$" : "£";
 
+  // HPB controls (US perm only): Team Lead toggle + grade selector.
+  // Team Lead defaults to the title when never explicitly set.
+  const tlOv       = ov.crbb7_isteamlead;
+  const isTeamLead = tlOv === true || (tlOv == null && /team lead/i.test(u.role || ""));
+  const hpbGradeVal = ov.crbb7_hpbgrade || "";
+  const hpbGradeOptions = [
+    ["", "Auto (by title)"],
+    ["none", "Doesn't qualify"],
+    ["associate", "Associate"],
+    ["consultant", "Consultant"],
+    ["senior", "Senior"],
+    ["principal", "Principal"],
+    ["eic", "EIC"],
+    ["sales_leader", "Sales Leader"],
+    ["team_lead", "Team Lead"],
+  ].map(([v, l]) => `<option value="${v}" ${hpbGradeVal === v ? "selected" : ""}>${l}</option>`).join("");
+  const hpbFields = isUsPerm ? `
+    <td style="text-align:center">
+      <input type="checkbox" class="hpb-teamlead-toggle" data-field="is_team_lead" ${isTeamLead ? "checked" : ""}>
+    </td>
+    <td><select class="team-select hpb-grade-select" data-field="hpb_grade">${hpbGradeOptions}</select></td>
+  ` : "";
+
   tr.innerHTML = `
     <td>${esc(u.name)}</td>
     <td class="role-cell">${esc(u.role)}</td>
@@ -168,6 +194,7 @@ function buildUserRow(u, territory) {
              placeholder="${sym}0" step="1000" min="0"
              value="${targetVal}">
     </td>`}
+    ${hpbFields}
     <td>
       <button class="save-btn" data-uid="${esc(u.uid)}"
               data-name="${esc(u.name)}"
@@ -197,7 +224,12 @@ function buildUserRow(u, territory) {
       previous_team:      tr.querySelector("[data-field=previous_team]").value      || null,
       previous_territory: tr.querySelector("[data-field=previous_territory]").value || null,
     };
-    await saveOverride(uid, btn.dataset.name, btn.dataset.territory, team, hidden, contractData, moveData, tr);
+    const hpbData = {};
+    const tlToggle = tr.querySelector(".hpb-teamlead-toggle");
+    if (tlToggle) hpbData.is_team_lead = tlToggle.checked;
+    const gradeSel = tr.querySelector(".hpb-grade-select");
+    if (gradeSel) hpbData.hpb_grade = gradeSel.value || null;
+    await saveOverride(uid, btn.dataset.name, btn.dataset.territory, team, hidden, contractData, moveData, hpbData, tr);
   });
 
   // Clear override
@@ -212,7 +244,7 @@ function buildUserRow(u, territory) {
   return tr;
 }
 
-async function saveOverride(uid, name, territory, team, isHidden, contractData, moveData, tr) {
+async function saveOverride(uid, name, territory, team, isHidden, contractData, moveData, hpbData, tr) {
   const btn = tr.querySelector(".save-btn");
   btn.textContent = "Saving…";
   btn.disabled = true;
@@ -221,7 +253,7 @@ async function saveOverride(uid, name, territory, team, isHidden, contractData, 
     const resp = await fetch("/api/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userid: uid, name, territory, team, is_hidden: isHidden, ...contractData, ...moveData }),
+      body: JSON.stringify({ userid: uid, name, territory, team, is_hidden: isHidden, ...contractData, ...moveData, ...hpbData }),
     });
     const data = await resp.json();
     if (data.ok) {
