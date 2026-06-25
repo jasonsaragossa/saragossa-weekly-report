@@ -270,14 +270,17 @@ def _hpb_grade(title: str, override_grade) -> str:
 
 
 def _hpb_quarter_billings(uid: str, placements: list, to_usd: dict, today: date, year: int) -> dict:
-    """Per-quarter USD billings for a consultant, counting placements once started (QTD)."""
+    """
+    Per-quarter USD billings for a consultant — all placements with a start date
+    in the quarter, whether started yet or not (full-year projection).
+    """
     q = {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0}
     for p in placements:
         factor = split_factor(p, uid)
         if factor == 0:
             continue
         d = parse_date(p["crimson_startdate"])
-        if d.year != year or d > today:
+        if d.year != year:
             continue
         gp  = p.get("recruit_truegrossprofit") or 0.0
         ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode")

@@ -97,8 +97,8 @@ function hpbTier(billings, target100) {
   return { label: "NO", cls: "neg" };
 }
 
-function hpbCell(billings, target100, isCurrent, isFuture) {
-  const t = isFuture ? { label: "—", cls: "dim" } : hpbTier(billings, target100);
+function hpbCell(billings, target100, isCurrent) {
+  const t = hpbTier(billings, target100);
   return `<td class="num${isCurrent ? " hpb-current" : ""}">
     <span class="hpb-amt">${fmt(billings || 0, "$")}</span>
     <span class="hpb-tier ${t.cls}">${t.label}</span>
@@ -127,7 +127,8 @@ function buildHpbSection() {
   desc.className = "settings-desc";
   desc.style.marginBottom = "14px";
   desc.innerHTML = `Quarterly billings (gross profit, USD) vs role target — tiers 100% / 150% / 200%. ` +
-    `Q${hpb.current_quarter} is quarter-to-date. Associates don't earn an individual bonus but count toward their team. ` +
+    `Includes all placements with a start date in the quarter, started or not (Q${hpb.current_quarter} highlighted). ` +
+    `Associates don't earn an individual bonus but count toward their team. ` +
     `Set grades and team leads in <a href="/settings" class="settings-link">Settings</a>.`;
   section.appendChild(desc);
 
@@ -149,7 +150,7 @@ function buildHpbSection() {
   for (const p of hpb.people) {
     iBody += `<tr><td>${esc(p.name)}</td><td class="role-cell">${esc(p.grade_label)}</td>`;
     for (let q = 1; q <= 4; q++) {
-      iBody += hpbCell(p.quarters[String(q)], p.target_100, q === hpb.current_quarter, q > hpb.current_quarter);
+      iBody += hpbCell(p.quarters[String(q)], p.target_100, q === hpb.current_quarter);
     }
     iBody += `</tr>`;
   }
@@ -169,7 +170,7 @@ function buildHpbSection() {
     for (const p of leads) {
       tBody += `<tr><td>${esc(p.name)}</td><td class="role-cell">${esc(p.team || "—")}</td>`;
       for (let q = 1; q <= 4; q++) {
-        tBody += hpbCell(p.team_quarters[String(q)], p.team_target_100, q === hpb.current_quarter, q > hpb.current_quarter);
+        tBody += hpbCell(p.team_quarters[String(q)], p.team_target_100, q === hpb.current_quarter);
       }
       tBody += `</tr>`;
     }
