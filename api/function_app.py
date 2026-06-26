@@ -253,3 +253,46 @@ def analytics_budget_post(req: func.HttpRequest) -> func.HttpResponse:
             mimetype="application/json",
             status_code=500,
         )
+
+
+# ── /api/bob-poc (GET) — TEMPORARY proof-of-concept, admin-only ────────────────
+# Validates the HiBob integration: email -> work history -> per-quarter grade.
+# Remove once the Bob automation is built (or abandoned).
+
+@app.route(route="bob-poc", methods=["GET"])
+def bob_poc(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_admin(req)
+    if err:
+        return err
+
+    target = req.params.get("email")
+    if not target:
+        return func.HttpResponse(
+            json.dumps({"ok": False, "error": "pass ?email=someone@saragossa.io"}),
+            mimetype="application/json", status_code=400,
+        )
+
+    try:
+        from shared.bob import find_employee_id, get_work_history, grades_by_quarter
+        emp_id = find_employee_id(target)
+        if not emp_id:
+            return func.HttpResponse(
+                json.dumps({"ok": False, "error": f"No Bob employee for {target}"}),
+                mimetype="application/json", status_code=404,
+            )
+        history = get_work_history(emp_id)
+        return func.HttpResponse(
+            json.dumps({
+                "ok": True,
+                "employee_id": emp_id,
+                "raw_work_entries": history,
+                "quarter_grades": grades_by_quarter(history, date.today().year),
+            }, indent=2),
+            mimetype="application/json", status_code=200,
+        )
+    except Exception as e:
+        logging.exception("bob-poc error")
+        return func.HttpResponse(
+            json.dumps({"ok": False, "error": str(e)}),
+            mimetype="application/json", status_code=500,
+        )
