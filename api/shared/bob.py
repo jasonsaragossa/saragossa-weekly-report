@@ -53,6 +53,33 @@ def get_work_history(emp_id: str) -> list[dict]:
     return data.get("values", data) if isinstance(data, dict) else data
 
 
+def get_named_lists() -> dict:
+    resp = requests.get(f"{BOB_BASE}/company/named-lists", headers=_auth_header(), timeout=30)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def _flatten_named_lists(node, out: dict) -> None:
+    """Walk the named-lists JSON, recording {str(id): label} for every value node."""
+    if isinstance(node, dict):
+        nid = node.get("id")
+        label = node.get("value") or node.get("name")
+        if nid is not None and isinstance(label, str):
+            out[str(nid)] = label
+        for v in node.values():
+            _flatten_named_lists(v, out)
+    elif isinstance(node, list):
+        for item in node:
+            _flatten_named_lists(item, out)
+
+
+def build_title_map() -> dict:
+    """{ str(list-value id): human title } across all company named lists."""
+    out = {}
+    _flatten_named_lists(get_named_lists(), out)
+    return out
+
+
 # ── Title → HPB grade (same logic the app uses elsewhere) ──────────────────────
 
 def title_to_grade(title: str) -> str:
@@ -90,9 +117,15 @@ def _entry_effective(e: dict) -> date | None:
     return _parse(_val(e.get("effectiveDate") or e.get("activeEffectiveDate") or e.get("startDate")))
 
 
-def grades_by_quarter(history: list[dict], year: int) -> dict:
+def _resolved_title(e: dict, title_map: dict) -> str:
+    """Title text for a work entry, resolving Bob's numeric list-value id to its label."""
+    raw = _entry_title(e)
+    return (title_map or {}).get(str(raw), raw)
+
+
+def grades_by_quarter(history: list[dict], year: int, title_map: dict = None) -> dict:
     """{ '1': {date, title, grade}, ... } using the latest entry on/before each quarter start."""
-    dated = [(_entry_effective(e), _entry_title(e)) for e in history]
+    dated = [(_entry_effective(e), _resolved_title(e, title_map)) for e in history]
     dated = sorted([(d, t) for d, t in dated if d is not None], key=lambda x: x[0])
     out = {}
     for q in range(1, 5):
@@ -103,3 +136,14 @@ def grades_by_quarter(history: list[dict], year: int) -> dict:
                 title = t
         out[str(q)] = {"as_of": qstart.isoformat(), "title": title, "grade": title_to_grade(title)}
     return out
+
+
+def current_grade(history: list[dict], title_map: dict = None) -> dict:
+    """Current title/grade — the entry flagged isCurrent, else the latest by effective date."""
+    cur = next((e for e in history if e.get("isCurrent")), None)
+    if cur is None and history:
+        cur = max(history, key=lambda e: _entry_effective(e) or date.min)
+    if cur is None:
+        return {"title": "", "grade": "none"}
+    title = _resolved_title(cur, title_map)
+    return {"title": title, "grade": title_to_grade(title)}

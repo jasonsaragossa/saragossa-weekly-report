@@ -273,20 +273,25 @@ def bob_poc(req: func.HttpRequest) -> func.HttpResponse:
         )
 
     try:
-        from shared.bob import find_employee_id, get_work_history, grades_by_quarter
+        from shared.bob import (
+            find_employee_id, get_work_history, grades_by_quarter,
+            build_title_map, current_grade,
+        )
         emp_id = find_employee_id(target)
         if not emp_id:
             return func.HttpResponse(
                 json.dumps({"ok": False, "error": f"No Bob employee for {target}"}),
                 mimetype="application/json", status_code=404,
             )
-        history = get_work_history(emp_id)
+        history    = get_work_history(emp_id)
+        title_map  = build_title_map()
         return func.HttpResponse(
             json.dumps({
                 "ok": True,
                 "employee_id": emp_id,
+                "current": current_grade(history, title_map),
+                "quarter_grades": grades_by_quarter(history, date.today().year, title_map),
                 "raw_work_entries": history,
-                "quarter_grades": grades_by_quarter(history, date.today().year),
             }, indent=2),
             mimetype="application/json", status_code=200,
         )
