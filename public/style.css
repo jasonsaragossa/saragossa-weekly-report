@@ -543,6 +543,22 @@ tr.team-header:first-child td { border-top: none; }
   border-bottom: 1px solid var(--accent);
 }
 
+/* Analytics access management */
+.access-list { list-style: none; margin: 0 0 14px; padding: 0; max-width: 460px; }
+.access-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 6px;
+  background: var(--surface);
+}
+.access-empty { color: var(--mid); font-size: 12px; padding: 6px 0; }
+.access-add { display: flex; gap: 8px; align-items: center; max-width: 460px; }
+.access-add .team-select { flex: 1; }
+
 /* Settings: per-quarter HPB grade pickers */
 .hpb-grade-grid { display: flex; gap: 6px; flex-wrap: wrap; }
 .hpb-q { display: flex; flex-direction: column; gap: 2px; }

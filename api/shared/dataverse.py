@@ -176,20 +176,37 @@ def get_territory_name(tid: str) -> str:
 
 def is_admin(user_email: str) -> bool:
     """
-    Admin = Director title OR member of Bristol Finance and Compliance team.
+    Admin (Analytics + Settings) =
+      Director title, OR manually granted via override, OR
+      member of the Finance and Compliance team.
     """
-    # Check title (Mercury stores role here, e.g. "Regional Director - London")
     users = odata_get_all(
         "systemusers",
         params={
-            "$select": "title",
+            "$select": "systemuserid,title",
             "$filter": f"internalemailaddress eq '{user_email}' and isdisabled eq false",
         },
     )
-    if users and "director" in (users[0].get("title") or "").lower():
+    if not users:
+        return False
+    user_id = users[0]["systemuserid"]
+
+    # 1. Director job title
+    if "director" in (users[0].get("title") or "").lower():
         return True
 
-    # Check team membership
+    # 2. Manual grant via the user-override table
+    granted = odata_get_all(
+        "crbb7_useroverrides",
+        params={
+            "$select": "crbb7_canaccessanalytics",
+            "$filter": f"crbb7_userid eq '{user_id}' and crbb7_canaccessanalytics eq true",
+        },
+    )
+    if granted:
+        return True
+
+    # 3. Finance and Compliance team membership
     teams = odata_get_all(
         "teams",
         params={
@@ -201,23 +218,27 @@ def is_admin(user_email: str) -> bool:
         return False
     team_id = teams[0]["teamid"]
 
-    # Check if this user is in that team
-    user_lookup = odata_get_all(
-        "systemusers",
-        params={
-            "$select": "systemuserid",
-            "$filter": f"internalemailaddress eq '{user_email}' and isdisabled eq false",
-        },
-    )
-    if not user_lookup:
-        return False
-    user_id = user_lookup[0]["systemuserid"]
-
     members = odata_get_all(
         f"teams({team_id})/teammembership_association",
         params={"$select": "systemuserid", "$filter": f"systemuserid eq '{user_id}'"},
     )
     return len(members) > 0
+
+
+def get_all_active_users() -> list[dict]:
+    """All enabled, human users (id + name + email) — for the analytics-access picker."""
+    users = odata_get_all(
+        "systemusers",
+        params={
+            "$select": "systemuserid,fullname,internalemailaddress",
+            "$filter": "isdisabled eq false and isintegrationuser eq false and internalemailaddress ne null",
+            "$orderby": "fullname asc",
+        },
+    )
+    return [
+        {"uid": u["systemuserid"], "name": u.get("fullname", ""), "email": u.get("internalemailaddress", "")}
+        for u in users
+    ]
 
 
 # ── Placement queries ─────────────────────────────────────────────────────────
@@ -424,11 +445,13 @@ def upsert_override(data: dict, updated_by: str) -> dict:
             "$filter": f"crbb7_userid eq '{data['userid']}'",
         },
     )
-    body = {
-        "crbb7_userid":   data["userid"],
-        "crbb7_team":     data.get("team", ""),
-        "crbb7_ishidden": data.get("is_hidden", False),
-    }
+    # Only write team / hidden when the caller actually sent them, so partial
+    # saves (e.g. granting analytics access) don't clobber existing values.
+    body = {"crbb7_userid": data["userid"]}
+    if "team" in data:
+        body["crbb7_team"] = data.get("team") or ""
+    if "is_hidden" in data:
+        body["crbb7_ishidden"] = bool(data["is_hidden"])
     # Numeric override fields
     for api_key, dv_key in [
         ("margin_ytd",       "crbb7_marginytd"),
@@ -458,6 +481,15 @@ def upsert_override(data: dict, updated_by: str) -> dict:
         if api_key in data:
             v = data[api_key]
             body["crbb7_hpbgradeq" + q] = v if v not in (None, "") else None
+
+    # Analytics access grant
+    if "can_access_analytics" in data:
+        body["crbb7_canaccessanalytics"] = bool(data["can_access_analytics"])
+
+    # crbb7_ishidden is NOT NULL — default it on first create
+    if not existing and "crbb7_ishidden" not in body:
+        body["crbb7_ishidden"] = False
+
     if existing:
         rid = existing[0]["crbb7_useroverrideid"]
         odata_patch(f"crbb7_useroverrides({rid})", body)

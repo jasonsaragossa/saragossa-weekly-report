@@ -19,7 +19,10 @@ const TEAMS_BY_TERRITORY = {
   "Chicago Contract": [],
 };
 
+const FINANCE_TEAM_NAME = "Bristol Finance and Compliance";
+
 let allUsers = [];
+let allActiveUsers = [];   // every enabled Mercury user (for the access picker)
 let overrideMap = {}; // uid → override record
 
 (async () => {
@@ -43,6 +46,7 @@ let overrideMap = {}; // uid → override record
   }
 
   allUsers = data.users || [];
+  allActiveUsers = data.all_active_users || [];
   (data.overrides || []).forEach(o => { overrideMap[o.crbb7_userid] = o; });
 
   renderSettings();
@@ -52,6 +56,9 @@ let overrideMap = {}; // uid → override record
 function renderSettings() {
   const container = document.getElementById("settings-content");
   container.innerHTML = "";
+
+  // Analytics access management (top of page)
+  container.appendChild(buildAccessSection());
 
   // Group users by territory
   const byTerritory = {};
@@ -95,6 +102,83 @@ function renderSettings() {
     wrap.appendChild(table);
     section.appendChild(wrap);
     container.appendChild(section);
+  }
+}
+
+
+// ── Analytics access management ────────────────────────────────────────────────
+
+function buildAccessSection() {
+  const section = document.createElement("div");
+  section.className = "settings-section";
+  section.id = "access-section";
+
+  const usersById = {};
+  allActiveUsers.forEach(u => { usersById[u.uid] = u; });
+
+  const granted = Object.values(overrideMap)
+    .filter(o => o.crbb7_canaccessanalytics === true)
+    .map(o => ({ uid: o.crbb7_userid, name: (usersById[o.crbb7_userid] || {}).name || o.crbb7_userid }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const grantedSet = new Set(granted.map(g => g.uid));
+  const addOptions = allActiveUsers
+    .filter(u => !grantedSet.has(u.uid))
+    .map(u => `<option value="${esc(u.uid)}" data-name="${esc(u.name)}">${esc(u.name)}</option>`)
+    .join("");
+
+  const grantedHtml = granted.length
+    ? granted.map(g => `<li class="access-row" data-uid="${esc(g.uid)}">
+         <span>${esc(g.name)}</span>
+         <button class="clear-btn access-remove" data-uid="${esc(g.uid)}">Remove</button>
+       </li>`).join("")
+    : `<li class="access-empty">No extra users granted yet.</li>`;
+
+  section.innerHTML = `
+    <h2 class="settings-territory">Analytics Access</h2>
+    <p class="settings-desc">Directors and the “${esc(FINANCE_TEAM_NAME)}” team can already see the Analytics page. Grant access to anyone else below.</p>
+    <ul class="access-list">${grantedHtml}</ul>
+    <div class="access-add">
+      <select class="team-select" id="access-add-select">${addOptions}</select>
+      <button class="save-btn" id="access-add-btn">Grant access</button>
+    </div>
+  `;
+
+  section.querySelector("#access-add-btn").addEventListener("click", () => {
+    const sel = section.querySelector("#access-add-select");
+    const uid = sel.value;
+    if (!uid) return;
+    const name = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].dataset.name : "";
+    setAnalyticsAccess(uid, name, true);
+  });
+  section.querySelectorAll(".access-remove").forEach(btn => {
+    btn.addEventListener("click", () => setAnalyticsAccess(btn.dataset.uid, "", false));
+  });
+
+  return section;
+}
+
+async function setAnalyticsAccess(uid, name, grant) {
+  const section = document.getElementById("access-section");
+  const addBtn = section ? section.querySelector("#access-add-btn") : null;
+  if (addBtn) { addBtn.textContent = "Saving…"; addBtn.disabled = true; }
+  try {
+    const resp = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userid: uid, name, can_access_analytics: grant }),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      overrideMap[uid] = { ...(overrideMap[uid] || {}), ...data.override };
+      if (section) section.replaceWith(buildAccessSection());
+    } else {
+      alert("Could not update access: " + (data.error || "unknown error"));
+      if (addBtn) { addBtn.textContent = "Grant access"; addBtn.disabled = false; }
+    }
+  } catch (e) {
+    alert("Could not update access: " + e.message);
+    if (addBtn) { addBtn.textContent = "Grant access"; addBtn.disabled = false; }
   }
 }
 
