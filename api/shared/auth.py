@@ -35,14 +35,22 @@ def get_user_email(req: func.HttpRequest) -> str | None:
         return None
 
 
+# Only identities on this domain may use the app, even if they hold a valid
+# token in the Saragossa Entra tenant (blocks B2B guest accounts).
+ALLOWED_EMAIL_DOMAINS = ("@saragossa.io",)
+
+
 def require_auth(req: func.HttpRequest) -> tuple[str | None, func.HttpResponse | None]:
     """
-    Returns (email, None) if authenticated, or (None, 401 response) if not.
-    Use at the top of every function handler.
+    Returns (email, None) if authenticated with an approved Saragossa identity,
+    or (None, 401/403 response) otherwise. Use at the top of every handler.
     """
     email = get_user_email(req)
     if not email:
         return None, func.HttpResponse("Unauthorised", status_code=401)
+    if not email.lower().endswith(ALLOWED_EMAIL_DOMAINS):
+        logging.warning(f"Blocked non-Saragossa identity: {email}")
+        return None, func.HttpResponse("Forbidden — Saragossa accounts only", status_code=403)
     return email, None
 
 

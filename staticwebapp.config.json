@@ -9,7 +9,7 @@
           "clientSecretSettingName": "AZURE_CLIENT_SECRET"
         },
         "login": {
-          "loginParameters": ["domain_hint=saragossa.com"]
+          "loginParameters": ["domain_hint=saragossa.io"]
         }
       }
     }

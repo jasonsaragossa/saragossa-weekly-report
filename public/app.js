@@ -28,6 +28,10 @@ const CONTRACT_TERRITORIES = new Set(["London Contract", "Chicago Contract"]);
       window.location.href = "/.auth/login/aad?post_login_redirect_uri=" + encodeURIComponent(window.location.pathname);
       return;
     }
+    if (resp.status === 403) {
+      window.location.href = "/403.html";
+      return;
+    }
     const text = await resp.text();
     try {
       data = JSON.parse(text);
