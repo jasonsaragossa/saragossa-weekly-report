@@ -39,7 +39,11 @@ def find_employee_id(email: str) -> str | None:
     if not employees:
         return None
     emp = employees[0]
-    return emp.get("/root/id") or emp.get("id")
+    val = emp.get("/root/id") or emp.get("id")
+    # Bob wraps field values as {"value": "..."} — unwrap to the bare id.
+    if isinstance(val, dict):
+        val = val.get("value")
+    return val
 
 
 def get_work_history(emp_id: str) -> list[dict]:
@@ -73,12 +77,17 @@ def _parse(d) -> date | None:
     return None
 
 
+def _val(x):
+    """Bob sometimes wraps a field as {'value': ...} — return the bare value."""
+    return x.get("value") if isinstance(x, dict) else x
+
+
 def _entry_title(e: dict) -> str:
-    return e.get("title") or e.get("jobTitle") or e.get("role") or ""
+    return _val(e.get("title") or e.get("jobTitle") or e.get("role")) or ""
 
 
 def _entry_effective(e: dict) -> date | None:
-    return _parse(e.get("effectiveDate") or e.get("activeEffectiveDate") or e.get("startDate"))
+    return _parse(_val(e.get("effectiveDate") or e.get("activeEffectiveDate") or e.get("startDate")))
 
 
 def grades_by_quarter(history: list[dict], year: int) -> dict:
