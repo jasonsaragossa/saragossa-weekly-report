@@ -327,6 +327,7 @@ def build_hpb(consultants: list, placements: list, override_map: dict,
         people.append({
             "uid":          uid,
             "name":         c.get("fullname", ""),
+            "territory":    territory,
             "grade":        current_grade,
             "grade_label":  HPB_GRADE_LABELS.get(current_grade, "—"),
             "team":         team,

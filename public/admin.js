@@ -65,25 +65,59 @@ function render() {
     <p class="settings-desc">Monthly perm GP by consultant · admin only</p>`;
   container.appendChild(heading);
 
-  // 1. Territory summary
-  container.appendChild(buildSummarySection());
+  container.appendChild(buildAnalyticsTabs());
+}
 
-  // 1b. Retained Business
-  container.appendChild(buildRetainedSection());
 
-  // 2. Monthly budget entry grid
-  container.appendChild(buildBudgetSection());
+// ── Top-level analytics tabs ────────────────────────────────────────────────
 
-  // 3. Monthly breakdown (tabbed per territory)
-  const breakdownHeading = document.createElement("h2");
-  breakdownHeading.className = "admin-section-title";
-  breakdownHeading.textContent = "Monthly Breakdown";
-  container.appendChild(breakdownHeading);
+function buildAnalyticsTabs() {
+  const wrapper  = document.createElement("div");
+  const tabsEl   = document.createElement("nav");
+  tabsEl.className = "analytics-tabs";
+  const panelsEl = document.createElement("div");
 
-  container.appendChild(buildBreakdownTabs());
+  const tabsDef = [
+    { id: "atab-summary", label: "Summary", build: () => {
+        const f = document.createDocumentFragment();
+        f.appendChild(buildSummarySection());
+        f.appendChild(buildRetainedSection());
+        return f;
+      } },
+    { id: "atab-budgets",   label: "Budgets",            build: () => buildBudgetSection() },
+    { id: "atab-breakdown", label: "Monthly Breakdown",  build: () => buildBreakdownTabs() },
+  ];
+  if (reportData.hpb) {
+    tabsDef.push({ id: "atab-hpb", label: "High Performance Bonus", build: () => buildHpbSection() });
+  }
 
-  // 4. High Performance Bonus (US perm)
-  if (reportData.hpb) container.appendChild(buildHpbSection());
+  tabsDef.forEach((t, i) => {
+    const tab = document.createElement("div");
+    tab.className = "analytics-tab" + (i === 0 ? " active" : "");
+    tab.textContent = t.label;
+    tab.dataset.panel = t.id;
+    tabsEl.appendChild(tab);
+
+    const panel = document.createElement("div");
+    panel.className = "analytics-panel" + (i === 0 ? " active" : "");
+    panel.id = t.id;
+    const content = t.build();
+    if (content) panel.appendChild(content);
+    panelsEl.appendChild(panel);
+  });
+
+  tabsEl.querySelectorAll(".analytics-tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      tabsEl.querySelectorAll(".analytics-tab").forEach(t => t.classList.remove("active"));
+      panelsEl.querySelectorAll(".analytics-panel").forEach(p => p.classList.remove("active"));
+      tab.classList.add("active");
+      document.getElementById(tab.dataset.panel).classList.add("active");
+    });
+  });
+
+  wrapper.appendChild(tabsEl);
+  wrapper.appendChild(panelsEl);
+  return wrapper;
 }
 
 
@@ -113,15 +147,24 @@ function hpbQuarterHeaders(currentQ) {
   return h;
 }
 
+const HPB_TERRITORY_ORDER = ["Chicago", "New York"];
+const HPB_TEAM_ORDER = ["Team JD", "Team Matty", "Team Adam", "Team Adam W"];
+
+function hpbTeamSort(a, b) {
+  const rank = (t) => {
+    const i = HPB_TEAM_ORDER.indexOf(t);
+    if (i !== -1) return [0, i, ""];
+    if (t === "") return [2, 0, ""];        // "No team" last
+    return [1, 0, t];                       // other named teams, alpha
+  };
+  const [ag, ai, an] = rank(a), [bg, bi, bn] = rank(b);
+  return ag - bg || ai - bi || an.localeCompare(bn);
+}
+
 function buildHpbSection() {
   const hpb = reportData.hpb;
   const section = document.createElement("div");
   section.className = "admin-section";
-
-  const h = document.createElement("h2");
-  h.className = "admin-section-title";
-  h.textContent = "High Performance Bonus (US)";
-  section.appendChild(h);
 
   const desc = document.createElement("p");
   desc.className = "settings-desc";
@@ -140,46 +183,71 @@ function buildHpbSection() {
     return section;
   }
 
-  // Individual
-  section.appendChild(hpbSubheading("Individual"));
-  const iWrap = document.createElement("div");
-  iWrap.className = "table-wrap";
-  const iTable = document.createElement("table");
-  iTable.className = "hpb-table";
-  let iBody = "";
-  for (const p of hpb.people) {
-    iBody += `<tr><td>${esc(p.name)}</td><td class="role-cell">${esc(p.grade_label)}</td>`;
-    for (let q = 1; q <= 4; q++) {
-      iBody += hpbCell(p.quarters[String(q)], p.q_targets[String(q)], q === hpb.current_quarter);
-    }
-    iBody += `</tr>`;
-  }
-  iTable.innerHTML = `<thead><tr><th>Consultant</th><th>Grade</th>${hpbQuarterHeaders(hpb.current_quarter)}</tr></thead><tbody>${iBody}</tbody>`;
-  iWrap.appendChild(iTable);
-  section.appendChild(iWrap);
+  for (const territory of HPB_TERRITORY_ORDER) {
+    const people = hpb.people.filter(p => p.territory === territory);
+    if (!people.length) continue;
 
-  // Team (team leads only)
-  const leads = hpb.people.filter(p => p.is_team_lead && p.team_quarters);
-  if (leads.length) {
-    section.appendChild(hpbSubheading(`Team (lead's own billings capped at ${fmt(hpb.team_lead_cap, "$")}/qtr)`));
-    const tWrap = document.createElement("div");
-    tWrap.className = "table-wrap";
-    const tTable = document.createElement("table");
-    tTable.className = "hpb-table";
-    let tBody = "";
-    for (const p of leads) {
-      tBody += `<tr><td>${esc(p.name)}</td><td class="role-cell">${esc(p.team || "—")}</td>`;
-      for (let q = 1; q <= 4; q++) {
-        tBody += hpbCell(p.team_quarters[String(q)], p.team_q_targets[String(q)], q === hpb.current_quarter);
-      }
-      tBody += `</tr>`;
+    const tHead = document.createElement("h3");
+    tHead.className = "hpb-territory-heading";
+    tHead.textContent = territory;
+    section.appendChild(tHead);
+
+    // Individual — grouped by team
+    section.appendChild(hpbSubheading("Individual"));
+    section.appendChild(buildHpbIndividualTable(hpb, people));
+
+    // Team qualification — this territory's team leads
+    const leads = people.filter(p => p.is_team_lead && p.team_quarters);
+    if (leads.length) {
+      section.appendChild(hpbSubheading(`Team (lead's own billings capped at ${fmt(hpb.team_lead_cap, "$")}/qtr)`));
+      section.appendChild(buildHpbTeamTable(hpb, leads));
     }
-    tTable.innerHTML = `<thead><tr><th>Team Lead</th><th>Team</th>${hpbQuarterHeaders(hpb.current_quarter)}</tr></thead><tbody>${tBody}</tbody>`;
-    tWrap.appendChild(tTable);
-    section.appendChild(tWrap);
   }
 
   return section;
+}
+
+function buildHpbIndividualTable(hpb, people) {
+  const wrap = document.createElement("div");
+  wrap.className = "table-wrap";
+  const table = document.createElement("table");
+  table.className = "hpb-table";
+
+  const byTeam = {};
+  for (const p of people) (byTeam[p.team || ""] = byTeam[p.team || ""] || []).push(p);
+
+  let body = "";
+  for (const team of Object.keys(byTeam).sort(hpbTeamSort)) {
+    body += `<tr class="team-header"><td colspan="6">${esc(team || "No team")}</td></tr>`;
+    for (const p of byTeam[team]) {
+      body += `<tr><td>${esc(p.name)}</td><td class="role-cell">${esc(p.grade_label)}</td>`;
+      for (let q = 1; q <= 4; q++) {
+        body += hpbCell(p.quarters[String(q)], p.q_targets[String(q)], q === hpb.current_quarter);
+      }
+      body += `</tr>`;
+    }
+  }
+  table.innerHTML = `<thead><tr><th>Consultant</th><th>Grade (now)</th>${hpbQuarterHeaders(hpb.current_quarter)}</tr></thead><tbody>${body}</tbody>`;
+  wrap.appendChild(table);
+  return wrap;
+}
+
+function buildHpbTeamTable(hpb, leads) {
+  const wrap = document.createElement("div");
+  wrap.className = "table-wrap";
+  const table = document.createElement("table");
+  table.className = "hpb-table";
+  let body = "";
+  for (const p of leads) {
+    body += `<tr><td>${esc(p.name)}</td><td class="role-cell">${esc(p.team || "—")}</td>`;
+    for (let q = 1; q <= 4; q++) {
+      body += hpbCell(p.team_quarters[String(q)], p.team_q_targets[String(q)], q === hpb.current_quarter);
+    }
+    body += `</tr>`;
+  }
+  table.innerHTML = `<thead><tr><th>Team Lead</th><th>Team</th>${hpbQuarterHeaders(hpb.current_quarter)}</tr></thead><tbody>${body}</tbody>`;
+  wrap.appendChild(table);
+  return wrap;
 }
 
 function hpbSubheading(text) {
