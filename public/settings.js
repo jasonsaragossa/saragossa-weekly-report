@@ -121,7 +121,9 @@ function buildAccessSection() {
   const financeSet = new Set(financeMemberUids);
 
   // Finance team — allowed by default, individually revocable.
+  // Only active users are shown; disabled accounts can't have access anyway.
   const financeRows = financeMemberUids
+    .filter(uid => usersById[uid])
     .map(uid => ({ uid, name: nameOf(uid), allowed: (overrideMap[uid] || {}).crbb7_canaccessanalytics !== false }))
     .sort((a, b) => a.name.localeCompare(b.name))
     .map(m => `<li class="access-row" data-uid="${esc(m.uid)}">
