@@ -556,6 +556,14 @@ tr.team-header:first-child td { border-top: none; }
   background: var(--surface);
 }
 .access-empty { color: var(--mid); font-size: 12px; padding: 6px 0; }
+.access-subhead {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--mid);
+  margin: 14px 0 8px;
+}
 .access-add { display: flex; gap: 8px; align-items: center; max-width: 460px; }
 .access-add .team-select { flex: 1; }
 

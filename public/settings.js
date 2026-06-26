@@ -23,6 +23,7 @@ const FINANCE_TEAM_NAME = "Bristol Finance and Compliance";
 
 let allUsers = [];
 let allActiveUsers = [];   // every enabled Mercury user (for the access picker)
+let financeMemberUids = []; // uids in the Finance & Compliance team
 let overrideMap = {}; // uid → override record
 
 (async () => {
@@ -47,6 +48,7 @@ let overrideMap = {}; // uid → override record
 
   allUsers = data.users || [];
   allActiveUsers = data.all_active_users || [];
+  financeMemberUids = data.finance_member_uids || [];
   (data.overrides || []).forEach(o => { overrideMap[o.crbb7_userid] = o; });
 
   renderSettings();
@@ -115,17 +117,27 @@ function buildAccessSection() {
 
   const usersById = {};
   allActiveUsers.forEach(u => { usersById[u.uid] = u; });
+  const nameOf = (uid) => (usersById[uid] || {}).name || uid;
+  const financeSet = new Set(financeMemberUids);
 
+  // Finance team — allowed by default, individually revocable.
+  const financeRows = financeMemberUids
+    .map(uid => ({ uid, name: nameOf(uid), allowed: (overrideMap[uid] || {}).crbb7_canaccessanalytics !== false }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(m => `<li class="access-row" data-uid="${esc(m.uid)}">
+        <span>${esc(m.name)}</span>
+        <label class="toggle">
+          <input type="checkbox" class="access-finance-toggle" data-uid="${esc(m.uid)}" ${m.allowed ? "checked" : ""}>
+          <span class="toggle-label">Can see Analytics</span>
+        </label>
+      </li>`).join("");
+
+  // Others explicitly granted (not in the finance team).
   const granted = Object.values(overrideMap)
-    .filter(o => o.crbb7_canaccessanalytics === true)
-    .map(o => ({ uid: o.crbb7_userid, name: (usersById[o.crbb7_userid] || {}).name || o.crbb7_userid }))
+    .filter(o => o.crbb7_canaccessanalytics === true && !financeSet.has(o.crbb7_userid))
+    .map(o => ({ uid: o.crbb7_userid, name: nameOf(o.crbb7_userid) }))
     .sort((a, b) => a.name.localeCompare(b.name));
-
   const grantedSet = new Set(granted.map(g => g.uid));
-  const addOptions = allActiveUsers
-    .filter(u => !grantedSet.has(u.uid))
-    .map(u => `<option value="${esc(u.uid)}" data-name="${esc(u.name)}">${esc(u.name)}</option>`)
-    .join("");
 
   const grantedHtml = granted.length
     ? granted.map(g => `<li class="access-row" data-uid="${esc(g.uid)}">
@@ -134,9 +146,17 @@ function buildAccessSection() {
        </li>`).join("")
     : `<li class="access-empty">No extra users granted yet.</li>`;
 
+  const addOptions = allActiveUsers
+    .filter(u => !financeSet.has(u.uid) && !grantedSet.has(u.uid))
+    .map(u => `<option value="${esc(u.uid)}" data-name="${esc(u.name)}">${esc(u.name)}</option>`)
+    .join("");
+
   section.innerHTML = `
     <h2 class="settings-territory">Analytics Access</h2>
-    <p class="settings-desc">Directors and the “${esc(FINANCE_TEAM_NAME)}” team can already see the Analytics page. Grant access to anyone else below.</p>
+    <p class="settings-desc">Directors always have access. Toggle individual “${esc(FINANCE_TEAM_NAME)}” members below, and grant access to anyone else.</p>
+    <h3 class="access-subhead">${esc(FINANCE_TEAM_NAME)}</h3>
+    <ul class="access-list">${financeRows || `<li class="access-empty">No team members found.</li>`}</ul>
+    <h3 class="access-subhead">Others with access</h3>
     <ul class="access-list">${grantedHtml}</ul>
     <div class="access-add">
       <select class="team-select" id="access-add-select">${addOptions}</select>
@@ -153,6 +173,9 @@ function buildAccessSection() {
   });
   section.querySelectorAll(".access-remove").forEach(btn => {
     btn.addEventListener("click", () => setAnalyticsAccess(btn.dataset.uid, "", false));
+  });
+  section.querySelectorAll(".access-finance-toggle").forEach(cb => {
+    cb.addEventListener("change", () => setAnalyticsAccess(cb.dataset.uid, "", cb.checked));
   });
 
   return section;

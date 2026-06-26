@@ -17,7 +17,7 @@ from shared.dataverse import (
     get_active_consultants, get_placements, get_overrides,
     get_team_membership_map, get_live_contract_placements, get_fx_rates,
     get_placements_full_year, get_budgets, upsert_monthly_budgets,
-    get_all_territory_consultants, get_all_active_users,
+    get_all_territory_consultants, get_all_active_users, get_finance_team_members,
     upsert_override, delete_override, TERRITORY_IDS,
 )
 from shared.calc import build_report, build_admin_report
@@ -76,9 +76,10 @@ def settings_get(req: func.HttpRequest) -> func.HttpResponse:
         return err
 
     try:
-        consultants = get_active_consultants()
-        overrides   = get_overrides()
-        all_users   = get_all_active_users()
+        consultants    = get_active_consultants()
+        overrides      = get_overrides()
+        all_users      = get_all_active_users()
+        finance_uids   = get_finance_team_members()
 
         # Build a simple territory name lookup
         tid_to_name = {v: k for k, v in TERRITORY_IDS.items()}
@@ -95,7 +96,8 @@ def settings_get(req: func.HttpRequest) -> func.HttpResponse:
         ]
 
         return func.HttpResponse(
-            json.dumps({"ok": True, "users": users, "overrides": overrides, "all_active_users": all_users}),
+            json.dumps({"ok": True, "users": users, "overrides": overrides,
+                        "all_active_users": all_users, "finance_member_uids": finance_uids}),
             mimetype="application/json",
             status_code=200,
         )

@@ -191,38 +191,43 @@ def is_admin(user_email: str) -> bool:
         return False
     user_id = users[0]["systemuserid"]
 
-    # 1. Director job title
+    # 1. Directors always have access (can't be locked out via overrides)
     if "director" in (users[0].get("title") or "").lower():
         return True
 
-    # 2. Manual grant via the user-override table
-    granted = odata_get_all(
+    # 2. Explicit override: True = grant, False = deny (revokes the team default)
+    ov = odata_get_all(
         "crbb7_useroverrides",
         params={
             "$select": "crbb7_canaccessanalytics",
-            "$filter": f"crbb7_userid eq '{user_id}' and crbb7_canaccessanalytics eq true",
+            "$filter": f"crbb7_userid eq '{user_id}'",
         },
     )
-    if granted:
-        return True
+    if ov:
+        flag = ov[0].get("crbb7_canaccessanalytics")
+        if flag is True:
+            return True
+        if flag is False:
+            return False
+        # flag unset → fall through to the team rule
 
-    # 3. Finance and Compliance team membership
+    # 3. Finance and Compliance team membership (the default for that team)
+    return user_id in set(get_finance_team_members())
+
+
+def get_finance_team_members() -> list[str]:
+    """systemuserids of everyone in the Finance & Compliance team."""
     teams = odata_get_all(
         "teams",
-        params={
-            "$select": "teamid",
-            "$filter": f"name eq '{FINANCE_TEAM_NAME}'",
-        },
+        params={"$select": "teamid", "$filter": f"name eq '{FINANCE_TEAM_NAME}'"},
     )
     if not teams:
-        return False
-    team_id = teams[0]["teamid"]
-
+        return []
     members = odata_get_all(
-        f"teams({team_id})/teammembership_association",
-        params={"$select": "systemuserid", "$filter": f"systemuserid eq '{user_id}'"},
+        f"teams({teams[0]['teamid']})/teammembership_association",
+        params={"$select": "systemuserid"},
     )
-    return len(members) > 0
+    return [m["systemuserid"] for m in members]
 
 
 def get_all_active_users() -> list[dict]:
