@@ -271,6 +271,16 @@ def _hpb_grade(title: str, override_grade) -> str:
     return "none"
 
 
+def _started_by(start_date, point: date) -> bool:
+    """True if employment start is on/before `point` (or unknown — then assume started)."""
+    if not start_date:
+        return True
+    try:
+        return parse_date(start_date) <= point
+    except Exception:
+        return True
+
+
 def _hpb_quarter_billings(uid: str, placements: list, to_usd: dict, today: date, year: int) -> dict:
     """
     Per-quarter USD billings for a consultant — all placements with a start date
@@ -348,6 +358,7 @@ def build_hpb(consultants: list, placements: list, override_map: dict,
             "grade_label":  HPB_GRADE_LABELS.get(display_grade, "—"),
             "team":         team,
             "is_team_lead": is_lead,
+            "start_date":   bob.get("start") or ov.get("crbb7_datejoined") or None,
             "q_grades":     q_grades,
             "q_targets":    q_targets,
             "quarters":     _hpb_quarter_billings(uid, placements, to_usd, today, year),
@@ -366,11 +377,15 @@ def build_hpb(consultants: list, placements: list, override_map: dict,
         members = [m for m in by_team.get(lead["team"], []) if m["uid"] != lead["uid"]]
         tq, ttarg = {}, {}
         for q in ("1", "2", "3", "4"):
-            member_sum  = sum(m["quarters"][q] for m in members)
+            qstart = date(year, 3 * (int(q) - 1) + 1, 1)
+            # Members who hadn't started by the quarter start don't count toward
+            # the team's billings or target for that quarter.
+            active = [m for m in members if _started_by(m.get("start_date"), qstart)]
+            member_sum  = sum(m["quarters"][q] for m in active)
             lead_capped = min(lead["quarters"][q], HPB_TEAM_LEAD_CAP)
             tq[q] = round(member_sum + lead_capped, 2)
-            # Team target uses each member's grade at the start of that quarter.
-            member_target = sum(HPB_TARGETS.get(m["q_grades"][q], 0) for m in members)
+            # Team target uses each active member's grade at the start of that quarter.
+            member_target = sum(HPB_TARGETS.get(m["q_grades"][q], 0) for m in active)
             lead_target   = HPB_TARGETS.get(lead["q_grades"][q], 100000)
             ttarg[q] = member_target + lead_target
         lead["team_quarters"]     = tq

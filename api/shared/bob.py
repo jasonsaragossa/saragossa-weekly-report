@@ -117,6 +117,12 @@ def _entry_effective(e: dict) -> date | None:
     return _parse(_val(e.get("effectiveDate") or e.get("activeEffectiveDate") or e.get("startDate")))
 
 
+def employment_start(history: list[dict]) -> str | None:
+    """Earliest work-entry effective date = the employee's start date (ISO), or None."""
+    dates = [d for d in (_entry_effective(e) for e in history) if d is not None]
+    return min(dates).isoformat() if dates else None
+
+
 def _resolved_title(e: dict, title_map: dict) -> str:
     """Title text for a work entry, resolving Bob's numeric list-value id to its label."""
     raw = _entry_title(e)
@@ -161,7 +167,11 @@ def get_titles_for_emails(emails: list[str], year: int) -> dict:
                 return email, None
             history = get_work_history(emp_id)
             quarters = {q: g["grade"] for q, g in grades_by_quarter(history, year, title_map).items()}
-            return email, {"current": current_grade(history, title_map)["grade"], "quarters": quarters}
+            return email, {
+                "current": current_grade(history, title_map)["grade"],
+                "quarters": quarters,
+                "start": employment_start(history),
+            }
         except Exception:
             return email, None
 
