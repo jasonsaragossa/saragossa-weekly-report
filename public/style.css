@@ -483,16 +483,25 @@ tr.team-header:first-child td { border-top: none; }
   color: var(--mid);
   margin: 20px 0 8px;
 }
+/* Fixed layout + matching widths so every HPB table (all regions/teams) lines up */
+.hpb-table {
+  table-layout: fixed;
+  width: 860px;
+  max-width: 100%;
+}
+.hpb-table th:nth-child(1), .hpb-table td:nth-child(1) { width: 210px; }
+.hpb-table th:nth-child(2), .hpb-table td:nth-child(2) { width: 140px; }
+.hpb-table th:nth-child(n+3), .hpb-table td:nth-child(n+3) { width: 128px; }
 .hpb-table td.num { padding: 8px 14px; }
 .hpb-amt {
   display: block;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--mid);
   font-family: var(--mono);
 }
 .hpb-tier {
   display: block;
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 700;
   margin-top: 2px;
 }
