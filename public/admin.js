@@ -169,10 +169,10 @@ function buildHpbSection() {
   const desc = document.createElement("p");
   desc.className = "settings-desc";
   desc.style.marginBottom = "14px";
-  desc.innerHTML = `Quarterly billings (gross profit, USD) vs the target for the grade held at the start of each quarter — tiers 100% / 150% / 200%. ` +
+  desc.innerHTML = `Quarterly billings (gross profit, USD) vs the target for the job title held at the start of each quarter — tiers 100% / 150% / 200%. ` +
+    `Job titles come from Bob automatically (overridable in Settings). ` +
     `Includes all placements with a start date in the quarter, started or not (Q${hpb.current_quarter} highlighted). ` +
-    `Associates don't earn an individual bonus but count toward their team. ` +
-    `Set per-quarter grades and team leads in <a href="/settings" class="settings-link">Settings</a>.`;
+    `Associate Consultants don't earn an individual bonus but count toward their team.`;
   section.appendChild(desc);
 
   if (!hpb.people || !hpb.people.length) {
@@ -227,7 +227,7 @@ function buildHpbIndividualTable(hpb, people) {
       body += `</tr>`;
     }
   }
-  table.innerHTML = `<thead><tr><th>Consultant</th><th>Grade (now)</th>${hpbQuarterHeaders(hpb.current_quarter)}</tr></thead><tbody>${body}</tbody>`;
+  table.innerHTML = `<thead><tr><th>Consultant</th><th>Job Title</th>${hpbQuarterHeaders(hpb.current_quarter)}</tr></thead><tbody>${body}</tbody>`;
   wrap.appendChild(table);
   return wrap;
 }

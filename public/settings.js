@@ -91,7 +91,7 @@ function renderSettings() {
       <th>Prev Team</th>
       <th>Prev Territory</th>
       ${isContract ? "<th>Total Margin YTD</th><th>Contract Last 12M</th><th>Rolling 3M</th>" : "<th>Annual Target</th>"}
-      ${isUsPerm ? "<th>Team Lead</th><th>HPB Grade (Q1–Q4)</th>" : ""}
+      ${isUsPerm ? "<th>Team Lead</th><th>Job Title (Q1–Q4)</th>" : ""}
       <th></th>
     </tr></thead>`;
 
@@ -264,12 +264,12 @@ function buildUserRow(u, territory) {
   const tlOv       = ov.crbb7_isteamlead;
   const isTeamLead = tlOv === true || (tlOv == null && /team lead/i.test(u.role || ""));
   const HPB_GRADE_CHOICES = [
-    ["", "Auto"],
+    ["", "Auto (Bob)"],
     ["none", "Doesn't qualify"],
-    ["associate", "Associate"],
+    ["associate", "Associate Consultant"],
     ["consultant", "Consultant"],
-    ["senior", "Senior"],
-    ["principal", "Principal"],
+    ["senior", "Senior Consultant"],
+    ["principal", "Principal Consultant"],
     ["eic", "EIC"],
     ["sales_leader", "Sales Leader"],
     ["team_lead", "Team Lead"],

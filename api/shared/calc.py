@@ -247,10 +247,12 @@ HPB_TARGETS = {
 }
 # Grades that earn an individual bonus (associate / unmapped do not)
 HPB_INDIVIDUAL_GRADES = {"consultant", "senior", "principal", "team_lead", "eic", "sales_leader"}
+# User-facing job titles (the figure is driven by the title held each quarter)
 HPB_GRADE_LABELS = {
-    "associate": "Associate", "consultant": "Consultant", "senior": "Senior",
-    "principal": "Principal", "team_lead": "Team Lead", "eic": "EIC",
-    "sales_leader": "Sales Leader", "none": "—",
+    "associate": "Associate Consultant", "consultant": "Consultant",
+    "senior": "Senior Consultant", "principal": "Principal Consultant",
+    "team_lead": "Team Lead", "eic": "EIC", "sales_leader": "Sales Leader",
+    "none": "—",
 }
 
 
@@ -289,12 +291,15 @@ def _hpb_quarter_billings(uid: str, placements: list, to_usd: dict, today: date,
 
 
 def build_hpb(consultants: list, placements: list, override_map: dict,
-              team_map: dict, to_usd: dict, today: date) -> dict:
+              team_map: dict, to_usd: dict, today: date, bob_titles: dict = None) -> dict:
     """
-    US perm High Performance Bonus: per-quarter billings vs role target, plus a
-    team total for team leads (their own billings capped at HPB_TEAM_LEAD_CAP).
+    US perm High Performance Bonus: per-quarter billings vs job-title target, plus
+    a team total for team leads (their own billings capped at HPB_TEAM_LEAD_CAP).
+
+    Job title per quarter resolves: manual override -> Bob -> Mercury title.
     """
     from collections import defaultdict
+    bob_titles      = bob_titles or {}
     year            = today.year
     current_quarter = (today.month - 1) // 3 + 1
     people          = []
@@ -307,29 +312,40 @@ def build_hpb(consultants: list, placements: list, override_map: dict,
         uid        = c["systemuserid"]
         ov         = override_map.get(uid, {})
         title      = c.get("title") or ""
-        auto_grade = _hpb_grade(title, None)   # grade implied by current title
+        auto_grade = _hpb_grade(title, None)   # grade implied by current Mercury title
         team       = ov.get("crbb7_team") or team_map.get(uid, "")
         tl_ov      = ov.get("crbb7_isteamlead")
         is_lead    = bool(tl_ov) if tl_ov is not None else ("team lead" in title.lower())
 
-        # Grade can differ per quarter (title at the start of each quarter).
-        # Blank/unset override quarter falls back to the current-title grade.
+        bob          = bob_titles.get((c.get("internalemailaddress") or "").lower()) or {}
+        bob_quarters = bob.get("quarters") or {}
+
+        # Job title can differ per quarter (title at the start of each quarter).
+        # Resolution per quarter: manual override -> Bob -> current Mercury title.
         q_grades = {}
         for q in ("1", "2", "3", "4"):
             ovg = ov.get("crbb7_hpbgradeq" + q)
             ovg = ovg.strip().lower() if isinstance(ovg, str) else ""
-            q_grades[q] = ovg if (ovg and ovg != "auto") else auto_grade
+            bob_q = bob_quarters.get(q)
+            if ovg and ovg != "auto":
+                q_grades[q] = ovg
+            elif bob_q and bob_q != "none":
+                q_grades[q] = bob_q
+            else:
+                q_grades[q] = auto_grade
         q_targets = {
             q: (HPB_TARGETS[g] if g in HPB_INDIVIDUAL_GRADES else None)
             for q, g in q_grades.items()
         }
-        current_grade = q_grades[str(current_quarter)]
+        # Display title = current Bob title, else current Mercury title.
+        bob_current   = bob.get("current")
+        display_grade = bob_current if (bob_current and bob_current != "none") else auto_grade
         people.append({
             "uid":          uid,
             "name":         c.get("fullname", ""),
             "territory":    territory,
-            "grade":        current_grade,
-            "grade_label":  HPB_GRADE_LABELS.get(current_grade, "—"),
+            "grade":        display_grade,
+            "grade_label":  HPB_GRADE_LABELS.get(display_grade, "—"),
             "team":         team,
             "is_team_lead": is_lead,
             "q_grades":     q_grades,
@@ -379,6 +395,7 @@ def build_admin_report(
     team_map: dict = None,
     budgets: list = None,
     fx_rates: dict = None,
+    bob_titles: dict = None,
 ) -> dict:
     """
     Builds the admin analytics report: monthly breakdown per consultant,
@@ -710,7 +727,7 @@ def build_admin_report(
             "count_last": retained_count_last,
             "last_gbp":   round(retained_last_gbp, 2),
         },
-        "hpb": build_hpb(consultants, placements_this, override_map, team_map or {}, to_usd, today),
+        "hpb": build_hpb(consultants, placements_this, override_map, team_map or {}, to_usd, today, bob_titles),
     }
 
 

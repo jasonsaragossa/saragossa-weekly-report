@@ -199,10 +199,28 @@ def analytics_report(req: func.HttpRequest) -> func.HttpResponse:
             logging.warning("admin-report: could not fetch live FX rates, using fallback")
             fx_rates = None
 
+        # Bob job-title history for US perm consultants (best-effort; falls back
+        # to Mercury titles if Bob is unavailable).
+        bob_titles = {}
+        try:
+            us_tids = {TERRITORY_IDS["Chicago"], TERRITORY_IDS["New York"]}
+            us_emails = [
+                c.get("internalemailaddress") for c in consultants
+                if c.get("_territoryid_value") in us_tids
+                and not c.get("isdisabled", False)
+                and c.get("internalemailaddress")
+            ]
+            if us_emails:
+                from shared.bob import get_titles_for_emails
+                bob_titles = get_titles_for_emails(us_emails, year)
+        except Exception:
+            logging.warning("admin-report: Bob enrichment failed, using Mercury titles", exc_info=True)
+
         report = build_admin_report(
             consultants, placements_this, placements_last,
             overrides, today,
             team_map=team_map, budgets=budgets, fx_rates=fx_rates,
+            bob_titles=bob_titles,
         )
 
         return func.HttpResponse(

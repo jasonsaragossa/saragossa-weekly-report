@@ -138,6 +138,41 @@ def grades_by_quarter(history: list[dict], year: int, title_map: dict = None) ->
     return out
 
 
+def get_titles_for_emails(emails: list[str], year: int) -> dict:
+    """
+    Best-effort: for each email, return the Bob job title resolved to an HPB grade
+    key for the current title and each quarter start.
+
+    Returns { email_lower: {"current": grade, "quarters": {"1": grade, ...}} }.
+    Emails not found in Bob (or that error) are simply omitted, so callers fall
+    back to their existing source.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    emails = [e for e in emails if e]
+    if not emails:
+        return {}
+    title_map = build_title_map()   # one call, shared across everyone
+
+    def fetch(email: str):
+        try:
+            emp_id = find_employee_id(email)
+            if not emp_id:
+                return email, None
+            history = get_work_history(emp_id)
+            quarters = {q: g["grade"] for q, g in grades_by_quarter(history, year, title_map).items()}
+            return email, {"current": current_grade(history, title_map)["grade"], "quarters": quarters}
+        except Exception:
+            return email, None
+
+    out = {}
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        for email, data in ex.map(fetch, emails):
+            if data:
+                out[email.lower()] = data
+    return out
+
+
 def current_grade(history: list[dict], title_map: dict = None) -> dict:
     """Current title/grade — the entry flagged isCurrent, else the latest by effective date."""
     cur = next((e for e in history if e.get("isCurrent")), None)

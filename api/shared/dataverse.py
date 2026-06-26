@@ -119,7 +119,7 @@ def get_all_territory_consultants() -> list[dict]:
     results = odata_get_all(
         "systemusers",
         params={
-            "$select": "systemuserid,fullname,title,createdon,_territoryid_value,isdisabled",
+            "$select": "systemuserid,fullname,title,createdon,_territoryid_value,isdisabled,internalemailaddress",
             "$filter": f"({territory_filter})",
             "$orderby": "createdon asc",
         },
