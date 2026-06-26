@@ -774,6 +774,26 @@ function buildOverallTable(showLastYear = false) {
     for (const m of mbs) overallMemberLookup[m.uid] = { member: m, sym: td2.sym };
   }
 
+  // Grand Total (GBP) row — rendered at both the top and bottom of the list
+  const grandMonthly = showLastYear ? reportData.grand_monthly_last_gbp : reportData.grand_monthly_gbp;
+  const grandTotFull = showLastYear ? reportData.grand_total_last_gbp   : reportData.grand_total_gbp;
+  const grandCmpFull = showLastYear ? reportData.grand_total_gbp        : reportData.grand_total_last_gbp;
+  const grandCells = MONTH_ABBR.map((_, i) => {
+    const v = (grandMonthly || {})[String(i + 1)] || 0;
+    return `<td class="num"><strong>${v > 0 ? fmt(v, "£") : ""}</strong></td>`;
+  }).join("");
+  const grandYoy    = grandCmpFull > 0 ? (grandTotFull - grandCmpFull) / grandCmpFull * 100 : null;
+  const grandYoyCls = grandYoy !== null ? (grandYoy >= 0 ? " pos" : " neg") : "";
+  const grandTotalRow = `<tr class="territory-total-row grand-total-row">
+      <td colspan="2"><strong>Grand Total (GBP)</strong></td>
+      ${grandCells}
+      <td class="num"><strong>${fmt(grandTotFull, "£")}</strong></td>
+      <td class="num">—</td>
+      <td class="num">—</td>
+      <td class="num dim"><strong>${grandCmpFull > 0 ? fmt(grandCmpFull, "£") : "—"}</strong></td>
+      <td class="num${grandYoyCls}"><strong>${grandYoy !== null ? fmtPct(grandYoy) : "—"}</strong></td>
+    </tr>`;
+
   let html = `<table class="monthly-table">
     <thead>
       <tr>
@@ -787,7 +807,7 @@ function buildOverallTable(showLastYear = false) {
         <th class="num">${esc(yoyLabel)}</th>
       </tr>
     </thead>
-    <tbody>`;
+    <tbody>${grandTotalRow}`;
 
   for (const territory of TERRITORY_ORDER) {
     const tdata = reportData.territories[territory];
@@ -877,31 +897,9 @@ function buildOverallTable(showLastYear = false) {
     </tr>`;
   }
 
-  // GBP grand total footer
-  const grandMonthly    = showLastYear ? reportData.grand_monthly_last_gbp : reportData.grand_monthly_gbp;
-  const grandMonthlyCmp = showLastYear ? reportData.grand_monthly_gbp      : reportData.grand_monthly_last_gbp;
-  const grandTotFull    = showLastYear ? reportData.grand_total_last_gbp   : reportData.grand_total_gbp;
-  const grandCmpFull    = showLastYear ? reportData.grand_total_gbp        : reportData.grand_total_last_gbp;
-
-  const grandCells = MONTH_ABBR.map((_, i) => {
-    const v = (grandMonthly || {})[String(i + 1)] || 0;
-    return `<td class="num"><strong>${v > 0 ? fmt(v, "£") : ""}</strong></td>`;
-  }).join("");
-
-  const grandYoy    = grandCmpFull > 0 ? (grandTotFull - grandCmpFull) / grandCmpFull * 100 : null;
-  const grandYoyCls = grandYoy !== null ? (grandYoy >= 0 ? " pos" : " neg") : "";
-
   html += `</tbody>
     <tfoot>
-      <tr class="territory-total-row grand-total-row">
-        <td colspan="2"><strong>Grand Total (GBP)</strong></td>
-        ${grandCells}
-        <td class="num"><strong>${fmt(grandTotFull, "£")}</strong></td>
-        <td class="num">—</td>
-        <td class="num">—</td>
-        <td class="num dim"><strong>${grandCmpFull > 0 ? fmt(grandCmpFull, "£") : "—"}</strong></td>
-        <td class="num${grandYoyCls}"><strong>${grandYoy !== null ? fmtPct(grandYoy) : "—"}</strong></td>
-      </tr>
+      ${grandTotalRow}
     </tfoot>
   </table>`;
 
