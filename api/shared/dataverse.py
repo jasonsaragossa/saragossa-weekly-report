@@ -69,6 +69,21 @@ def odata_delete(path: str) -> None:
     resp.raise_for_status()
 
 
+import re
+
+_GUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
+
+def odata_str(value) -> str:
+    """Escape a value for safe inclusion inside an OData string literal ('...')."""
+    return str(value).replace("'", "''")
+
+
+def is_guid(value) -> bool:
+    """True if value is a well-formed GUID (for entity-key path segments)."""
+    return bool(_GUID_RE.match(str(value or "")))
+
+
 # ── Territory IDs ────────────────────────────────────────────────────────────
 
 TERRITORY_IDS = {
@@ -193,7 +208,7 @@ def is_admin(user_email: str) -> bool:
         "systemusers",
         params={
             "$select": "systemuserid,title",
-            "$filter": f"internalemailaddress eq '{user_email}' and isdisabled eq false",
+            "$filter": f"internalemailaddress eq '{odata_str(user_email)}' and isdisabled eq false",
         },
     )
     if not users:
@@ -421,8 +436,8 @@ def upsert_monthly_budgets(year: int, territory: str, monthly_amounts: dict) -> 
             "crbb7_budgets",
             params={
                 "$filter": (
-                    f"crbb7_year eq {year}"
-                    f" and crbb7_territory eq '{territory}'"
+                    f"crbb7_year eq {int(year)}"
+                    f" and crbb7_territory eq '{odata_str(territory)}'"
                     f" and crbb7_month eq {int(month)}"
                 ),
             },
@@ -456,7 +471,7 @@ def upsert_override(data: dict, updated_by: str) -> dict:
     existing = odata_get_all(
         "crbb7_useroverrides",
         params={
-            "$filter": f"crbb7_userid eq '{data['userid']}'",
+            "$filter": f"crbb7_userid eq '{odata_str(data['userid'])}'",
         },
     )
     # Only write team / hidden when the caller actually sent them, so partial

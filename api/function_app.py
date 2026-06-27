@@ -18,11 +18,20 @@ from shared.dataverse import (
     get_team_membership_map, get_live_contract_placements, get_fx_rates,
     get_placements_full_year, get_budgets, upsert_monthly_budgets,
     get_all_territory_consultants, get_all_active_users, get_finance_team_members,
-    upsert_override, delete_override, TERRITORY_IDS,
+    upsert_override, delete_override, is_guid, TERRITORY_IDS,
 )
 from shared.calc import build_report, build_admin_report
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
+
+
+def _server_error() -> func.HttpResponse:
+    """Generic 500 — full detail is logged server-side, never returned to the client."""
+    return func.HttpResponse(
+        json.dumps({"ok": False, "error": "Internal server error"}),
+        mimetype="application/json",
+        status_code=500,
+    )
 
 
 # ── /api/report-data ──────────────────────────────────────────────────────────
@@ -60,11 +69,7 @@ def report_data(req: func.HttpRequest) -> func.HttpResponse:
         )
     except Exception as e:
         logging.exception("report-data error")
-        return func.HttpResponse(
-            json.dumps({"ok": False, "error": str(e)}),
-            mimetype="application/json",
-            status_code=500,
-        )
+        return _server_error()
 
 
 # ── /api/settings (GET) ───────────────────────────────────────────────────────
@@ -103,11 +108,7 @@ def settings_get(req: func.HttpRequest) -> func.HttpResponse:
         )
     except Exception as e:
         logging.exception("settings GET error")
-        return func.HttpResponse(
-            json.dumps({"ok": False, "error": str(e)}),
-            mimetype="application/json",
-            status_code=500,
-        )
+        return _server_error()
 
 
 # ── /api/settings (POST) ──────────────────────────────────────────────────────
@@ -135,11 +136,7 @@ def settings_post(req: func.HttpRequest) -> func.HttpResponse:
         )
     except Exception as e:
         logging.exception("settings POST error")
-        return func.HttpResponse(
-            json.dumps({"ok": False, "error": str(e)}),
-            mimetype="application/json",
-            status_code=500,
-        )
+        return _server_error()
 
 
 # ── /api/settings/{id} (DELETE) ──────────────────────────────────────────────
@@ -151,9 +148,9 @@ def settings_delete(req: func.HttpRequest) -> func.HttpResponse:
         return err
 
     override_id = req.route_params.get("override_id")
-    if not override_id:
+    if not override_id or not is_guid(override_id):
         return func.HttpResponse(
-            json.dumps({"ok": False, "error": "override_id required"}),
+            json.dumps({"ok": False, "error": "valid override_id required"}),
             mimetype="application/json",
             status_code=400,
         )
@@ -167,11 +164,7 @@ def settings_delete(req: func.HttpRequest) -> func.HttpResponse:
         )
     except Exception as e:
         logging.exception("settings DELETE error")
-        return func.HttpResponse(
-            json.dumps({"ok": False, "error": str(e)}),
-            mimetype="application/json",
-            status_code=500,
-        )
+        return _server_error()
 
 
 # ── /api/admin-report ─────────────────────────────────────────────────────────
@@ -230,11 +223,7 @@ def analytics_report(req: func.HttpRequest) -> func.HttpResponse:
         )
     except Exception as e:
         logging.exception("admin-report error")
-        return func.HttpResponse(
-            json.dumps({"ok": False, "error": str(e)}),
-            mimetype="application/json",
-            status_code=500,
-        )
+        return _server_error()
 
 
 # ── /api/admin/budget (POST) ──────────────────────────────────────────────────
@@ -264,58 +253,6 @@ def analytics_budget_post(req: func.HttpRequest) -> func.HttpResponse:
             mimetype="application/json",
             status_code=200,
         )
-    except Exception as e:
+    except Exception:
         logging.exception("admin budget POST error")
-        return func.HttpResponse(
-            json.dumps({"ok": False, "error": str(e)}),
-            mimetype="application/json",
-            status_code=500,
-        )
-
-
-# ── /api/bob-poc (GET) — TEMPORARY proof-of-concept, admin-only ────────────────
-# Validates the HiBob integration: email -> work history -> per-quarter grade.
-# Remove once the Bob automation is built (or abandoned).
-
-@app.route(route="bob-poc", methods=["GET"])
-def bob_poc(req: func.HttpRequest) -> func.HttpResponse:
-    email, err = require_admin(req)
-    if err:
-        return err
-
-    target = req.params.get("email")
-    if not target:
-        return func.HttpResponse(
-            json.dumps({"ok": False, "error": "pass ?email=someone@saragossa.io"}),
-            mimetype="application/json", status_code=400,
-        )
-
-    try:
-        from shared.bob import (
-            find_employee_id, get_work_history, grades_by_quarter,
-            build_title_map, current_grade,
-        )
-        emp_id = find_employee_id(target)
-        if not emp_id:
-            return func.HttpResponse(
-                json.dumps({"ok": False, "error": f"No Bob employee for {target}"}),
-                mimetype="application/json", status_code=404,
-            )
-        history    = get_work_history(emp_id)
-        title_map  = build_title_map()
-        return func.HttpResponse(
-            json.dumps({
-                "ok": True,
-                "employee_id": emp_id,
-                "current": current_grade(history, title_map),
-                "quarter_grades": grades_by_quarter(history, date.today().year, title_map),
-                "raw_work_entries": history,
-            }, indent=2),
-            mimetype="application/json", status_code=200,
-        )
-    except Exception as e:
-        logging.exception("bob-poc error")
-        return func.HttpResponse(
-            json.dumps({"ok": False, "error": str(e)}),
-            mimetype="application/json", status_code=500,
-        )
+        return _server_error()
