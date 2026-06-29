@@ -25,6 +25,7 @@ let allUsers = [];
 let allActiveUsers = [];   // every enabled Mercury user (for the access picker)
 let financeMemberUids = []; // uids in the Finance & Compliance team
 let overrideMap = {}; // uid → override record
+let nbThresholds = {}; // NB-uplift qualification thresholds
 
 (async () => {
   let data;
@@ -49,6 +50,7 @@ let overrideMap = {}; // uid → override record
   allUsers = data.users || [];
   allActiveUsers = data.all_active_users || [];
   financeMemberUids = data.finance_member_uids || [];
+  nbThresholds = data.nb_thresholds || {};
   (data.overrides || []).forEach(o => { overrideMap[o.crbb7_userid] = o; });
 
   renderSettings();
@@ -61,6 +63,9 @@ function renderSettings() {
 
   // Analytics access management (top of page)
   container.appendChild(buildAccessSection());
+
+  // NB-uplift qualification thresholds
+  container.appendChild(buildNbThresholdsSection());
 
   // Group users by territory
   const byTerritory = {};
@@ -105,6 +110,63 @@ function renderSettings() {
     section.appendChild(wrap);
     container.appendChild(section);
   }
+}
+
+
+// ── NB-uplift qualification thresholds ─────────────────────────────────────────
+
+function buildNbThresholdsSection() {
+  const section = document.createElement("div");
+  section.className = "settings-section";
+
+  const v = (k) => (nbThresholds[k] != null ? nbThresholds[k] : "");
+  section.innerHTML = `
+    <h2 class="settings-territory">New-Business Uplift Thresholds</h2>
+    <p class="settings-desc">A new-business placement only earns the CRO the 50% uplift if it clears these.
+      Applied in the placement's own currency (£/$).</p>
+    <div class="nb-threshold-grid">
+      <label class="nb-th"><span>Perm — min fee %</span>
+        <input type="number" step="0.5" min="0" class="contract-input" data-field="perm_fee_pct" value="${esc(v("perm_fee_pct"))}"></label>
+      <label class="nb-th"><span>Perm — min deal value</span>
+        <input type="number" step="500" min="0" class="contract-input" data-field="perm_min_value" value="${esc(v("perm_min_value"))}"></label>
+      <label class="nb-th"><span>Contract — min margin %</span>
+        <input type="number" step="0.5" min="0" class="contract-input" data-field="contract_margin_pct" value="${esc(v("contract_margin_pct"))}"></label>
+      <label class="nb-th"><span>Contract — min margin value</span>
+        <input type="number" step="5" min="0" class="contract-input" data-field="contract_min_margin" value="${esc(v("contract_min_margin"))}"></label>
+    </div>
+    <button class="save-btn" id="nb-th-save">Save thresholds</button>
+  `;
+
+  section.querySelector("#nb-th-save").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    const payload = {};
+    section.querySelectorAll(".nb-threshold-grid input").forEach(inp => {
+      const val = inp.value.trim();
+      if (val !== "") payload[inp.dataset.field] = parseFloat(val);
+    });
+    btn.textContent = "Saving…"; btn.disabled = true;
+    try {
+      const resp = await fetch("/api/nb-thresholds", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json();
+      if (data.ok) {
+        nbThresholds = data.nb_thresholds || nbThresholds;
+        btn.textContent = "Saved ✓";
+        setTimeout(() => { btn.textContent = "Save thresholds"; btn.disabled = false; }, 2000);
+      } else {
+        alert("Could not save: " + (data.error || "unknown error"));
+        btn.textContent = "Save thresholds"; btn.disabled = false;
+      }
+    } catch (err) {
+      alert("Could not save: " + err.message);
+      btn.textContent = "Save thresholds"; btn.disabled = false;
+    }
+  });
+
+  return section;
 }
 
 

@@ -63,10 +63,34 @@ def split_factor(placement: dict, uid: str) -> float:
     return count / denom if count > 0 else 0.0
 
 
-def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: date, to_gbp: dict = None, to_usd: dict = None) -> dict:
+# NB-uplift qualification thresholds (overridable via the crbb7_nbconfig table).
+# Applied in the placement's own currency; percentages are whole numbers.
+NB_UPLIFT_DEFAULTS = {
+    "perm_fee_pct":        18.0,
+    "perm_min_value":      8000.0,
+    "contract_margin_pct": 15.0,
+    "contract_min_margin": 75.0,
+}
+
+
+def _nb_qualifies(p: dict, th: dict) -> bool:
+    """Does this placement clear the new-business uplift thresholds?"""
+    if p.get("crimson_type") == 143570000:  # Permanent
+        fee_pct = p.get("crimson_permanentfeepercent")
+        gp      = p.get("recruit_truegrossprofit") or 0.0
+        return fee_pct is not None and fee_pct >= th["perm_fee_pct"] and gp >= th["perm_min_value"]
+    # Contract / Temporary
+    margin_pct = p.get("mercury_marginpercent")
+    wk_margin  = p.get("recruit_weeklymarginvalue_mc") or 0.0
+    return margin_pct is not None and margin_pct >= th["contract_margin_pct"] and wk_margin >= th["contract_min_margin"]
+
+
+def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: date,
+                    to_gbp: dict = None, to_usd: dict = None, thresholds: dict = None) -> dict:
     """
     Returns YTD, Written, Year Prediction, and Rolling 12M for a single user.
     """
+    thresholds = thresholds or NB_UPLIFT_DEFAULTS
     ytd_start    = date(today.year, 1, 1)
     written_end  = date(today.year, 12, 31)
     roll12_start = date(today.year - 1, today.month, today.day + 1
@@ -101,7 +125,7 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
             # the business) — 50% of their own contribution, not split to others.
             is_nb  = "new business" in (p.get("crimson_specialinstructionsclient") or "").lower()
             is_cro = p.get("_mercury_clientrelationshipowner_value") == uid
-            if is_nb and is_cro:
+            if is_nb and is_cro and _nb_qualifies(p, thresholds):
                 roll12_uplift += val * 0.5
 
     year_pred = (written / week_no) * 52 if written > 0 else 0.0
@@ -758,6 +782,7 @@ def build_report(
     team_map: dict = None,
     live_contracts: list = None,
     fx_rates: dict = None,
+    nb_thresholds: dict = None,
 ) -> dict:
     """
     Assembles the full report structure.
@@ -807,7 +832,7 @@ def build_report(
         role = _clean_role(c.get("title") or "")
         ccy  = CCY.get(territory, "GBP")
 
-        metrics = compute_metrics(uid, placements, ccy, today, to_gbp, to_usd)
+        metrics = compute_metrics(uid, placements, ccy, today, to_gbp, to_usd, nb_thresholds)
         wnf     = compute_wnf(uid, live_contracts, ccy, to_gbp, to_usd)
 
         by_territory[territory].append({

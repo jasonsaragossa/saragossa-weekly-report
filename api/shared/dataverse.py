@@ -300,6 +300,8 @@ def get_placements(start_date: str, end_date: str) -> list[dict]:
             "$select": (
                 "crimson_placementid,recruit_truegrossprofit,"
                 "crimson_startdate,crimson_specialinstructionsclient,"
+                "crimson_type,crimson_permanentfeepercent,"
+                "mercury_marginpercent,recruit_weeklymarginvalue_mc,"
                 "_recruit_truegrossprofitcurrency_value,"
                 "_mercury_clientrelationshipowner_value,"
                 "_crimson_consultant_value,"
@@ -529,3 +531,52 @@ def upsert_override(data: dict, updated_by: str) -> dict:
 
 def delete_override(override_id: str) -> None:
     odata_delete(f"crbb7_useroverrides({override_id})")
+
+
+# ── NB-uplift qualification thresholds (crbb7_nbconfig, single row) ────────────
+
+_NB_THRESHOLD_DEFAULTS = {
+    "perm_fee_pct":        18.0,
+    "perm_min_value":      8000.0,
+    "contract_margin_pct": 15.0,
+    "contract_min_margin": 75.0,
+}
+_NB_COLS = {
+    "perm_fee_pct":        "crbb7_permfeepct",
+    "perm_min_value":      "crbb7_permminval",
+    "contract_margin_pct": "crbb7_contractmarginpct",
+    "contract_min_margin": "crbb7_contractminmargin",
+}
+
+
+def get_nb_thresholds() -> dict:
+    """Returns the NB-uplift thresholds, falling back to code defaults per field."""
+    out = dict(_NB_THRESHOLD_DEFAULTS)
+    try:
+        rows = odata_get_all("crbb7_nbconfigs", params={"$select": ",".join(_NB_COLS.values())})
+    except Exception:
+        logging.warning("Could not read crbb7_nbconfig, using default NB thresholds")
+        return out
+    if rows:
+        r = rows[0]
+        for key, col in _NB_COLS.items():
+            if r.get(col) is not None:
+                out[key] = float(r[col])
+    return out
+
+
+def upsert_nb_thresholds(values: dict) -> None:
+    """Patches the single NB-config row (creates it if missing)."""
+    body = {}
+    for key, col in _NB_COLS.items():
+        if values.get(key) is not None:
+            v = float(values[key])
+            body[col] = int(v) if col == "crbb7_permminval" else v
+    if not body:
+        return
+    rows = odata_get_all("crbb7_nbconfigs", params={"$select": "crbb7_nbconfigid"})
+    if rows:
+        odata_patch(f"crbb7_nbconfigs({rows[0]['crbb7_nbconfigid']})", body)
+    else:
+        body["crbb7_name"] = "default"
+        odata_post("crbb7_nbconfigs", body)

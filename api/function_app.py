@@ -19,6 +19,7 @@ from shared.dataverse import (
     get_placements_full_year, get_budgets, upsert_monthly_budgets,
     get_all_territory_consultants, get_all_active_users, get_finance_team_members,
     upsert_override, delete_override, is_guid, TERRITORY_IDS,
+    get_nb_thresholds, upsert_nb_thresholds,
 )
 from shared.calc import build_report, build_admin_report
 
@@ -54,13 +55,15 @@ def report_data(req: func.HttpRequest) -> func.HttpResponse:
         overrides       = get_overrides()
         team_map        = get_team_membership_map()
         live_contracts  = get_live_contract_placements(today.isoformat())
+        nb_thresholds   = get_nb_thresholds()
         try:
             fx_rates = get_fx_rates()
         except Exception:
             logging.warning("Could not fetch live FX rates — using hardcoded fallback")
             fx_rates = None
 
-        report = build_report(consultants, placements, overrides, today, team_map, live_contracts, fx_rates)
+        report = build_report(consultants, placements, overrides, today, team_map,
+                              live_contracts, fx_rates, nb_thresholds)
 
         return func.HttpResponse(
             json.dumps({"ok": True, "report": report, "as_of": today.isoformat()}),
@@ -102,7 +105,8 @@ def settings_get(req: func.HttpRequest) -> func.HttpResponse:
 
         return func.HttpResponse(
             json.dumps({"ok": True, "users": users, "overrides": overrides,
-                        "all_active_users": all_users, "finance_member_uids": finance_uids}),
+                        "all_active_users": all_users, "finance_member_uids": finance_uids,
+                        "nb_thresholds": get_nb_thresholds()}),
             mimetype="application/json",
             status_code=200,
         )
@@ -136,6 +140,35 @@ def settings_post(req: func.HttpRequest) -> func.HttpResponse:
         )
     except Exception as e:
         logging.exception("settings POST error")
+        return _server_error()
+
+
+# ── /api/nb-thresholds (POST) — save NB-uplift qualification thresholds ────────
+
+@app.route(route="nb-thresholds", methods=["POST"])
+def nb_thresholds_post(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_admin(req)
+    if err:
+        return err
+    try:
+        body = req.get_json() or {}
+        clean = {}
+        for key in ("perm_fee_pct", "perm_min_value", "contract_margin_pct", "contract_min_margin"):
+            if body.get(key) is not None:
+                try:
+                    clean[key] = float(body[key])
+                except (TypeError, ValueError):
+                    return func.HttpResponse(
+                        json.dumps({"ok": False, "error": f"{key} must be a number"}),
+                        mimetype="application/json", status_code=400,
+                    )
+        upsert_nb_thresholds(clean)
+        return func.HttpResponse(
+            json.dumps({"ok": True, "nb_thresholds": get_nb_thresholds()}),
+            mimetype="application/json", status_code=200,
+        )
+    except Exception:
+        logging.exception("nb-thresholds POST error")
         return _server_error()
 
 

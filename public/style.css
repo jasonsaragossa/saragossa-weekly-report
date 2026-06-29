@@ -566,6 +566,12 @@ tr.team-header:first-child td { border-top: none; }
 .access-add { display: flex; gap: 8px; align-items: center; max-width: 460px; }
 .access-add .team-select { flex: 1; }
 
+/* NB-uplift thresholds */
+.nb-threshold-grid { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 14px; max-width: 640px; }
+.nb-th { display: flex; flex-direction: column; gap: 4px; }
+.nb-th span { font-size: 11px; color: var(--mid); }
+.nb-th input { width: 150px; }
+
 /* Settings: per-quarter HPB grade pickers */
 .hpb-grade-grid { display: flex; gap: 6px; flex-wrap: wrap; }
 .hpb-q { display: flex; flex-direction: column; gap: 2px; }
