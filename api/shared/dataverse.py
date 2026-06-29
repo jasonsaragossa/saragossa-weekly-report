@@ -321,6 +321,35 @@ def get_placements(start_date: str, end_date: str) -> list[dict]:
     )
 
 
+def get_contract_placements(start_date: str, end_date: str) -> list[dict]:
+    """
+    Contract/temp placements with a start date in range — used only for the
+    cross-type NB-client count (perm fee/GP fields aren't needed here).
+    """
+    cancel_filter = " and ".join(f"statuscode ne {c}" for c in CANCEL_CODES)
+    type_filter   = " or ".join(f"crimson_type eq {t}" for t in CONTRACT_TYPES)
+    return odata_get_all(
+        "crimson_placements",
+        params={
+            "$select": (
+                "crimson_placementid,crimson_startdate,crimson_specialinstructionsclient,"
+                "crimson_type,_crimson_clientname_value,"
+                "_mercury_clientrelationshipowner_value,"
+                "_crimson_consultant_value,"
+                "_mercury_assignmentowner_value,"
+                "_mercury_contractorrelationship_userid_value"
+            ),
+            "$filter": (
+                f"({type_filter})"
+                f" and statecode eq 0"
+                f" and crimson_startdate ge {start_date}"
+                f" and crimson_startdate le {end_date}"
+                f" and {cancel_filter}"
+            ),
+        },
+    )
+
+
 # ── FX rates ─────────────────────────────────────────────────────────────────
 
 def get_fx_rates() -> dict:

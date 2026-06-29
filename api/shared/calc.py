@@ -86,9 +86,11 @@ def _nb_qualifies(p: dict, th: dict) -> bool:
 
 
 def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: date,
-                    to_gbp: dict = None, to_usd: dict = None, thresholds: dict = None) -> dict:
+                    to_gbp: dict = None, to_usd: dict = None, thresholds: dict = None,
+                    contract_placements: list = None) -> dict:
     """
     Returns YTD, Written, Year Prediction, and Rolling 12M for a single user.
+    Financial figures are perm-only; the NB-client count spans perm + contract.
     """
     thresholds = thresholds or NB_UPLIFT_DEFAULTS
     ytd_start    = date(today.year, 1, 1)
@@ -132,6 +134,19 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
                     nb_clients.add(client_id)
                 if _nb_qualifies(p, thresholds):
                     roll12_uplift += val * 0.5
+
+    # NB-client count also spans contract/temp placements (this metric only)
+    for p in (contract_placements or []):
+        if p.get("_mercury_clientrelationshipowner_value") != uid:
+            continue
+        try:
+            d = parse_date(p["crimson_startdate"])
+        except Exception:
+            continue
+        if roll12_start <= d <= today and "new business" in (p.get("crimson_specialinstructionsclient") or "").lower():
+            cid = p.get("_crimson_clientname_value")
+            if cid:
+                nb_clients.add(cid)
 
     year_pred = (written / week_no) * 52 if written > 0 else 0.0
 
@@ -789,6 +804,7 @@ def build_report(
     live_contracts: list = None,
     fx_rates: dict = None,
     nb_thresholds: dict = None,
+    contract_placements: list = None,
 ) -> dict:
     """
     Assembles the full report structure.
@@ -838,7 +854,7 @@ def build_report(
         role = _clean_role(c.get("title") or "")
         ccy  = CCY.get(territory, "GBP")
 
-        metrics = compute_metrics(uid, placements, ccy, today, to_gbp, to_usd, nb_thresholds)
+        metrics = compute_metrics(uid, placements, ccy, today, to_gbp, to_usd, nb_thresholds, contract_placements)
         wnf     = compute_wnf(uid, live_contracts, ccy, to_gbp, to_usd)
 
         by_territory[territory].append({

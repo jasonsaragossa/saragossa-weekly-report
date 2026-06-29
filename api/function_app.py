@@ -14,7 +14,7 @@ import azure.functions as func
 
 from shared.auth import require_auth, require_admin
 from shared.dataverse import (
-    get_active_consultants, get_placements, get_overrides,
+    get_active_consultants, get_placements, get_contract_placements, get_overrides,
     get_team_membership_map, get_live_contract_placements, get_fx_rates,
     get_placements_full_year, get_budgets, upsert_monthly_budgets,
     get_all_territory_consultants, get_all_active_users, get_finance_team_members,
@@ -52,6 +52,7 @@ def report_data(req: func.HttpRequest) -> func.HttpResponse:
 
         consultants     = get_active_consultants()
         placements      = get_placements(start, end)
+        contract_pl     = get_contract_placements(start, end)
         overrides       = get_overrides()
         team_map        = get_team_membership_map()
         live_contracts  = get_live_contract_placements(today.isoformat())
@@ -63,7 +64,7 @@ def report_data(req: func.HttpRequest) -> func.HttpResponse:
             fx_rates = None
 
         report = build_report(consultants, placements, overrides, today, team_map,
-                              live_contracts, fx_rates, nb_thresholds)
+                              live_contracts, fx_rates, nb_thresholds, contract_pl)
 
         return func.HttpResponse(
             json.dumps({"ok": True, "report": report, "as_of": today.isoformat()}),
