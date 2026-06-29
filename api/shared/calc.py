@@ -96,9 +96,13 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
                 ytd += val
 
         if roll12_start <= d <= today:
-            is_nb = "new business" in (p.get("crimson_specialinstructionsclient") or "").lower()
-            roll12_base   += val
-            roll12_uplift += val * 0.5 if is_nb else 0.0
+            roll12_base += val
+            # New-business uplift is earned only by the CRO (the person who won
+            # the business) — 50% of their own contribution, not split to others.
+            is_nb  = "new business" in (p.get("crimson_specialinstructionsclient") or "").lower()
+            is_cro = p.get("_mercury_clientrelationshipowner_value") == uid
+            if is_nb and is_cro:
+                roll12_uplift += val * 0.5
 
     year_pred = (written / week_no) * 52 if written > 0 else 0.0
 
