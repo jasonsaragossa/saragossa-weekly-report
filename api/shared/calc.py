@@ -102,6 +102,7 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
     fx = (to_gbp or TO_GBP) if display_ccy == "GBP" else (to_usd or TO_USD)
 
     ytd = written = roll12_base = roll12_uplift = 0.0
+    nb_clients = set()   # unique new-business clients won as CRO (rolling 12m)
 
     for p in placements:
         factor = split_factor(p, uid)
@@ -125,8 +126,12 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
             # the business) — 50% of their own contribution, not split to others.
             is_nb  = "new business" in (p.get("crimson_specialinstructionsclient") or "").lower()
             is_cro = p.get("_mercury_clientrelationshipowner_value") == uid
-            if is_nb and is_cro and _nb_qualifies(p, thresholds):
-                roll12_uplift += val * 0.5
+            if is_nb and is_cro:
+                client_id = p.get("_crimson_clientname_value")
+                if client_id:
+                    nb_clients.add(client_id)
+                if _nb_qualifies(p, thresholds):
+                    roll12_uplift += val * 0.5
 
     year_pred = (written / week_no) * 52 if written > 0 else 0.0
 
@@ -137,6 +142,7 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
         "roll12":       round(roll12_base, 2),
         "roll12_uplift": round(roll12_uplift, 2),
         "roll12_total": round(roll12_base + roll12_uplift, 2),
+        "nb_clients":   len(nb_clients),
     }
 
 

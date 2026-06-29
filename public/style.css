@@ -222,6 +222,15 @@ tr.team-header:first-child td { border-top: none; }
   font-size: 11px;
 }
 
+/* NB client count under the NB Uplift figure */
+.nb-clients {
+  display: block;
+  font-size: 10px;
+  color: var(--mid);
+  margin-top: 2px;
+  font-family: var(--font);
+}
+
 /* Contract table — 8 wordy columns; keep it on the page */
 .contract-table { table-layout: fixed; }
 .contract-table th,

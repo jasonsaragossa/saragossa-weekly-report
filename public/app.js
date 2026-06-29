@@ -149,7 +149,9 @@ function permRow(m) {
     <td class="num">${fmt(m.written, m.sym)}</td>
     <td class="num">${fmt(m.year_pred, m.sym)}</td>
     <td class="num">${fmt(m.roll12, m.sym)}</td>
-    <td class="num">${fmt(m.roll12_uplift, m.sym)}</td>
+    <td class="num">${fmt(m.roll12_uplift, m.sym)}${m.nb_clients > 0
+        ? `<span class="nb-clients">${m.nb_clients} NB ${m.nb_clients === 1 ? "client" : "clients"}</span>`
+        : ""}</td>
     <td class="num">${fmt(m.roll12_total, m.sym)}</td>
   </tr>`;
 }

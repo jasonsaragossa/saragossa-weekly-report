@@ -302,6 +302,7 @@ def get_placements(start_date: str, end_date: str) -> list[dict]:
                 "crimson_startdate,crimson_specialinstructionsclient,"
                 "crimson_type,crimson_permanentfeepercent,"
                 "mercury_marginpercent,recruit_weeklymarginvalue_mc,"
+                "_crimson_clientname_value,"
                 "_recruit_truegrossprofitcurrency_value,"
                 "_mercury_clientrelationshipowner_value,"
                 "_crimson_consultant_value,"
