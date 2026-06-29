@@ -14,6 +14,9 @@ const TERRITORY_ORDER = [
 
 const CONTRACT_TERRITORIES = new Set(["London Contract", "Chicago Contract"]);
 
+// Highlight a consultant's NB-client count once it reaches this many
+const NB_CLIENT_ALERT = 5;
+
 // ── Boot ─────────────────────────────────────────────────────────────────────
 
 (async () => {
@@ -150,7 +153,7 @@ function permRow(m) {
     <td class="num">${fmt(m.year_pred, m.sym)}</td>
     <td class="num">${fmt(m.roll12, m.sym)}</td>
     <td class="num">${fmt(m.roll12_uplift, m.sym)}${m.nb_clients > 0
-        ? `<span class="nb-clients">${m.nb_clients} NB ${m.nb_clients === 1 ? "client" : "clients"}</span>`
+        ? `<span class="nb-clients${m.nb_clients >= NB_CLIENT_ALERT ? " nb-clients-hit" : ""}">${m.nb_clients} NB ${m.nb_clients === 1 ? "client" : "clients"}</span>`
         : ""}</td>
     <td class="num">${fmt(m.roll12_total, m.sym)}</td>
   </tr>`;

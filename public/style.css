@@ -230,6 +230,15 @@ tr.team-header:first-child td { border-top: none; }
   margin-top: 2px;
   font-family: var(--font);
 }
+/* Highlight once the count reaches the alert threshold (5) */
+.nb-clients-hit {
+  display: inline-block;
+  color: var(--accent);
+  font-weight: 700;
+  background: rgba(200,168,75,.16);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
 
 /* Contract table — 8 wordy columns; keep it on the page */
 .contract-table { table-layout: fixed; }
