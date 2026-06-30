@@ -610,3 +610,51 @@ def upsert_nb_thresholds(values: dict) -> None:
     else:
         body["crbb7_name"] = "default"
         odata_post("crbb7_nbconfigs", body)
+
+
+# ── NB-client alert state (crbb7_nbalert: one row per currently-alerted user) ──
+
+def get_nb_alerted_uids() -> set:
+    rows = odata_get_all("crbb7_nbalerts", params={"$select": "crbb7_userid"})
+    return {r.get("crbb7_userid") for r in rows if r.get("crbb7_userid")}
+
+
+def add_nb_alerted(uid: str) -> None:
+    odata_post("crbb7_nbalerts", {"crbb7_userid": uid, "crbb7_name": uid})
+
+
+def remove_nb_alerted(uid: str) -> None:
+    rows = odata_get_all(
+        "crbb7_nbalerts",
+        params={"$select": "crbb7_nbalertid", "$filter": f"crbb7_userid eq '{odata_str(uid)}'"},
+    )
+    for r in rows:
+        odata_delete(f"crbb7_nbalerts({r['crbb7_nbalertid']})")
+
+
+# ── Microsoft Graph email (for scheduled alerts) ──────────────────────────────
+
+def _graph_token() -> str:
+    result = _msal_app().acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
+    if "access_token" not in result:
+        raise RuntimeError(f"Graph token error: {result.get('error_description')}")
+    return result["access_token"]
+
+
+def graph_send_mail(sender: str, recipients: list, subject: str, body_text: str) -> None:
+    """Sends a plain-text email as `sender` via Graph (needs Mail.Send app permission)."""
+    msg = {
+        "message": {
+            "subject": subject,
+            "body": {"contentType": "Text", "content": body_text},
+            "toRecipients": [{"emailAddress": {"address": r}} for r in recipients],
+        },
+        "saveToSentItems": False,
+    }
+    resp = requests.post(
+        f"https://graph.microsoft.com/v1.0/users/{sender}/sendMail",
+        headers={"Authorization": f"Bearer {_graph_token()}", "Content-Type": "application/json"},
+        json=msg, timeout=30,
+    )
+    if not resp.ok:
+        raise RuntimeError(f"Graph sendMail {resp.status_code}: {resp.text[:500]}")

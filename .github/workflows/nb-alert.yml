@@ -1,0 +1,27 @@
+name: NB client alert
+
+on:
+  schedule:
+    - cron: "0 7 * * 1-5"   # 07:00 UTC, weekdays
+  workflow_dispatch: {}      # allow manual runs
+
+jobs:
+  alert:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r api/requirements.txt
+      - name: Run NB client alert
+        working-directory: api
+        env:
+          DATAVERSE_URL:           ${{ secrets.DATAVERSE_URL }}
+          DATAVERSE_TENANT_ID:     ${{ secrets.DATAVERSE_TENANT_ID }}
+          DATAVERSE_CLIENT_ID:     ${{ secrets.DATAVERSE_CLIENT_ID }}
+          DATAVERSE_CLIENT_SECRET: ${{ secrets.DATAVERSE_CLIENT_SECRET }}
+          ALERT_SENDER:            ${{ secrets.ALERT_SENDER }}
+          ALERT_RECIPIENTS:        ${{ secrets.ALERT_RECIPIENTS }}
+        run: python nb_alert.py
