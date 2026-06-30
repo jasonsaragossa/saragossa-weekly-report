@@ -230,15 +230,32 @@ tr.team-header:first-child td { border-top: none; }
   margin-top: 2px;
   font-family: var(--font);
 }
-/* Highlight once the count reaches the alert threshold (5) */
+/* Clickable drill-down on the NB-client count */
+.nb-clients-link { cursor: pointer; }
+.nb-clients-link:hover { text-decoration: underline; }
+
+/* Highlight once the count reaches the alert threshold (5) — own line, right-aligned pill */
 .nb-clients-hit {
-  display: inline-block;
+  display: block;
+  width: fit-content;
+  margin-left: auto;
   color: var(--accent);
   font-weight: 700;
   background: rgba(200,168,75,.16);
   border-radius: 4px;
   padding: 1px 6px;
 }
+
+/* NB-clients drill-down list */
+.nb-client-list { list-style: none; margin: 0; padding: 0; }
+.nb-client-list li {
+  padding: 9px 2px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--light);
+}
+.nb-client-list li:last-child { border-bottom: none; }
+.nb-client-empty { color: var(--mid); font-size: 13px; }
 
 /* Contract table — 8 wordy columns; keep it on the page */
 .contract-table { table-layout: fixed; }

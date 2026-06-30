@@ -316,7 +316,10 @@ def get_placements(start_date: str, end_date: str) -> list[dict]:
                 f" and crimson_startdate le {end_date}"
                 f" and {cancel_filter}"
             ),
-            "$expand": "recruit_truegrossprofitcurrency($select=isocurrencycode)",
+            "$expand": (
+                "recruit_truegrossprofitcurrency($select=isocurrencycode),"
+                "crimson_clientname($select=name)"
+            ),
         },
     )
 
@@ -346,6 +349,7 @@ def get_contract_placements(start_date: str, end_date: str) -> list[dict]:
                 f" and crimson_startdate le {end_date}"
                 f" and {cancel_filter}"
             ),
+            "$expand": "crimson_clientname($select=name)",
         },
     )
 

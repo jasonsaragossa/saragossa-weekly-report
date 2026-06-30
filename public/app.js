@@ -126,6 +126,43 @@ function renderReport(data) {
       document.getElementById("panel-" + tab.dataset.panel).classList.add("active");
     });
   });
+
+  // NB-clients drill-down
+  panelsEl.addEventListener("click", (e) => {
+    const el = e.target.closest(".nb-clients-link");
+    if (!el) return;
+    let names = [];
+    try { names = JSON.parse(el.dataset.clients || "[]"); } catch (_) {}
+    showNbClients(el.dataset.name, names);
+  });
+}
+
+// ── NB clients drill-down modal ────────────────────────────────────────────────
+
+function showNbClients(name, clients) {
+  let overlay = document.getElementById("nb-modal");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "nb-modal";
+    overlay.className = "modal-overlay";
+    overlay.style.display = "none";
+    overlay.innerHTML = `<div class="modal-box">
+      <div class="modal-header">
+        <span class="modal-title" id="nb-modal-title"></span>
+        <button class="modal-close" id="nb-modal-close" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body" id="nb-modal-body"></div>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.style.display = "none"; });
+    overlay.querySelector("#nb-modal-close").addEventListener("click", () => { overlay.style.display = "none"; });
+  }
+  const n = clients.length;
+  overlay.querySelector("#nb-modal-title").textContent = `${name} — ${n} NB ${n === 1 ? "client" : "clients"} (rolling 12m)`;
+  overlay.querySelector("#nb-modal-body").innerHTML = n
+    ? `<ul class="nb-client-list">${clients.map(c => `<li>${esc(c)}</li>`).join("")}</ul>`
+    : `<p class="nb-client-empty">No new-business clients.</p>`;
+  overlay.style.display = "flex";
 }
 
 
@@ -153,7 +190,7 @@ function permRow(m) {
     <td class="num">${fmt(m.year_pred, m.sym)}</td>
     <td class="num">${fmt(m.roll12, m.sym)}</td>
     <td class="num">${fmt(m.roll12_uplift, m.sym)}${m.nb_clients > 0
-        ? `<span class="nb-clients${m.nb_clients >= NB_CLIENT_ALERT ? " nb-clients-hit" : ""}">${m.nb_clients} NB ${m.nb_clients === 1 ? "client" : "clients"}</span>`
+        ? `<span class="nb-clients nb-clients-link${m.nb_clients >= NB_CLIENT_ALERT ? " nb-clients-hit" : ""}" data-name="${esc(m.name)}" data-clients="${esc(JSON.stringify(m.nb_client_names || []))}">${m.nb_clients} NB ${m.nb_clients === 1 ? "client" : "clients"}</span>`
         : ""}</td>
     <td class="num">${fmt(m.roll12_total, m.sym)}</td>
   </tr>`;
