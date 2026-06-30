@@ -775,6 +775,7 @@ def build_admin_report(
 
     return {
         "year":                    year,
+        "usd_to_gbp":              round(usd_to_gbp, 6),
         "territories":             report,
         "other": {
             "total_gbp":         round(other_total_gbp, 2),

@@ -503,6 +503,28 @@ tr.team-header:first-child td { border-top: none; }
   width: 110px;
 }
 
+/* Summary GBP toggle */
+.gbp-toggle {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: rgba(200,168,75,.12);
+  color: var(--accent);
+  cursor: pointer;
+}
+.gbp-toggle:hover { background: rgba(200,168,75,.24); }
+.gbp-tag {
+  font-size: 9px;
+  color: var(--accent);
+  font-weight: 600;
+  margin-left: 4px;
+}
+
 /* Delta colours */
 .pos { color: var(--green); }
 .neg { color: var(--red); }

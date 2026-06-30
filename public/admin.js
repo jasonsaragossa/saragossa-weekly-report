@@ -14,6 +14,9 @@ const MONTH_ABBR = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct",
 let reportData  = null;
 let currentYear = new Date().getFullYear();
 let currentMonth = new Date().getMonth() + 1; // 1-indexed
+let summaryGbp = false; // convert USD territories to GBP in the summary
+
+const SUMMARY_USD_TERRITORIES = new Set(["Chicago", "New York", "Chicago Contract"]);
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
@@ -273,9 +276,11 @@ function buildSummarySection() {
   const wrap = document.createElement("div");
   wrap.className = "table-wrap";
 
+  const usdToGbp = reportData.usd_to_gbp || 0.79;
+
   const table = document.createElement("table");
   table.innerHTML = `<thead><tr>
-    <th>Territory</th>
+    <th>Territory <button class="gbp-toggle" id="summary-gbp-toggle" title="Convert Chicago / New York to GBP">${summaryGbp ? "Show local $" : "USD→£"}</button></th>
     <th class="num">Full Year Written</th>
     <th class="num">YoY %</th>
     <th class="num">Full Year Written Last YTD</th>
@@ -293,11 +298,15 @@ function buildSummarySection() {
     const tdata = territories[territory];
     if (!tdata) continue;
 
-    const sym        = tdata.sym;
     const months     = tdata.territory_months;
     const budget     = tdata.budget || {};
     const budgetMths = budget.months || {};
     const annualBudget = budget.total || 0;
+
+    // Convert USD territories to GBP when the toggle is on
+    const toGbp = summaryGbp && SUMMARY_USD_TERRITORIES.has(territory);
+    const conv  = toGbp ? usdToGbp : 1;
+    const sym   = toGbp ? "£" : tdata.sym;
 
     // Written YTD (this year, by start date) — kept internally for vs-Budget
     let ytd = 0, ytdBudget = 0;
@@ -319,15 +328,15 @@ function buildSummarySection() {
 
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td><strong>${esc(territory)}</strong></td>
-      <td class="num">${fmt(fullYear, sym)}</td>
+      <td><strong>${esc(territory)}</strong>${toGbp ? ` <span class="gbp-tag">in £</span>` : ""}</td>
+      <td class="num">${fmt(fullYear * conv, sym)}</td>
       <td class="num${ytdYoyCls}">${ytdYoyPct !== null ? fmtPct(ytdYoyPct) : "—"}</td>
-      <td class="num dim">${lastYearYtd > 0 ? fmt(lastYearYtd, sym) : "—"}</td>
-      <td class="num">${ytdBudget > 0 ? fmt(ytdBudget, sym) : "—"}</td>
-      <td class="num${vsCls}">${vsBudget !== null ? fmtDelta(vsBudget, sym) : "—"}</td>
-      <td class="num dim">${lastYear > 0 ? fmt(lastYear, sym) : "—"}</td>
+      <td class="num dim">${lastYearYtd > 0 ? fmt(lastYearYtd * conv, sym) : "—"}</td>
+      <td class="num">${ytdBudget > 0 ? fmt(ytdBudget * conv, sym) : "—"}</td>
+      <td class="num${vsCls}">${vsBudget !== null ? fmtDelta(vsBudget * conv, sym) : "—"}</td>
+      <td class="num dim">${lastYear > 0 ? fmt(lastYear * conv, sym) : "—"}</td>
       <td class="num${fullYoyCls}">${fullYoyPct !== null ? fmtPct(fullYoyPct) : "—"}</td>
-      <td class="num">${annualBudget > 0 ? fmt(annualBudget, sym) : "—"}</td>
+      <td class="num">${annualBudget > 0 ? fmt(annualBudget * conv, sym) : "—"}</td>
     `;
 
     tbody.appendChild(tr);
@@ -454,6 +463,16 @@ function buildSummarySection() {
   });
 
   section.appendChild(wrap);
+
+  // GBP toggle for USD territories
+  const gbpToggle = table.querySelector("#summary-gbp-toggle");
+  if (gbpToggle) gbpToggle.addEventListener("click", (e) => {
+    e.stopPropagation();
+    summaryGbp = !summaryGbp;
+    const old = document.getElementById("summary-section");
+    if (old) old.replaceWith(buildSummarySection());
+  });
+
   return section;
 }
 
