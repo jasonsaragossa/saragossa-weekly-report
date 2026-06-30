@@ -20,6 +20,7 @@ from shared.dataverse import (
     get_all_territory_consultants, get_all_active_users, get_finance_team_members,
     upsert_override, delete_override, is_guid, TERRITORY_IDS,
     get_nb_thresholds, upsert_nb_thresholds,
+    get_manual_nb_clients, add_manual_nb_client, remove_manual_nb_client, search_accounts,
 )
 from shared.calc import build_report, build_admin_report
 
@@ -57,6 +58,7 @@ def report_data(req: func.HttpRequest) -> func.HttpResponse:
         team_map        = get_team_membership_map()
         live_contracts  = get_live_contract_placements(today.isoformat())
         nb_thresholds   = get_nb_thresholds()
+        manual_nb       = get_manual_nb_clients()
         try:
             fx_rates = get_fx_rates()
         except Exception:
@@ -64,7 +66,7 @@ def report_data(req: func.HttpRequest) -> func.HttpResponse:
             fx_rates = None
 
         report = build_report(consultants, placements, overrides, today, team_map,
-                              live_contracts, fx_rates, nb_thresholds, contract_pl)
+                              live_contracts, fx_rates, nb_thresholds, contract_pl, manual_nb)
 
         return func.HttpResponse(
             json.dumps({"ok": True, "report": report, "as_of": today.isoformat()}),
@@ -107,7 +109,8 @@ def settings_get(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(
             json.dumps({"ok": True, "users": users, "overrides": overrides,
                         "all_active_users": all_users, "finance_member_uids": finance_uids,
-                        "nb_thresholds": get_nb_thresholds()}),
+                        "nb_thresholds": get_nb_thresholds(),
+                        "manual_nb_clients": get_manual_nb_clients()}),
             mimetype="application/json",
             status_code=200,
         )
@@ -141,6 +144,76 @@ def settings_post(req: func.HttpRequest) -> func.HttpResponse:
         )
     except Exception as e:
         logging.exception("settings POST error")
+        return _server_error()
+
+
+# ── /api/clients (GET) — search client accounts for the NB-client picker ──────
+
+@app.route(route="clients", methods=["GET"])
+def clients_search(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_admin(req)
+    if err:
+        return err
+    q = (req.params.get("q") or "").strip()
+    if len(q) < 2:
+        return func.HttpResponse(
+            json.dumps({"ok": True, "results": []}),
+            mimetype="application/json", status_code=200,
+        )
+    try:
+        return func.HttpResponse(
+            json.dumps({"ok": True, "results": search_accounts(q)}),
+            mimetype="application/json", status_code=200,
+        )
+    except Exception:
+        logging.exception("clients search error")
+        return _server_error()
+
+
+# ── /api/nb-clients (POST add / DELETE remove) — manual NB client credit ───────
+
+@app.route(route="nb-clients", methods=["POST"])
+def nb_clients_post(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_admin(req)
+    if err:
+        return err
+    try:
+        body = req.get_json() or {}
+        uid, cid, cname = body.get("userid"), body.get("client_id"), body.get("client_name")
+        if not uid or not cid:
+            return func.HttpResponse(
+                json.dumps({"ok": False, "error": "userid and client_id are required"}),
+                mimetype="application/json", status_code=400,
+            )
+        add_manual_nb_client(uid, cid, cname or "")
+        return func.HttpResponse(
+            json.dumps({"ok": True, "manual_nb_clients": get_manual_nb_clients()}),
+            mimetype="application/json", status_code=200,
+        )
+    except Exception:
+        logging.exception("nb-clients POST error")
+        return _server_error()
+
+
+@app.route(route="nb-clients/{rowid}", methods=["DELETE"])
+def nb_clients_delete(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_admin(req)
+    if err:
+        return err
+    rowid = req.route_params.get("rowid")
+    if not rowid or not is_guid(rowid):
+        return func.HttpResponse(
+            json.dumps({"ok": False, "error": "valid rowid required"}),
+            mimetype="application/json", status_code=400,
+        )
+    try:
+        remove_manual_nb_client(rowid)
+        return func.HttpResponse(
+            json.dumps({"ok": True, "manual_nb_clients": get_manual_nb_clients()}),
+            mimetype="application/json", status_code=200,
+        )
+    except Exception:
+        logging.exception("nb-clients DELETE error")
         return _server_error()
 
 

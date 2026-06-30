@@ -601,6 +601,13 @@ tr.team-header:first-child td { border-top: none; }
 .access-add { display: flex; gap: 8px; align-items: center; max-width: 460px; }
 .access-add .team-select { flex: 1; }
 
+/* NB client additions */
+.nbclient-controls { margin-bottom: 12px; max-width: 460px; }
+.nbclient-controls .team-select { width: 100%; }
+.nbclient-add { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; max-width: 640px; margin-top: 12px; }
+.nbclient-add #nbclient-search { width: 200px; }
+.nbclient-add #nbclient-results { flex: 1; min-width: 180px; }
+
 /* NB-uplift thresholds */
 .nb-threshold-grid { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 14px; max-width: 640px; }
 .nb-th { display: flex; flex-direction: column; gap: 4px; }

@@ -87,7 +87,7 @@ def _nb_qualifies(p: dict, th: dict) -> bool:
 
 def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: date,
                     to_gbp: dict = None, to_usd: dict = None, thresholds: dict = None,
-                    contract_placements: list = None) -> dict:
+                    contract_placements: list = None, manual_clients: list = None) -> dict:
     """
     Returns YTD, Written, Year Prediction, and Rolling 12M for a single user.
     Financial figures are perm-only; the NB-client count spans perm + contract.
@@ -147,6 +147,11 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
             cid = p.get("_crimson_clientname_value")
             if cid:
                 nb_clients[cid] = (p.get("crimson_clientname") or {}).get("name") or "(unknown client)"
+
+    # Admin-added NB clients (manual credit, e.g. a contract that wouldn't auto-count)
+    for c in (manual_clients or []):
+        if c.get("id"):
+            nb_clients[c["id"]] = c.get("name") or "(client)"
 
     year_pred = (written / week_no) * 52 if written > 0 else 0.0
 
@@ -806,6 +811,7 @@ def build_report(
     fx_rates: dict = None,
     nb_thresholds: dict = None,
     contract_placements: list = None,
+    manual_nb_clients: dict = None,
 ) -> dict:
     """
     Assembles the full report structure.
@@ -855,7 +861,8 @@ def build_report(
         role = _clean_role(c.get("title") or "")
         ccy  = CCY.get(territory, "GBP")
 
-        metrics = compute_metrics(uid, placements, ccy, today, to_gbp, to_usd, nb_thresholds, contract_placements)
+        metrics = compute_metrics(uid, placements, ccy, today, to_gbp, to_usd, nb_thresholds,
+                                  contract_placements, (manual_nb_clients or {}).get(uid, []))
         wnf     = compute_wnf(uid, live_contracts, ccy, to_gbp, to_usd)
 
         by_territory[territory].append({

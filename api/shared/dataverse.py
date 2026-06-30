@@ -636,6 +636,55 @@ def remove_nb_alerted(uid: str) -> None:
         odata_delete(f"crbb7_nbalerts({r['crbb7_nbalertid']})")
 
 
+# ── Manual NB-client additions (crbb7_nbclient) ───────────────────────────────
+
+def get_manual_nb_clients() -> dict:
+    """{ uid: [ {id, name, rowid} ] } — admin-added NB clients per consultant."""
+    rows = odata_get_all(
+        "crbb7_nbclients",
+        params={"$select": "crbb7_userid,crbb7_clientid,crbb7_clientname,crbb7_nbclientid"},
+    )
+    out = {}
+    for r in rows:
+        uid = r.get("crbb7_userid")
+        if not uid:
+            continue
+        out.setdefault(uid, []).append({
+            "id":    r.get("crbb7_clientid"),
+            "name":  r.get("crbb7_clientname") or "(client)",
+            "rowid": r.get("crbb7_nbclientid"),
+        })
+    return out
+
+
+def add_manual_nb_client(uid: str, client_id: str, client_name: str) -> dict:
+    return odata_post("crbb7_nbclients", {
+        "crbb7_userid":     uid,
+        "crbb7_clientid":   client_id,
+        "crbb7_clientname": client_name,
+        "crbb7_name":       client_name or uid,
+    })
+
+
+def remove_manual_nb_client(rowid: str) -> None:
+    odata_delete(f"crbb7_nbclients({rowid})")
+
+
+def search_accounts(query: str, top: int = 25) -> list[dict]:
+    """Search client accounts by name (for the NB-client picker)."""
+    q = odata_str(query)
+    rows = odata_get_all(
+        "accounts",
+        params={
+            "$select": "accountid,name",
+            "$filter": f"contains(name,'{q}') and statecode eq 0",
+            "$orderby": "name asc",
+            "$top": top,
+        },
+    )
+    return [{"id": a["accountid"], "name": a.get("name", "")} for a in rows[:top]]
+
+
 # ── Microsoft Graph email (for scheduled alerts) ──────────────────────────────
 
 def _graph_token() -> str:

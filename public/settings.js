@@ -26,6 +26,8 @@ let allActiveUsers = [];   // every enabled Mercury user (for the access picker)
 let financeMemberUids = []; // uids in the Finance & Compliance team
 let overrideMap = {}; // uid → override record
 let nbThresholds = {}; // NB-uplift qualification thresholds
+let manualNbClients = {}; // uid → [{id, name, rowid}] admin-added NB clients
+let nbSelectedUid = "";   // consultant selected in the NB-client section
 
 (async () => {
   let data;
@@ -51,6 +53,7 @@ let nbThresholds = {}; // NB-uplift qualification thresholds
   allActiveUsers = data.all_active_users || [];
   financeMemberUids = data.finance_member_uids || [];
   nbThresholds = data.nb_thresholds || {};
+  manualNbClients = data.manual_nb_clients || {};
   (data.overrides || []).forEach(o => { overrideMap[o.crbb7_userid] = o; });
 
   renderSettings();
@@ -66,6 +69,9 @@ function renderSettings() {
 
   // NB-uplift qualification thresholds
   container.appendChild(buildNbThresholdsSection());
+
+  // Manual NB-client additions
+  container.appendChild(buildNbClientSection());
 
   // Group users by territory
   const byTerritory = {};
@@ -165,6 +171,105 @@ function buildNbThresholdsSection() {
       btn.textContent = "Save thresholds"; btn.disabled = false;
     }
   });
+
+  return section;
+}
+
+
+// ── Manual NB-client additions ─────────────────────────────────────────────────
+
+function rerenderNbClient() {
+  const old = document.getElementById("nbclient-section");
+  if (old) old.replaceWith(buildNbClientSection());
+}
+
+function buildNbClientSection() {
+  const section = document.createElement("div");
+  section.className = "settings-section";
+  section.id = "nbclient-section";
+
+  const consultantOpts = [...allUsers]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(u => `<option value="${esc(u.uid)}" ${u.uid === nbSelectedUid ? "selected" : ""}>${esc(u.name)}</option>`)
+    .join("");
+
+  const current = manualNbClients[nbSelectedUid] || [];
+  const listHtml = !nbSelectedUid
+    ? `<p class="access-empty">Select a consultant to manage their added clients.</p>`
+    : (current.length
+        ? `<ul class="access-list">${current.map(c => `<li class="access-row">
+             <span>${esc(c.name)}</span>
+             <button class="clear-btn nbclient-remove" data-rowid="${esc(c.rowid)}">Remove</button>
+           </li>`).join("")}</ul>`
+        : `<p class="access-empty">No manually added clients.</p>`);
+
+  section.innerHTML = `
+    <h2 class="settings-territory">NB Client Additions</h2>
+    <p class="settings-desc">Manually credit a consultant with a new-business client (e.g. a contract that won't auto-count).
+      Added to their NB-client count and drill-down.</p>
+    <div class="nbclient-controls">
+      <select class="team-select" id="nbclient-consultant"><option value="">— Select consultant —</option>${consultantOpts}</select>
+    </div>
+    <div id="nbclient-current">${listHtml}</div>
+    ${nbSelectedUid ? `<div class="nbclient-add">
+      <input type="text" class="contract-input" id="nbclient-search" placeholder="Search client name…">
+      <button class="save-btn" id="nbclient-searchbtn">Search</button>
+      <select class="team-select" id="nbclient-results"><option value="">— search results —</option></select>
+      <button class="save-btn" id="nbclient-addbtn">Add client</button>
+    </div>` : ""}
+  `;
+
+  section.querySelector("#nbclient-consultant").addEventListener("change", (e) => {
+    nbSelectedUid = e.target.value;
+    rerenderNbClient();
+  });
+
+  const searchBtn = section.querySelector("#nbclient-searchbtn");
+  if (searchBtn) searchBtn.addEventListener("click", async () => {
+    const q = section.querySelector("#nbclient-search").value.trim();
+    const results = section.querySelector("#nbclient-results");
+    if (q.length < 2) { results.innerHTML = `<option value="">type at least 2 characters</option>`; return; }
+    searchBtn.textContent = "…"; searchBtn.disabled = true;
+    try {
+      const resp = await fetch("/api/clients?q=" + encodeURIComponent(q));
+      const data = await resp.json();
+      const rs = (data.results || []);
+      results.innerHTML = rs.length
+        ? rs.map(r => `<option value="${esc(r.id)}" data-name="${esc(r.name)}">${esc(r.name)}</option>`).join("")
+        : `<option value="">No matches</option>`;
+    } catch (_) {
+      results.innerHTML = `<option value="">search failed</option>`;
+    }
+    searchBtn.textContent = "Search"; searchBtn.disabled = false;
+  });
+
+  const addBtn = section.querySelector("#nbclient-addbtn");
+  if (addBtn) addBtn.addEventListener("click", async () => {
+    const sel = section.querySelector("#nbclient-results");
+    const opt = sel.options[sel.selectedIndex];
+    if (!opt || !opt.value) return;
+    addBtn.textContent = "Adding…"; addBtn.disabled = true;
+    try {
+      const resp = await fetch("/api/nb-clients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userid: nbSelectedUid, client_id: opt.value, client_name: opt.dataset.name }),
+      });
+      const data = await resp.json();
+      if (data.ok) { manualNbClients = data.manual_nb_clients || manualNbClients; rerenderNbClient(); }
+      else { alert("Could not add: " + (data.error || "unknown error")); addBtn.textContent = "Add client"; addBtn.disabled = false; }
+    } catch (e) { alert("Could not add: " + e.message); addBtn.textContent = "Add client"; addBtn.disabled = false; }
+  });
+
+  section.querySelectorAll(".nbclient-remove").forEach(btn => btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    try {
+      const resp = await fetch("/api/nb-clients/" + btn.dataset.rowid, { method: "DELETE" });
+      const data = await resp.json();
+      if (data.ok) { manualNbClients = data.manual_nb_clients || {}; rerenderNbClient(); }
+      else { alert("Could not remove: " + (data.error || "unknown error")); btn.disabled = false; }
+    } catch (e) { alert("Could not remove: " + e.message); btn.disabled = false; }
+  }));
 
   return section;
 }
