@@ -135,7 +135,9 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
                 if _nb_qualifies(p, thresholds):
                     roll12_uplift += val * 0.5
 
-    # NB-client count also spans contract/temp placements (this metric only)
+    # Contract/temp NB placements: count the client AND credit the CRO the
+    # 50% uplift on their share. Contract GP itself never contributes to a
+    # perm consultant's figures — the uplift is the only credit.
     for p in (contract_placements or []):
         if p.get("_mercury_clientrelationshipowner_value") != uid:
             continue
@@ -147,6 +149,11 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
             cid = p.get("_crimson_clientname_value")
             if cid:
                 nb_clients[cid] = (p.get("crimson_clientname") or {}).get("name") or "(unknown client)"
+            if _nb_qualifies(p, thresholds):
+                factor = split_factor(p, uid)
+                gp     = p.get("recruit_truegrossprofit") or 0.0
+                ccy    = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode")
+                roll12_uplift += gp * factor * fx.get(ccy, 1.0) * 0.5
 
     # Admin-added NB clients (manual credit, e.g. a contract that wouldn't auto-count)
     for c in (manual_clients or []):

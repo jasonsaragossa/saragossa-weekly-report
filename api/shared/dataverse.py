@@ -326,8 +326,8 @@ def get_placements(start_date: str, end_date: str) -> list[dict]:
 
 def get_contract_placements(start_date: str, end_date: str) -> list[dict]:
     """
-    Contract/temp placements with a start date in range — used only for the
-    cross-type NB-client count (perm fee/GP fields aren't needed here).
+    Contract/temp placements with a start date in range — used for the
+    cross-type NB-client count and the CRO's NB uplift on contract deals.
     """
     cancel_filter = " and ".join(f"statuscode ne {c}" for c in CANCEL_CODES)
     type_filter   = " or ".join(f"crimson_type eq {t}" for t in CONTRACT_TYPES)
@@ -337,6 +337,8 @@ def get_contract_placements(start_date: str, end_date: str) -> list[dict]:
             "$select": (
                 "crimson_placementid,crimson_startdate,crimson_specialinstructionsclient,"
                 "crimson_type,_crimson_clientname_value,"
+                "recruit_truegrossprofit,mercury_marginpercent,recruit_weeklymarginvalue_mc,"
+                "_recruit_truegrossprofitcurrency_value,"
                 "_mercury_clientrelationshipowner_value,"
                 "_crimson_consultant_value,"
                 "_mercury_assignmentowner_value,"
@@ -349,7 +351,10 @@ def get_contract_placements(start_date: str, end_date: str) -> list[dict]:
                 f" and crimson_startdate le {end_date}"
                 f" and {cancel_filter}"
             ),
-            "$expand": "crimson_clientname($select=name)",
+            "$expand": (
+                "crimson_clientname($select=name),"
+                "recruit_truegrossprofitcurrency($select=isocurrencycode)"
+            ),
         },
     )
 
