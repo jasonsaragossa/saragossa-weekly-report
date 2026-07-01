@@ -699,16 +699,36 @@ def _graph_token() -> str:
     return result["access_token"]
 
 
-def graph_send_mail(sender: str, recipients: list, subject: str, body_text: str) -> None:
-    """Sends a plain-text email as `sender` via Graph (needs Mail.Send app permission)."""
-    msg = {
-        "message": {
-            "subject": subject,
-            "body": {"contentType": "Text", "content": body_text},
-            "toRecipients": [{"emailAddress": {"address": r}} for r in recipients],
+def graph_send_mail(sender: str, recipients: list, subject: str, body_text: str,
+                    body_html: str = None, inline_images: dict = None) -> None:
+    """
+    Sends an email as `sender` via Graph (needs Mail.Send app permission).
+    body_html: optional HTML body (plain text used when None).
+    inline_images: {content_id: png_bytes} embedded as inline attachments,
+    referenced in the HTML as <img src="cid:content_id">.
+    """
+    import base64
+    message = {
+        "subject": subject,
+        "body": {
+            "contentType": "HTML" if body_html else "Text",
+            "content": body_html or body_text,
         },
-        "saveToSentItems": False,
+        "toRecipients": [{"emailAddress": {"address": r}} for r in recipients],
     }
+    if inline_images:
+        message["attachments"] = [
+            {
+                "@odata.type": "#microsoft.graph.fileAttachment",
+                "name": f"{cid}.png",
+                "contentType": "image/png",
+                "contentBytes": base64.b64encode(data).decode("ascii"),
+                "contentId": cid,
+                "isInline": True,
+            }
+            for cid, data in inline_images.items()
+        ]
+    msg = {"message": message, "saveToSentItems": False}
     resp = requests.post(
         f"https://graph.microsoft.com/v1.0/users/{sender}/sendMail",
         headers={"Authorization": f"Bearer {_graph_token()}", "Content-Type": "application/json"},
