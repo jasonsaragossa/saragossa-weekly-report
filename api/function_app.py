@@ -187,9 +187,9 @@ def nb_clients_post(req: func.HttpRequest) -> func.HttpResponse:
     try:
         body = req.get_json() or {}
         uid, cid, cname = body.get("userid"), body.get("client_id"), body.get("client_name")
-        if not uid or not cid:
+        if not is_guid(uid) or not is_guid(cid):
             return func.HttpResponse(
-                json.dumps({"ok": False, "error": "userid and client_id are required"}),
+                json.dumps({"ok": False, "error": "userid and client_id must be valid ids"}),
                 mimetype="application/json", status_code=400,
             )
         add_manual_nb_client(uid, cid, cname or "")
