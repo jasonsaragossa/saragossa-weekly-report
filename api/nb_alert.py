@@ -108,7 +108,7 @@ def main() -> None:
         get_active_consultants, get_placements, get_contract_placements, get_overrides,
         get_team_membership_map, get_live_contract_placements, get_fx_rates,
         get_nb_thresholds, get_nb_alert_state, upsert_nb_alert_state,
-        graph_send_mail,
+        get_manual_nb_clients, graph_send_mail,
     )
     from shared.calc import build_report
 
@@ -129,7 +129,8 @@ def main() -> None:
         fx_rates = None
 
     report = build_report(consultants, placements, overrides, today, team_map,
-                          live_contracts, fx_rates, nb_thresholds, contract_pl)
+                          live_contracts, fx_rates, nb_thresholds, contract_pl,
+                          get_manual_nb_clients())
 
     # Current NB clients per consultant (id -> name)
     current = {}

@@ -246,6 +246,25 @@ tr.team-header:first-child td { border-top: none; }
   padding: 1px 6px;
 }
 
+/* "Milestone recognised" note under the NB client count */
+.nb-recognised {
+  color: var(--green);
+  font-size: 9px;
+}
+
+/* Drill-down tag for clients already counted toward a previous milestone */
+.nb-flag {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 9px;
+  color: var(--mid);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
 /* NB-clients drill-down list */
 .nb-client-list { list-style: none; margin: 0; padding: 0; }
 .nb-client-list li {

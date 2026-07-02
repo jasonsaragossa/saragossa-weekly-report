@@ -87,7 +87,8 @@ def _nb_qualifies(p: dict, th: dict) -> bool:
 
 def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: date,
                     to_gbp: dict = None, to_usd: dict = None, thresholds: dict = None,
-                    contract_placements: list = None, manual_clients: list = None) -> dict:
+                    contract_placements: list = None, manual_clients: list = None,
+                    recognised_ids: set = None) -> dict:
     """
     Returns YTD, Written, Year Prediction, and Rolling 12M for a single user.
     Financial figures are perm-only; the NB-client count spans perm + contract.
@@ -170,7 +171,13 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
         "roll12_uplift": round(roll12_uplift, 2),
         "roll12_total": round(roll12_base + roll12_uplift, 2),
         "nb_clients":   len(nb_clients),
-        "nb_client_names": sorted(nb_clients.values()),
+        # Per-client detail with the "counted toward a previous milestone" flag
+        "nb_client_detail": [
+            {"name": n, "recognised": cid in (recognised_ids or set())}
+            for cid, n in sorted(nb_clients.items(), key=lambda kv: kv[1].lower())
+        ],
+        # Clients not yet part of any milestone (drives the next alert)
+        "nb_new_count":  len(set(nb_clients.keys()) - (recognised_ids or set())),
         "nb_client_map": nb_clients,   # id -> name; used by the alert job to track new clients
     }
 
@@ -821,6 +828,7 @@ def build_report(
     nb_thresholds: dict = None,
     contract_placements: list = None,
     manual_nb_clients: dict = None,
+    nb_alert_state: dict = None,   # uid -> set of client ids already in a milestone
 ) -> dict:
     """
     Assembles the full report structure.
@@ -871,7 +879,8 @@ def build_report(
         ccy  = CCY.get(territory, "GBP")
 
         metrics = compute_metrics(uid, placements, ccy, today, to_gbp, to_usd, nb_thresholds,
-                                  contract_placements, (manual_nb_clients or {}).get(uid, []))
+                                  contract_placements, (manual_nb_clients or {}).get(uid, []),
+                                  (nb_alert_state or {}).get(uid))
         wnf     = compute_wnf(uid, live_contracts, ccy, to_gbp, to_usd)
 
         by_territory[territory].append({

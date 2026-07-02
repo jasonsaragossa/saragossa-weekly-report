@@ -61,13 +61,19 @@ def report_data(req: func.HttpRequest) -> func.HttpResponse:
         nb_thresholds   = get_nb_thresholds()
         manual_nb       = get_manual_nb_clients()
         try:
+            alert_state = {u: s["client_ids"] for u, s in get_nb_alert_state().items()}
+        except Exception:
+            logging.warning("report-data: could not read NB alert state")
+            alert_state = {}
+        try:
             fx_rates = get_fx_rates()
         except Exception:
             logging.warning("Could not fetch live FX rates — using hardcoded fallback")
             fx_rates = None
 
         report = build_report(consultants, placements, overrides, today, team_map,
-                              live_contracts, fx_rates, nb_thresholds, contract_pl, manual_nb)
+                              live_contracts, fx_rates, nb_thresholds, contract_pl, manual_nb,
+                              nb_alert_state=alert_state)
 
         return func.HttpResponse(
             json.dumps({"ok": True, "report": report, "as_of": today.isoformat()}),

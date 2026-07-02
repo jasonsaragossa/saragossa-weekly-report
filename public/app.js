@@ -160,7 +160,11 @@ function showNbClients(name, clients) {
   const n = clients.length;
   overlay.querySelector("#nb-modal-title").textContent = `${name} — ${n} NB ${n === 1 ? "client" : "clients"} (rolling 12m)`;
   overlay.querySelector("#nb-modal-body").innerHTML = n
-    ? `<ul class="nb-client-list">${clients.map(c => `<li>${esc(c)}</li>`).join("")}</ul>`
+    ? `<ul class="nb-client-list">${clients.map(c => {
+        const nm  = typeof c === "string" ? c : c.name;
+        const rec = typeof c === "object" && c.recognised;
+        return `<li>${esc(nm)}${rec ? ' <span class="nb-flag">previous milestone</span>' : ""}</li>`;
+      }).join("")}</ul>`
     : `<p class="nb-client-empty">No new-business clients.</p>`;
   overlay.style.display = "flex";
 }
@@ -189,11 +193,23 @@ function permRow(m) {
     <td class="num">${fmt(m.written, m.sym)}</td>
     <td class="num">${fmt(m.year_pred, m.sym)}</td>
     <td class="num">${fmt(m.roll12, m.sym)}</td>
-    <td class="num">${fmt(m.roll12_uplift, m.sym)}${m.nb_clients > 0
-        ? `<span class="nb-clients nb-clients-link${m.nb_clients >= NB_CLIENT_ALERT ? " nb-clients-hit" : ""}" data-name="${esc(m.name)}" data-clients="${esc(JSON.stringify(m.nb_client_names || []))}">${m.nb_clients} NB ${m.nb_clients === 1 ? "client" : "clients"}</span>`
-        : ""}</td>
+    <td class="num">${fmt(m.roll12_uplift, m.sym)}${nbClientsHtml(m)}</td>
     <td class="num">${fmt(m.roll12_total, m.sym)}</td>
   </tr>`;
+}
+
+function nbClientsHtml(m) {
+  const total = m.nb_clients || 0;
+  if (total === 0) return "";
+  const nu = m.nb_new_count != null ? m.nb_new_count : total;
+  const recognised = total - nu;                 // clients already in a milestone
+  const pending = nu >= NB_CLIENT_ALERT;         // unrecognised milestone waiting
+  let html = `<span class="nb-clients nb-clients-link${pending ? " nb-clients-hit" : ""}"
+      data-name="${esc(m.name)}" data-clients="${esc(JSON.stringify(m.nb_client_detail || []))}">${total} NB ${total === 1 ? "client" : "clients"}</span>`;
+  if (recognised > 0 && !pending) {
+    html += `<span class="nb-clients nb-recognised">✓ milestone recognised${nu > 0 ? ` · ${nu} new` : ""}</span>`;
+  }
+  return html;
 }
 
 function buildPermTeamTable(groups) {
