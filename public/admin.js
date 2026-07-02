@@ -643,13 +643,17 @@ function round2(n) { return Math.round(n * 100) / 100; }
 function buildBreakdownTabs() {
   const wrapper = document.createElement("div");
 
-  // Year toggle
+  // Year + basis toggles
   let showLastYear = false;
+  let showWritten  = false;
   const toggleBar = document.createElement("div");
   toggleBar.className = "breakdown-toggle";
   toggleBar.innerHTML = `
     <button class="year-toggle-btn active" data-year="this">${currentYear}</button>
     <button class="year-toggle-btn" data-year="last">${currentYear - 1}</button>
+    <span class="breakdown-toggle-gap"></span>
+    <button class="year-toggle-btn active" data-mode="actuals" title="By placement start date">Actuals</button>
+    <button class="year-toggle-btn" data-mode="written" title="By the month the placement was created">Written</button>
   `;
   wrapper.appendChild(toggleBar);
 
@@ -703,24 +707,32 @@ function buildBreakdownTabs() {
     });
   });
 
-  // Year toggle handler — re-render all panels
-  toggleBar.querySelectorAll(".year-toggle-btn").forEach(btn => {
+  // Toggle handlers — re-render all panels
+  function renderPanels() {
+    panelsEl.querySelectorAll(".panel").forEach(panel => {
+      if (panel.dataset.territory === "__overall__") {
+        panel.innerHTML = "";
+        panel.appendChild(buildOverallTable(showLastYear, showWritten));
+      } else {
+        const tdata = reportData.territories[panel.dataset.territory];
+        if (!tdata) return;
+        panel.innerHTML = "";
+        panel.appendChild(buildMonthlyTable(tdata, showLastYear, showWritten));
+      }
+    });
+  }
+  toggleBar.querySelectorAll("[data-year]").forEach(btn => {
     btn.addEventListener("click", () => {
       showLastYear = btn.dataset.year === "last";
-      toggleBar.querySelectorAll(".year-toggle-btn").forEach(b =>
-        b.classList.toggle("active", b === btn)
-      );
-      panelsEl.querySelectorAll(".panel").forEach(panel => {
-        if (panel.dataset.territory === "__overall__") {
-          panel.innerHTML = "";
-          panel.appendChild(buildOverallTable(showLastYear));
-        } else {
-          const tdata = reportData.territories[panel.dataset.territory];
-          if (!tdata) return;
-          panel.innerHTML = "";
-          panel.appendChild(buildMonthlyTable(tdata, showLastYear));
-        }
-      });
+      toggleBar.querySelectorAll("[data-year]").forEach(b => b.classList.toggle("active", b === btn));
+      renderPanels();
+    });
+  });
+  toggleBar.querySelectorAll("[data-mode]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      showWritten = btn.dataset.mode === "written";
+      toggleBar.querySelectorAll("[data-mode]").forEach(b => b.classList.toggle("active", b === btn));
+      renderPanels();
     });
   });
 
@@ -732,9 +744,10 @@ function buildBreakdownTabs() {
 
 // ── Overall Table (all territories combined) ──────────────────────────────────
 
-function buildOverallTable(showLastYear = false) {
+function buildOverallTable(showLastYear = false, showWritten = false) {
   const compareLabel = showLastYear ? `${currentYear}` : `${currentYear - 1}`;
   const yoyLabel     = showLastYear ? "vs This Year" : "YoY";
+  const usdToGbp     = reportData.usd_to_gbp || 0.79;
 
   // ── Summary totals bar ────────────────────────────────────────────────────
   const GBP_TERRITORIES = ["Bristol", "London", "London Contract"];
@@ -745,8 +758,13 @@ function buildOverallTable(showLastYear = false) {
     for (const t of terrs) {
       const td = reportData.territories[t];
       if (!td) continue;
-      total   += showLastYear ? td.territory_last_year  : td.territory_total;
-      compare += showLastYear ? td.territory_total       : td.territory_last_year;
+      if (showWritten) {
+        total   += (showLastYear ? td.territory_written_last_total : td.territory_written_total) || 0;
+        compare += (showLastYear ? td.territory_written_total : td.territory_written_last_total) || 0;
+      } else {
+        total   += showLastYear ? td.territory_last_year  : td.territory_total;
+        compare += showLastYear ? td.territory_total       : td.territory_last_year;
+      }
     }
     return { total, compare };
   }
@@ -767,8 +785,14 @@ function buildOverallTable(showLastYear = false) {
       </div>`;
   }
 
-  const grandTotal  = showLastYear ? reportData.grand_total_last_gbp  : reportData.grand_total_gbp;
-  const grandCompare = showLastYear ? reportData.grand_total_gbp       : reportData.grand_total_last_gbp;
+  // Written mode has no "Other" bucket, so the grand figures come from the
+  // territory totals (USD converted); Actuals keeps the precomputed GBP totals.
+  const grandTotal  = showWritten
+    ? gbp.total + usd.total * usdToGbp
+    : (showLastYear ? reportData.grand_total_last_gbp  : reportData.grand_total_gbp);
+  const grandCompare = showWritten
+    ? gbp.compare + usd.compare * usdToGbp
+    : (showLastYear ? reportData.grand_total_gbp       : reportData.grand_total_last_gbp);
 
   const summaryBar = document.createElement("div");
   summaryBar.className = "overall-summary-bar";
@@ -793,13 +817,35 @@ function buildOverallTable(showLastYear = false) {
     for (const m of mbs) overallMemberLookup[m.uid] = { member: m, sym: td2.sym };
   }
 
-  // Grand Total (GBP) row — rendered at both the top and bottom of the list
-  const grandMonthly = showLastYear ? reportData.grand_monthly_last_gbp : reportData.grand_monthly_gbp;
-  const grandTotFull = showLastYear ? reportData.grand_total_last_gbp   : reportData.grand_total_gbp;
-  const grandCmpFull = showLastYear ? reportData.grand_total_gbp        : reportData.grand_total_last_gbp;
+  // Grand Total (GBP) row — rendered at both the top and bottom of the list.
+  // Written mode assembles the grand monthly figures (and counts) from the
+  // territory written totals, converting USD territories to GBP.
+  let grandMonthly, grandCounts = null;
+  if (showWritten) {
+    grandMonthly = {}; grandCounts = {};
+    for (let mm = 1; mm <= 12; mm++) { grandMonthly[String(mm)] = 0; grandCounts[String(mm)] = 0; }
+    for (const t of TERRITORY_ORDER) {
+      const td = reportData.territories[t];
+      if (!td) continue;
+      const f  = USD_TERRITORIES.includes(t) ? usdToGbp : 1;
+      const wm = showLastYear ? td.territory_written_last_months : td.territory_written_months;
+      const wc = showLastYear ? td.territory_written_last_counts : td.territory_written_counts;
+      for (let mm = 1; mm <= 12; mm++) {
+        grandMonthly[String(mm)] += ((wm || {})[String(mm)] || 0) * f;
+        grandCounts[String(mm)]  += (wc || {})[String(mm)] || 0;
+      }
+    }
+  } else {
+    grandMonthly = showLastYear ? reportData.grand_monthly_last_gbp : reportData.grand_monthly_gbp;
+  }
+  const grandTotFull = showWritten ? grandTotal
+    : (showLastYear ? reportData.grand_total_last_gbp   : reportData.grand_total_gbp);
+  const grandCmpFull = showWritten ? grandCompare
+    : (showLastYear ? reportData.grand_total_gbp        : reportData.grand_total_last_gbp);
   const grandCells = MONTH_ABBR.map((_, i) => {
     const v = (grandMonthly || {})[String(i + 1)] || 0;
-    return `<td class="num"><strong>${v > 0 ? fmt(v, "£") : ""}</strong></td>`;
+    const c = grandCounts ? (grandCounts[String(i + 1)] || 0) : 0;
+    return `<td class="num"><strong>${v > 0 ? fmt(v, "£") : ""}</strong>${showWritten && c > 0 ? `<span class="written-count">${fmtCount(c)} pl</span>` : ""}</td>`;
   }).join("");
   const grandYoy    = grandCmpFull > 0 ? (grandTotFull - grandCmpFull) / grandCmpFull * 100 : null;
   const grandYoyCls = grandYoy !== null ? (grandYoy >= 0 ? " pos" : " neg") : "";
@@ -840,21 +886,48 @@ function buildOverallTable(showLastYear = false) {
     if (!members.length) continue;
 
     const sym           = tdata.sym;
-    const territoryMths = showLastYear ? tdata.territory_last_year_months : tdata.territory_months;
-    const territoryTot  = showLastYear ? tdata.territory_last_year        : tdata.territory_total;
-    const territoryCmp  = showLastYear ? tdata.territory_total            : tdata.territory_last_year;
+    const territoryMths = showWritten
+      ? (showLastYear ? tdata.territory_written_last_months : tdata.territory_written_months)
+      : (showLastYear ? tdata.territory_last_year_months : tdata.territory_months);
+    const territoryCnts = showWritten
+      ? (showLastYear ? tdata.territory_written_last_counts : tdata.territory_written_counts)
+      : null;
+    const territoryTot  = showWritten
+      ? ((showLastYear ? tdata.territory_written_last_total : tdata.territory_written_total) || 0)
+      : (showLastYear ? tdata.territory_last_year        : tdata.territory_total);
+    const territoryCmp  = showWritten
+      ? ((showLastYear ? tdata.territory_written_total : tdata.territory_written_last_total) || 0)
+      : (showLastYear ? tdata.territory_total            : tdata.territory_last_year);
+    const territoryCnt  = (showLastYear ? tdata.territory_written_last_count_total : tdata.territory_written_count_total) || 0;
 
     // Territory header row
     html += `<tr class="team-header"><td colspan="${colCount}">${esc(territory)}</td></tr>`;
 
     for (const m of members) {
-      const mMonths = showLastYear ? (m.last_year_months || {}) : m.months;
-      const mTotal  = showLastYear ? m.last_year_total : m.total;
-      const mCmp    = showLastYear ? m.total : m.last_year_total;
+      const mMonths = showWritten
+        ? (showLastYear ? (m.written_last_months || {}) : (m.written_months || {}))
+        : (showLastYear ? (m.last_year_months || {}) : m.months);
+      const mCounts = showWritten
+        ? (showLastYear ? (m.written_last_counts || {}) : (m.written_counts || {}))
+        : null;
+      const mTotal  = showWritten
+        ? ((showLastYear ? m.written_last_total : m.written_total) || 0)
+        : (showLastYear ? m.last_year_total : m.total);
+      const mCmp    = showWritten
+        ? ((showLastYear ? m.written_total : m.written_last_total) || 0)
+        : (showLastYear ? m.total : m.last_year_total);
+      const mCountTotal = showWritten
+        ? ((showLastYear ? m.written_last_count_total : m.written_count_total) || 0)
+        : 0;
       const mSym    = m.sym || sym;
 
       const monthCells = MONTH_ABBR.map((_, i) => {
         const v = mMonths[String(i + 1)] || 0;
+        if (showWritten) {
+          const c = (mCounts || {})[String(i + 1)] || 0;
+          if (v <= 0 && c <= 0) return `<td class="num"></td>`;
+          return `<td class="num">${v > 0 ? fmt(v, mSym) : ""}${c > 0 ? `<span class="written-count">${fmtCount(c)} pl</span>` : ""}</td>`;
+        }
         if (v > 0) {
           return `<td class="num clickable-cell" data-uid="${m.uid}" data-month="${i+1}" data-lastyear="${showLastYear?1:0}">${fmt(v, mSym)}</td>`;
         }
@@ -880,7 +953,7 @@ function buildOverallTable(showLastYear = false) {
         <td>${nameCell}</td>
         <td class="role-cell">${esc(m.role)}</td>
         ${monthCells}
-        <td class="num"><strong>${mTotal > 0 ? fmt(mTotal, mSym) : ""}</strong></td>
+        <td class="num"><strong>${mTotal > 0 ? fmt(mTotal, mSym) : ""}</strong>${mCountTotal > 0 ? `<span class="written-count">${fmtCount(mCountTotal)} pl</span>` : ""}</td>
         <td class="num${vsTgtCls}">${vsTgt !== null ? fmtDelta(vsTgt, mSym) : "—"}</td>
         <td class="num${tgtPctCls}">${tgtPct !== null ? fmtPct(tgtPct) : "—"}</td>
         <td class="num dim">${mCmp > 0 ? fmt(mCmp, mSym) : "—"}</td>
@@ -899,7 +972,8 @@ function buildOverallTable(showLastYear = false) {
 
     const subtotalCells = MONTH_ABBR.map((_, i) => {
       const v = (territoryMths || {})[String(i + 1)] || 0;
-      return `<td class="num"><strong>${v > 0 ? fmt(v, sym) : ""}</strong></td>`;
+      const c = territoryCnts ? (territoryCnts[String(i + 1)] || 0) : 0;
+      return `<td class="num"><strong>${v > 0 ? fmt(v, sym) : ""}</strong>${showWritten && c > 0 ? `<span class="written-count">${fmtCount(c)} pl</span>` : ""}</td>`;
     }).join("");
 
     const tYoy    = territoryCmp > 0 ? (territoryTot - territoryCmp) / territoryCmp * 100 : null;
@@ -908,7 +982,7 @@ function buildOverallTable(showLastYear = false) {
     html += `<tr class="territory-total-row">
       <td colspan="2"><strong>${esc(territory)} Total</strong></td>
       ${subtotalCells}
-      <td class="num"><strong>${fmt(territoryTot, sym)}</strong></td>
+      <td class="num"><strong>${fmt(territoryTot, sym)}</strong>${showWritten && territoryCnt > 0 ? `<span class="written-count">${fmtCount(territoryCnt)} pl</span>` : ""}</td>
       <td class="num${tVsTgtCls}"><strong>${tVsTgt !== null ? fmtDelta(tVsTgt, sym) : "—"}</strong></td>
       <td class="num${tTgtPctCls}"><strong>${tTgtPct !== null ? fmtPct(tTgtPct) : "—"}</strong></td>
       <td class="num dim"><strong>${territoryCmp > 0 ? fmt(territoryCmp, sym) : "—"}</strong></td>
@@ -950,25 +1024,43 @@ function buildOverallTable(showLastYear = false) {
 
 // ── Monthly Table ─────────────────────────────────────────────────────────────
 
-function buildMonthlyTable(tdata, showLastYear = false) {
+function buildMonthlyTable(tdata, showLastYear = false, showWritten = false) {
   const sym    = tdata.sym;
   const groups = tdata.type === "teams"
     ? tdata.groups
     : [{ team: null, members: tdata.members }];
 
-  // Which year's data to show as primary
-  const primaryMonths   = m => showLastYear ? (m.last_year_months || {}) : m.months;
-  const primaryTotal    = m => showLastYear ? m.last_year_total : m.total;
-  const compareTotal    = m => showLastYear ? m.total : m.last_year_total;
-  const territoryMonths = showLastYear ? tdata.territory_last_year_months : tdata.territory_months;
+  // Which basis (actuals by start date / written by created date) and year
+  const primaryMonths = m => showWritten
+    ? (showLastYear ? (m.written_last_months || {}) : (m.written_months || {}))
+    : (showLastYear ? (m.last_year_months || {}) : m.months);
+  const primaryCounts = m => showLastYear ? (m.written_last_counts || {}) : (m.written_counts || {});
+  const primaryCountTotal = m => (showLastYear ? m.written_last_count_total : m.written_count_total) || 0;
+  const primaryTotal = m => showWritten
+    ? ((showLastYear ? m.written_last_total : m.written_total) || 0)
+    : (showLastYear ? m.last_year_total : m.total);
+  const compareTotal = m => showWritten
+    ? ((showLastYear ? m.written_total : m.written_last_total) || 0)
+    : (showLastYear ? m.total : m.last_year_total);
+  const territoryMonths = showWritten
+    ? (showLastYear ? tdata.territory_written_last_months : tdata.territory_written_months)
+    : (showLastYear ? tdata.territory_last_year_months : tdata.territory_months);
+  const territoryCounts = showWritten
+    ? (showLastYear ? tdata.territory_written_last_counts : tdata.territory_written_counts)
+    : null;
 
   // Build uid → member lookup for click handlers (scoped to this table render)
   const memberLookup = {};
   for (const g of groups) {
     for (const m of g.members) memberLookup[m.uid] = m;
   }
-  const territoryTotal  = showLastYear ? tdata.territory_last_year : tdata.territory_total;
-  const territoryCompare = showLastYear ? tdata.territory_total : tdata.territory_last_year;
+  const territoryTotal = showWritten
+    ? ((showLastYear ? tdata.territory_written_last_total : tdata.territory_written_total) || 0)
+    : (showLastYear ? tdata.territory_last_year : tdata.territory_total);
+  const territoryCompare = showWritten
+    ? ((showLastYear ? tdata.territory_written_total : tdata.territory_written_last_total) || 0)
+    : (showLastYear ? tdata.territory_total : tdata.territory_last_year);
+  const territoryCountTotal = (showLastYear ? tdata.territory_written_last_count_total : tdata.territory_written_count_total) || 0;
   const compareLabel    = showLastYear ? `${currentYear}` : `${currentYear - 1}`;
   const yoyLabel        = showLastYear ? "vs This Year" : "YoY";
 
@@ -997,12 +1089,18 @@ function buildMonthlyTable(tdata, showLastYear = false) {
     }
     for (const m of g.members) {
       const mMonths = primaryMonths(m);
+      const mCounts = showWritten ? primaryCounts(m) : null;
       const mTotal  = primaryTotal(m);
       const mCmp    = compareTotal(m);
       const mSym    = m.sym || sym;
 
       const monthCells = MONTH_ABBR.map((_, i) => {
         const v = mMonths[String(i + 1)] || 0;
+        if (showWritten) {
+          const c = (mCounts || {})[String(i + 1)] || 0;
+          if (v <= 0 && c <= 0) return `<td class="num"></td>`;
+          return `<td class="num">${v > 0 ? fmt(v, mSym) : ""}${c > 0 ? `<span class="written-count">${fmtCount(c)} pl</span>` : ""}</td>`;
+        }
         if (v > 0) {
           return `<td class="num clickable-cell" data-uid="${m.uid}" data-month="${i+1}" data-lastyear="${showLastYear?1:0}">${fmt(v, mSym)}</td>`;
         }
@@ -1024,11 +1122,12 @@ function buildMonthlyTable(tdata, showLastYear = false) {
         ? `${esc(m.name)} <span class="inactive-badge">${esc(badgeText)}</span>`
         : esc(m.name);
 
+      const mCountTotal = showWritten ? primaryCountTotal(m) : 0;
       html += `<tr class="${inactiveCls}">
         <td>${nameCell}</td>
         <td class="role-cell">${esc(m.role)}</td>
         ${monthCells}
-        <td class="num"><strong>${mTotal > 0 ? fmt(mTotal, mSym) : ""}</strong></td>
+        <td class="num"><strong>${mTotal > 0 ? fmt(mTotal, mSym) : ""}</strong>${mCountTotal > 0 ? `<span class="written-count">${fmtCount(mCountTotal)} pl</span>` : ""}</td>
         <td class="num${vsTgtCls}">${vsTgt !== null ? fmtDelta(vsTgt, mSym) : "—"}</td>
         <td class="num${tgtPctCls}">${tgtPct !== null ? fmtPct(tgtPct) : "—"}</td>
         <td class="num dim">${mCmp > 0 ? fmt(mCmp, mSym) : "—"}</td>
@@ -1049,7 +1148,8 @@ function buildMonthlyTable(tdata, showLastYear = false) {
 
   const totalCells = MONTH_ABBR.map((_, i) => {
     const v = (territoryMonths || {})[String(i + 1)] || 0;
-    return `<td class="num"><strong>${v > 0 ? fmt(v, sym) : ""}</strong></td>`;
+    const c = territoryCounts ? (territoryCounts[String(i + 1)] || 0) : 0;
+    return `<td class="num"><strong>${v > 0 ? fmt(v, sym) : ""}</strong>${showWritten && c > 0 ? `<span class="written-count">${fmtCount(c)} pl</span>` : ""}</td>`;
   }).join("");
 
   const tYoy    = territoryCompare > 0
@@ -1062,7 +1162,7 @@ function buildMonthlyTable(tdata, showLastYear = false) {
       <tr class="territory-total-row">
         <td colspan="2"><strong>Territory Total</strong></td>
         ${totalCells}
-        <td class="num"><strong>${fmt(territoryTotal, sym)}</strong></td>
+        <td class="num"><strong>${fmt(territoryTotal, sym)}</strong>${showWritten && territoryCountTotal > 0 ? `<span class="written-count">${fmtCount(territoryCountTotal)} pl</span>` : ""}</td>
         <td class="num${tVsTgtCls}"><strong>${tVsTgt !== null ? fmtDelta(tVsTgt, sym) : "—"}</strong></td>
         <td class="num${tTgtPctCls}"><strong>${tTgtPct !== null ? fmtPct(tTgtPct) : "—"}</strong></td>
         <td class="num dim"><strong>${territoryCompare > 0 ? fmt(territoryCompare, sym) : "—"}</strong></td>
@@ -1159,6 +1259,11 @@ function showPlacementModal(consultantName, month, year, placements, sym) {
 function fmt(n, sym) {
   if (!n || n === 0) return "";
   return sym + Math.round(n).toLocaleString("en-GB");
+}
+
+function fmtCount(n) {
+  const r = Math.round(n * 10) / 10;
+  return r % 1 === 0 ? String(r) : r.toFixed(1);
 }
 
 function fmtDelta(n, sym) {

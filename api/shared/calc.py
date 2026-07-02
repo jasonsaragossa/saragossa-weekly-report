@@ -265,6 +265,67 @@ def compute_monthly_breakdown(
     return {str(k): round(v, 2) for k, v in months.items()}
 
 
+_PERM_TYPE_CODE      = 143570000
+_CONTRACT_TYPE_CODES = {143570001, 143570002}   # Contract, Temporary
+
+
+def _is_extension(p: dict) -> bool:
+    """Extension record: parent placement set, extension counter > 0, or a
+    non-'00' middle segment in the placement id code (e.g. 004701/01/00)."""
+    if p.get("_mercury_parentplacementid_value"):
+        return True
+    if (p.get("crimson_extension") or 0) > 0:
+        return True
+    parts = (p.get("crimson_placementidcode") or "").split("/")
+    return len(parts) >= 2 and parts[1] != "00"
+
+
+def compute_written_months(
+    uid: str, placements: list, display_ccy: str, year: int,
+    to_gbp: dict = None, to_usd: dict = None, contract_mode: bool = False,
+    after_date: date = None, before_date: date = None,
+) -> dict:
+    """
+    "Written" view — bucketed by the month the placement record was CREATED.
+    Returns {"months": {"1": gp, ...}, "counts": {"1": n, ...}} where GP uses
+    the standard ownership split and the placement count credits 0.5 to the
+    Consultant and 0.5 to the AO. contract_mode looks at contract/temp records
+    only and excludes extensions (initial contracts, full-contract GP);
+    otherwise permanent placements only.
+    """
+    fx = (to_gbp or TO_GBP) if display_ccy == "GBP" else (to_usd or TO_USD)
+    months = {str(m): 0.0 for m in range(1, 13)}
+    counts = {str(m): 0.0 for m in range(1, 13)}
+    for p in (placements or []):
+        ptype = p.get("crimson_type")
+        if contract_mode:
+            if ptype not in _CONTRACT_TYPE_CODES or _is_extension(p):
+                continue
+        elif ptype != _PERM_TYPE_CODE:
+            continue
+        try:
+            d = parse_date(p.get("createdon") or "")
+        except Exception:
+            continue
+        if d.year != year:
+            continue
+        if after_date and d < after_date:
+            continue
+        if before_date and d >= before_date:
+            continue
+        m_str = str(d.month)
+        count = (0.5 if p.get("_crimson_consultant_value") == uid else 0.0) \
+              + (0.5 if p.get("_mercury_assignmentowner_value") == uid else 0.0)
+        if count > 0:
+            counts[m_str] = round(counts[m_str] + count, 1)
+        factor = split_factor(p, uid)
+        if factor > 0:
+            gp  = p.get("recruit_truegrossprofit") or 0.0
+            ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode")
+            months[m_str] = round(months[m_str] + gp * factor * fx.get(ccy, 1.0), 2)
+    return {"months": months, "counts": counts}
+
+
 def compute_written_by_created(
     uid: str, placements: list, display_ccy: str, year: int,
     created_cutoff: date, to_gbp: dict = None, to_usd: dict = None,
@@ -481,10 +542,13 @@ def build_admin_report(
     budgets: list = None,
     fx_rates: dict = None,
     bob_titles: dict = None,
+    created_this: list = None,
+    created_last: list = None,
 ) -> dict:
     """
     Builds the admin analytics report: monthly breakdown per consultant,
     territory totals, YoY comparison, and budget figures.
+    created_this/created_last power the "Written" view (bucketed by createdon).
     """
     year = today.year
     to_gbp, to_usd = _build_fx_tables(fx_rates) if fx_rates else (TO_GBP, TO_USD)
@@ -522,6 +586,24 @@ def build_admin_report(
 
     from collections import defaultdict
     by_territory = defaultdict(list)
+
+    _WRITTEN_CONTRACT_TERRITORIES = {"London Contract", "Chicago Contract"}
+
+    def _written_fields(uid, terr, ccy, after_date=None, before_date=None):
+        """Member fields for the Written view (created-in-month basis)."""
+        cmode  = terr in _WRITTEN_CONTRACT_TERRITORIES
+        w_this = compute_written_months(uid, created_this, ccy, year,     to_gbp, to_usd, cmode, after_date, before_date)
+        w_last = compute_written_months(uid, created_last, ccy, year - 1, to_gbp, to_usd, cmode, after_date, before_date)
+        return {
+            "written_months":           w_this["months"],
+            "written_counts":           w_this["counts"],
+            "written_total":            round(sum(w_this["months"].values()), 2),
+            "written_count_total":      round(sum(w_this["counts"].values()), 1),
+            "written_last_months":      w_last["months"],
+            "written_last_counts":      w_last["counts"],
+            "written_last_total":       round(sum(w_last["months"].values()), 2),
+            "written_last_count_total": round(sum(w_last["counts"].values()), 1),
+        }
 
     for c in consultants:
         uid       = c["systemuserid"]
@@ -573,6 +655,7 @@ def build_admin_report(
                     "target":           round(float(ov["crbb7_target"]), 2) if ov.get("crbb7_target") is not None else None,
                     "placements":       _consultant_placement_details(uid, placements_this, ccy, year,     to_gbp, to_usd, after_date=move_date),
                     "last_placements":  _consultant_placement_details(uid, placements_last, ccy, year - 1, to_gbp, to_usd, after_date=move_date),
+                    **_written_fields(uid, territory, ccy, after_date=move_date),
                 })
 
             # ── Previous territory: placements before move_date ──────────────
@@ -600,6 +683,7 @@ def build_admin_report(
                     "target":           round(float(ov["crbb7_target"]), 2) if ov.get("crbb7_target") is not None else None,
                     "placements":       _consultant_placement_details(uid, placements_this, prev_ccy, year,     to_gbp, to_usd, before_date=move_date),
                     "last_placements":  _consultant_placement_details(uid, placements_last, prev_ccy, year - 1, to_gbp, to_usd, before_date=move_date),
+                    **_written_fields(uid, prev_territory, prev_ccy, before_date=move_date),
                 })
         else:
             # ── No move — use all placements ─────────────────────────────────
@@ -628,6 +712,7 @@ def build_admin_report(
                 "target":           round(float(ov["crbb7_target"]), 2) if ov.get("crbb7_target") is not None else None,
                 "placements":       _consultant_placement_details(uid, placements_this, ccy, year,     to_gbp, to_usd),
                 "last_placements":  _consultant_placement_details(uid, placements_last, ccy, year - 1, to_gbp, to_usd),
+                **_written_fields(uid, territory, ccy),
             })
 
     report = {}
@@ -641,11 +726,23 @@ def build_admin_report(
         t_last_months = {str(m): 0.0 for m in range(1, 13)}
         t_last        = 0.0
         t_last_ytd    = 0.0
+        t_w_months      = {str(m): 0.0 for m in range(1, 13)}
+        t_w_counts      = {str(m): 0.0 for m in range(1, 13)}
+        t_w_last_months = {str(m): 0.0 for m in range(1, 13)}
+        t_w_last_counts = {str(m): 0.0 for m in range(1, 13)}
         for member in members:
             for m_str, v in member["months"].items():
                 t_months[m_str] = round(t_months[m_str] + v, 2)
             for m_str, v in member.get("last_year_months", {}).items():
                 t_last_months[m_str] = round(t_last_months[m_str] + v, 2)
+            for m_str, v in member.get("written_months", {}).items():
+                t_w_months[m_str] = round(t_w_months[m_str] + v, 2)
+            for m_str, v in member.get("written_counts", {}).items():
+                t_w_counts[m_str] = round(t_w_counts[m_str] + v, 1)
+            for m_str, v in member.get("written_last_months", {}).items():
+                t_w_last_months[m_str] = round(t_w_last_months[m_str] + v, 2)
+            for m_str, v in member.get("written_last_counts", {}).items():
+                t_w_last_counts[m_str] = round(t_w_last_counts[m_str] + v, 1)
             t_last     += member.get("last_year_total", 0)
             t_last_ytd += member.get("last_year_ytd", 0)
         t_total = sum(t_months.values())
@@ -674,6 +771,14 @@ def build_admin_report(
             "territory_total":          round(t_total, 2),
             "territory_last_year":      round(t_last, 2),
             "territory_last_year_ytd":  round(t_last_ytd, 2),
+            "territory_written_months":           t_w_months,
+            "territory_written_counts":           t_w_counts,
+            "territory_written_total":            round(sum(t_w_months.values()), 2),
+            "territory_written_count_total":      round(sum(t_w_counts.values()), 1),
+            "territory_written_last_months":      t_w_last_months,
+            "territory_written_last_counts":      t_w_last_counts,
+            "territory_written_last_total":       round(sum(t_w_last_months.values()), 2),
+            "territory_written_last_count_total": round(sum(t_w_last_counts.values()), 1),
             "budget":                   budget_map.get(territory, {"months": {}, "total": 0.0}),
         })
         report[territory] = result

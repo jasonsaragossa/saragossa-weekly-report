@@ -359,6 +359,37 @@ def get_contract_placements(start_date: str, end_date: str) -> list[dict]:
     )
 
 
+def get_placements_created_in_year(year: int) -> list[dict]:
+    """
+    All placements (any type) CREATED in the given calendar year — the basis
+    for the "Written" monthly view. Includes extension markers so initial
+    contracts can be told apart from extensions.
+    """
+    cancel_filter = " and ".join(f"statuscode ne {c}" for c in CANCEL_CODES)
+    return odata_get_all(
+        "crimson_placements",
+        params={
+            "$select": (
+                "crimson_placementid,crimson_type,createdon,"
+                "recruit_truegrossprofit,"
+                "crimson_extension,crimson_placementidcode,"
+                "_mercury_parentplacementid_value,"
+                "_mercury_clientrelationshipowner_value,"
+                "_crimson_consultant_value,"
+                "_mercury_assignmentowner_value,"
+                "_mercury_contractorrelationship_userid_value"
+            ),
+            "$filter": (
+                f"statecode eq 0"
+                f" and createdon ge {year}-01-01T00:00:00Z"
+                f" and createdon lt {year + 1}-01-01T00:00:00Z"
+                f" and {cancel_filter}"
+            ),
+            "$expand": "recruit_truegrossprofitcurrency($select=isocurrencycode)",
+        },
+    )
+
+
 # ── FX rates ─────────────────────────────────────────────────────────────────
 
 def get_fx_rates() -> dict:

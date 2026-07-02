@@ -16,7 +16,7 @@ from shared.auth import require_auth, require_admin
 from shared.dataverse import (
     get_active_consultants, get_placements, get_contract_placements, get_overrides,
     get_team_membership_map, get_live_contract_placements, get_fx_rates,
-    get_placements_full_year, get_budgets, upsert_monthly_budgets,
+    get_placements_full_year, get_placements_created_in_year, get_budgets, upsert_monthly_budgets,
     get_all_territory_consultants, get_all_active_users, get_finance_team_members,
     upsert_override, delete_override, is_guid, TERRITORY_IDS,
     get_nb_thresholds, upsert_nb_thresholds,
@@ -378,6 +378,8 @@ def analytics_report(req: func.HttpRequest) -> func.HttpResponse:
         team_map         = get_team_membership_map()
         placements_this  = get_placements_full_year(year)
         placements_last  = get_placements_full_year(year - 1)
+        created_this     = get_placements_created_in_year(year)
+        created_last     = get_placements_created_in_year(year - 1)
         budgets          = get_budgets()
 
         try:
@@ -408,6 +410,7 @@ def analytics_report(req: func.HttpRequest) -> func.HttpResponse:
             overrides, today,
             team_map=team_map, budgets=budgets, fx_rates=fx_rates,
             bob_titles=bob_titles,
+            created_this=created_this, created_last=created_last,
         )
 
         return func.HttpResponse(
