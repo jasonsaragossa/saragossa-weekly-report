@@ -657,6 +657,43 @@ def upsert_nb_alert_state(uid: str, client_ids: set, rowid: str = None) -> None:
         odata_post("crbb7_nbalerts", body)
 
 
+def delete_nb_alert_state(rowid: str) -> None:
+    odata_delete(f"crbb7_nbalerts({rowid})")
+
+
+def get_nb_clients_for_cro(uid: str, start_date: str, end_date: str) -> dict:
+    """
+    {client_id: name} — new-business clients won as CRO in the window, any
+    placement type. Mirrors the client-counting rules in compute_metrics.
+    `uid` must be a validated GUID.
+    """
+    cancel_filter = " and ".join(f"statuscode ne {c}" for c in CANCEL_CODES)
+    rows = odata_get_all(
+        "crimson_placements",
+        params={
+            "$select": (
+                "crimson_placementid,crimson_startdate,"
+                "crimson_specialinstructionsclient,_crimson_clientname_value"
+            ),
+            "$filter": (
+                f"_mercury_clientrelationshipowner_value eq '{uid}'"
+                f" and statecode eq 0"
+                f" and crimson_startdate ge {start_date}"
+                f" and crimson_startdate le {end_date}"
+                f" and {cancel_filter}"
+            ),
+            "$expand": "crimson_clientname($select=name)",
+        },
+    )
+    out = {}
+    for p in rows:
+        if "new business" in (p.get("crimson_specialinstructionsclient") or "").lower():
+            cid = p.get("_crimson_clientname_value")
+            if cid:
+                out[cid] = (p.get("crimson_clientname") or {}).get("name") or "(unknown client)"
+    return out
+
+
 # ── Manual NB-client additions (crbb7_nbclient) ───────────────────────────────
 
 def get_manual_nb_clients() -> dict:

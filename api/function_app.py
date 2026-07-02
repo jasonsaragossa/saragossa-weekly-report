@@ -21,6 +21,7 @@ from shared.dataverse import (
     upsert_override, delete_override, is_guid, TERRITORY_IDS,
     get_nb_thresholds, upsert_nb_thresholds,
     get_manual_nb_clients, add_manual_nb_client, remove_manual_nb_client, search_accounts,
+    get_nb_clients_for_cro, get_nb_alert_state, upsert_nb_alert_state, delete_nb_alert_state,
 )
 from shared.calc import build_report, build_admin_report
 
@@ -214,6 +215,86 @@ def nb_clients_delete(req: func.HttpRequest) -> func.HttpResponse:
         )
     except Exception:
         logging.exception("nb-clients DELETE error")
+        return _server_error()
+
+
+# ── /api/nb-alert-clients — per-consultant alert credit management ─────────────
+# GET  ?uid=…  → their rolling NB clients with consumed (already-alerted) flags
+# POST {userid, consumed_client_ids} → mark clients as counted by a past alert
+
+def _nb_rolling_window():
+    """Same rolling-12-month window compute_metrics uses."""
+    today = date.today()
+    start = date(today.year - 1, today.month, today.day + 1 if today.day < 28 else today.day)
+    return start.isoformat(), today.isoformat()
+
+
+def _nb_current_clients(uid: str) -> dict:
+    """{client_id: name} for a consultant — placements as CRO + manual additions."""
+    start, end = _nb_rolling_window()
+    clients = get_nb_clients_for_cro(uid, start, end)
+    for c in get_manual_nb_clients().get(uid, []):
+        if c.get("id"):
+            clients[c["id"]] = c.get("name") or "(client)"
+    return clients
+
+
+@app.route(route="nb-alert-clients", methods=["GET"])
+def nb_alert_clients_get(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_admin(req)
+    if err:
+        return err
+    uid = req.params.get("uid")
+    if not uid or not is_guid(uid):
+        return func.HttpResponse(
+            json.dumps({"ok": False, "error": "valid uid required"}),
+            mimetype="application/json", status_code=400,
+        )
+    try:
+        clients  = _nb_current_clients(uid)
+        state    = get_nb_alert_state().get(uid)
+        consumed = state["client_ids"] if state else set()
+        out = [{"id": cid, "name": name, "consumed": cid in consumed}
+               for cid, name in sorted(clients.items(), key=lambda kv: kv[1].lower())]
+        return func.HttpResponse(
+            json.dumps({"ok": True, "clients": out}),
+            mimetype="application/json", status_code=200,
+        )
+    except Exception:
+        logging.exception("nb-alert-clients GET error")
+        return _server_error()
+
+
+@app.route(route="nb-alert-clients", methods=["POST"])
+def nb_alert_clients_post(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_admin(req)
+    if err:
+        return err
+    try:
+        body = req.get_json() or {}
+        uid  = body.get("userid")
+        if not uid or not is_guid(uid):
+            return func.HttpResponse(
+                json.dumps({"ok": False, "error": "valid userid required"}),
+                mimetype="application/json", status_code=400,
+            )
+        posted  = {c for c in (body.get("consumed_client_ids") or []) if c}
+        clients = _nb_current_clients(uid)
+        state   = get_nb_alert_state().get(uid)
+        existing = state["client_ids"] if state else set()
+        # Keep consumed ids that have aged out of the window; only edit current ones
+        preserved    = existing - set(clients.keys())
+        new_consumed = preserved | (posted & set(clients.keys()))
+        if new_consumed:
+            upsert_nb_alert_state(uid, new_consumed, state["rowid"] if state else None)
+        elif state:
+            delete_nb_alert_state(state["rowid"])
+        return func.HttpResponse(
+            json.dumps({"ok": True}),
+            mimetype="application/json", status_code=200,
+        )
+    except Exception:
+        logging.exception("nb-alert-clients POST error")
         return _server_error()
 
 

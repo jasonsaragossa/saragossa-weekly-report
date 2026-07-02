@@ -216,7 +216,8 @@ function buildNbClientSection() {
       <button class="save-btn" id="nbclient-searchbtn">Search</button>
       <select class="team-select" id="nbclient-results"><option value="">— search results —</option></select>
       <button class="save-btn" id="nbclient-addbtn">Add client</button>
-    </div>` : ""}
+    </div>
+    <div id="nbclient-alertstate"><p class="access-empty">Loading NB clients…</p></div>` : ""}
   `;
 
   section.querySelector("#nbclient-consultant").addEventListener("change", (e) => {
@@ -271,7 +272,61 @@ function buildNbClientSection() {
     } catch (e) { alert("Could not remove: " + e.message); btn.disabled = false; }
   }));
 
+  if (nbSelectedUid) loadNbAlertState(section);
+
   return section;
+}
+
+async function loadNbAlertState(section) {
+  const box = section.querySelector("#nbclient-alertstate");
+  if (!box) return;
+  try {
+    const resp = await fetch("/api/nb-alert-clients?uid=" + encodeURIComponent(nbSelectedUid));
+    const data = await resp.json();
+    if (!data.ok) { box.innerHTML = `<p class="access-empty">Could not load alert status.</p>`; return; }
+    const clients = data.clients || [];
+    if (!clients.length) {
+      box.innerHTML = `<p class="access-empty">No NB clients in the rolling 12 months.</p>`;
+      return;
+    }
+    box.innerHTML = `
+      <h3 class="access-subhead">Alert status — already counted</h3>
+      <p class="settings-desc">Tick any client that was part of a previous 5-client alert (or recognised before
+        the alerts existed). Ticked clients don't count toward the consultant's next alert.</p>
+      <ul class="access-list">` + clients.map(c => `
+        <li class="access-row"><span>${esc(c.name)}</span>
+          <label class="toggle">
+            <input type="checkbox" class="nbalert-consumed" data-id="${esc(c.id)}" ${c.consumed ? "checked" : ""}>
+            <span class="toggle-label">Already counted</span>
+          </label></li>`).join("") + `
+      </ul>
+      <button class="save-btn" id="nbalert-save">Save alert status</button>`;
+    box.querySelector("#nbalert-save").addEventListener("click", async (e) => {
+      const btn = e.currentTarget;
+      const ids = [...box.querySelectorAll(".nbalert-consumed:checked")].map(cb => cb.dataset.id);
+      btn.textContent = "Saving…"; btn.disabled = true;
+      try {
+        const r2 = await fetch("/api/nb-alert-clients", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userid: nbSelectedUid, consumed_client_ids: ids }),
+        });
+        const d2 = await r2.json();
+        if (d2.ok) {
+          btn.textContent = "Saved ✓";
+          setTimeout(() => { btn.textContent = "Save alert status"; btn.disabled = false; }, 2000);
+        } else {
+          alert("Could not save: " + (d2.error || "unknown error"));
+          btn.textContent = "Save alert status"; btn.disabled = false;
+        }
+      } catch (err) {
+        alert("Could not save: " + err.message);
+        btn.textContent = "Save alert status"; btn.disabled = false;
+      }
+    });
+  } catch (_) {
+    box.innerHTML = `<p class="access-empty">Could not load alert status.</p>`;
+  }
 }
 
 
