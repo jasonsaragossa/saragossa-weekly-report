@@ -171,6 +171,7 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
         "roll12_total": round(roll12_base + roll12_uplift, 2),
         "nb_clients":   len(nb_clients),
         "nb_client_names": sorted(nb_clients.values()),
+        "nb_client_map": nb_clients,   # id -> name; used by the alert job to track new clients
     }
 
 

@@ -621,24 +621,40 @@ def upsert_nb_thresholds(values: dict) -> None:
         odata_post("crbb7_nbconfigs", body)
 
 
-# ── NB-client alert state (crbb7_nbalert: one row per currently-alerted user) ──
+# ── NB-client alert state (crbb7_nbalert: one row per user, recording the
+#    client ids already "consumed" by previous alerts — the next alert only
+#    fires once they have 5 clients not in this set) ───────────────────────────
 
-def get_nb_alerted_uids() -> set:
-    rows = odata_get_all("crbb7_nbalerts", params={"$select": "crbb7_userid"})
-    return {r.get("crbb7_userid") for r in rows if r.get("crbb7_userid")}
-
-
-def add_nb_alerted(uid: str) -> None:
-    odata_post("crbb7_nbalerts", {"crbb7_userid": uid, "crbb7_name": uid})
-
-
-def remove_nb_alerted(uid: str) -> None:
+def get_nb_alert_state() -> dict:
+    """{ uid: {"rowid": guid, "client_ids": set} } from previous alerts."""
     rows = odata_get_all(
         "crbb7_nbalerts",
-        params={"$select": "crbb7_nbalertid", "$filter": f"crbb7_userid eq '{odata_str(uid)}'"},
+        params={"$select": "crbb7_nbalertid,crbb7_userid,crbb7_clientids"},
     )
+    out = {}
     for r in rows:
-        odata_delete(f"crbb7_nbalerts({r['crbb7_nbalertid']})")
+        uid = r.get("crbb7_userid")
+        if not uid:
+            continue
+        raw = r.get("crbb7_clientids") or ""
+        out[uid] = {
+            "rowid":      r["crbb7_nbalertid"],
+            "client_ids": {c for c in raw.split(",") if c},
+        }
+    return out
+
+
+def upsert_nb_alert_state(uid: str, client_ids: set, rowid: str = None) -> None:
+    """Persists the full set of client ids consumed by alerts for this user."""
+    body = {
+        "crbb7_userid":    uid,
+        "crbb7_name":      uid,
+        "crbb7_clientids": ",".join(sorted(client_ids)),
+    }
+    if rowid:
+        odata_patch(f"crbb7_nbalerts({rowid})", body)
+    else:
+        odata_post("crbb7_nbalerts", body)
 
 
 # ── Manual NB-client additions (crbb7_nbclient) ───────────────────────────────
