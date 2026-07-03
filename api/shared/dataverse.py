@@ -371,6 +371,7 @@ def get_placements_created_in_year(year: int) -> list[dict]:
         params={
             "$select": (
                 "crimson_placementid,crimson_type,createdon,"
+                "crimson_name,crimson_startdate,"
                 "recruit_truegrossprofit,"
                 "crimson_extension,crimson_placementidcode,"
                 "_mercury_parentplacementid_value,"
@@ -385,7 +386,10 @@ def get_placements_created_in_year(year: int) -> list[dict]:
                 f" and createdon lt {year + 1}-01-01T00:00:00Z"
                 f" and {cancel_filter}"
             ),
-            "$expand": "recruit_truegrossprofitcurrency($select=isocurrencycode)",
+            "$expand": (
+                "recruit_truegrossprofitcurrency($select=isocurrencycode),"
+                "crimson_clientname($select=name)"
+            ),
         },
     )
 

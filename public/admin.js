@@ -926,7 +926,7 @@ function buildOverallTable(showLastYear = false, showWritten = false) {
         if (showWritten) {
           const c = (mCounts || {})[String(i + 1)] || 0;
           if (v <= 0 && c <= 0) return `<td class="num"></td>`;
-          return `<td class="num">${v > 0 ? fmt(v, mSym) : ""}${c > 0 ? `<span class="written-count">${fmtCount(c)} pl</span>` : ""}</td>`;
+          return `<td class="num clickable-cell" data-uid="${m.uid}" data-month="${i+1}" data-lastyear="${showLastYear?1:0}" data-written="1">${v > 0 ? fmt(v, mSym) : ""}${c > 0 ? `<span class="written-count">${fmtCount(c)} pl</span>` : ""}</td>`;
         }
         if (v > 0) {
           return `<td class="num clickable-cell" data-uid="${m.uid}" data-month="${i+1}" data-lastyear="${showLastYear?1:0}">${fmt(v, mSym)}</td>`;
@@ -1003,15 +1003,18 @@ function buildOverallTable(showLastYear = false, showWritten = false) {
   // Attach click handlers for the overall table
   wrap.querySelectorAll(".clickable-cell").forEach(td => {
     td.addEventListener("click", () => {
-      const uid    = td.dataset.uid;
-      const month  = parseInt(td.dataset.month);
-      const isLast = td.dataset.lastyear === "1";
+      const uid       = td.dataset.uid;
+      const month     = parseInt(td.dataset.month);
+      const isLast    = td.dataset.lastyear === "1";
+      const isWritten = td.dataset.written === "1";
       const entry  = overallMemberLookup[uid];
       if (!entry) return;
       const { member, sym: tSym } = entry;
-      const pls = ((isLast ? member.last_placements : member.placements) || [])
-        .filter(p => p.month === month);
-      showPlacementModal(member.name, month, isLast ? currentYear - 1 : currentYear, pls, member.sym || tSym);
+      const src = isWritten
+        ? (isLast ? member.written_last_placements : member.written_placements)
+        : (isLast ? member.last_placements : member.placements);
+      const pls = (src || []).filter(p => p.month === month);
+      showPlacementModal(member.name, month, isLast ? currentYear - 1 : currentYear, pls, member.sym || tSym, isWritten ? "written" : "");
     });
   });
 
@@ -1099,7 +1102,7 @@ function buildMonthlyTable(tdata, showLastYear = false, showWritten = false) {
         if (showWritten) {
           const c = (mCounts || {})[String(i + 1)] || 0;
           if (v <= 0 && c <= 0) return `<td class="num"></td>`;
-          return `<td class="num">${v > 0 ? fmt(v, mSym) : ""}${c > 0 ? `<span class="written-count">${fmtCount(c)} pl</span>` : ""}</td>`;
+          return `<td class="num clickable-cell" data-uid="${m.uid}" data-month="${i+1}" data-lastyear="${showLastYear?1:0}" data-written="1">${v > 0 ? fmt(v, mSym) : ""}${c > 0 ? `<span class="written-count">${fmtCount(c)} pl</span>` : ""}</td>`;
         }
         if (v > 0) {
           return `<td class="num clickable-cell" data-uid="${m.uid}" data-month="${i+1}" data-lastyear="${showLastYear?1:0}">${fmt(v, mSym)}</td>`;
@@ -1178,14 +1181,17 @@ function buildMonthlyTable(tdata, showLastYear = false, showWritten = false) {
   // Attach click handlers to non-zero month cells
   wrap.querySelectorAll(".clickable-cell").forEach(td => {
     td.addEventListener("click", () => {
-      const uid      = td.dataset.uid;
-      const month    = parseInt(td.dataset.month);
-      const isLast   = td.dataset.lastyear === "1";
-      const member   = memberLookup[uid];
+      const uid       = td.dataset.uid;
+      const month     = parseInt(td.dataset.month);
+      const isLast    = td.dataset.lastyear === "1";
+      const isWritten = td.dataset.written === "1";
+      const member    = memberLookup[uid];
       if (!member) return;
-      const pls = ((isLast ? member.last_placements : member.placements) || [])
-        .filter(p => p.month === month);
-      showPlacementModal(member.name, month, isLast ? currentYear - 1 : currentYear, pls, member.sym || sym);
+      const src = isWritten
+        ? (isLast ? member.written_last_placements : member.written_placements)
+        : (isLast ? member.last_placements : member.placements);
+      const pls = (src || []).filter(p => p.month === month);
+      showPlacementModal(member.name, month, isLast ? currentYear - 1 : currentYear, pls, member.sym || sym, isWritten ? "written" : "");
     });
   });
 
@@ -1195,7 +1201,7 @@ function buildMonthlyTable(tdata, showLastYear = false, showWritten = false) {
 
 // ── Placement drilldown modal ─────────────────────────────────────────────────
 
-function showPlacementModal(consultantName, month, year, placements, sym) {
+function showPlacementModal(consultantName, month, year, placements, sym, label = "") {
   // Create modal DOM once and reuse
   let modal = document.getElementById("placement-modal");
   if (!modal) {
@@ -1217,7 +1223,7 @@ function showPlacementModal(consultantName, month, year, placements, sym) {
   }
 
   document.getElementById("modal-title").textContent =
-    `${consultantName} — ${MONTH_ABBR[month - 1]} ${year}`;
+    `${consultantName} — ${MONTH_ABBR[month - 1]} ${year}${label ? ` · ${label}` : ""}`;
 
   const body = document.getElementById("modal-body");
 

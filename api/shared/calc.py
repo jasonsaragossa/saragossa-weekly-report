@@ -326,6 +326,53 @@ def compute_written_months(
     return {"months": months, "counts": counts}
 
 
+def _written_placement_details(
+    uid: str, placements: list, display_ccy: str, year: int,
+    to_gbp: dict = None, to_usd: dict = None, contract_mode: bool = False,
+    after_date: date = None, before_date: date = None,
+) -> list:
+    """
+    Per-placement drilldown for the Written view — bucketed by CREATED month.
+    Same entry shape as _consultant_placement_details so the modal is shared.
+    """
+    fx = (to_gbp or TO_GBP) if display_ccy == "GBP" else (to_usd or TO_USD)
+    details = []
+    for p in (placements or []):
+        ptype = p.get("crimson_type")
+        if contract_mode:
+            if ptype not in _CONTRACT_TYPE_CODES or _is_extension(p):
+                continue
+        elif ptype != _PERM_TYPE_CODE:
+            continue
+        factor = split_factor(p, uid)
+        if factor == 0:
+            continue
+        try:
+            d = parse_date(p.get("createdon") or "")
+        except Exception:
+            continue
+        if d.year != year:
+            continue
+        if after_date and d < after_date:
+            continue
+        if before_date and d >= before_date:
+            continue
+        gp    = p.get("recruit_truegrossprofit") or 0.0
+        p_ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode", display_ccy)
+        rate  = fx.get(p_ccy, 1.0)
+        details.append({
+            "month":      d.month,
+            "title":      p.get("crimson_name") or "",
+            "client":     (p.get("crimson_clientname") or {}).get("name") or "",
+            "own_fee":    round(gp * factor * rate, 2),
+            "full_fee":   round(gp * rate, 2),
+            "currency":   p_ccy,
+            "start_date": (p.get("crimson_startdate") or "")[:10],
+        })
+    details.sort(key=lambda x: x["start_date"])
+    return details
+
+
 def compute_written_by_created(
     uid: str, placements: list, display_ccy: str, year: int,
     created_cutoff: date, to_gbp: dict = None, to_usd: dict = None,
@@ -603,6 +650,8 @@ def build_admin_report(
             "written_last_counts":      w_last["counts"],
             "written_last_total":       round(sum(w_last["months"].values()), 2),
             "written_last_count_total": round(sum(w_last["counts"].values()), 1),
+            "written_placements":       _written_placement_details(uid, created_this, ccy, year,     to_gbp, to_usd, cmode, after_date, before_date),
+            "written_last_placements":  _written_placement_details(uid, created_last, ccy, year - 1, to_gbp, to_usd, cmode, after_date, before_date),
         }
 
     for c in consultants:
