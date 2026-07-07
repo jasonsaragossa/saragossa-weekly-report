@@ -119,7 +119,8 @@ def get_active_consultants() -> list[dict]:
 # Users with no territory in Mercury that we inject into the analytics.
 # Key = systemuserid, value = territory name (must exist in TERRITORY_IDS).
 _UNASSIGNED_HOUSE_USERS = {
-    "cf6f0d98-2a7a-ee11-8179-002248c7244c": "Bristol",        # Saragossa House (generic)
+    # NB: the generic "Saragossa House" user (cf6f0d98-…) is deliberately NOT
+    # tracked — its placements (e.g. house-owned retainers) belong in "Other".
     "b835f278-3264-ee11-8def-6045bd0c1d6a": "Cameron Scott",  # Director of Solution Sales
 }
 
