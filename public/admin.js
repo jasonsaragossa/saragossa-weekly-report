@@ -294,6 +294,9 @@ function buildSummarySection() {
   const tbody = document.createElement("tbody");
   const territories = reportData.territories;
 
+  // Overall vs-Budget counts ONLY budgeted territories, so the column foots
+  let gBudgetedYtdGbp = 0;
+
   for (const territory of TERRITORY_ORDER) {
     const tdata = territories[territory];
     if (!tdata) continue;
@@ -313,6 +316,9 @@ function buildSummarySection() {
     for (let m = 1; m <= currentMonth; m++) {
       ytd        += months[String(m)]     || 0;
       ytdBudget  += budgetMths[String(m)] || 0;
+    }
+    if (ytdBudget > 0) {
+      gBudgetedYtdGbp += ytd * (SUMMARY_USD_TERRITORIES.has(territory) ? usdToGbp : 1);
     }
 
     const fullYear     = tdata.territory_total;
@@ -377,13 +383,13 @@ function buildSummarySection() {
   const gLastYear    = reportData.grand_total_last_gbp     || 0;
   const gLastYearYtd = reportData.grand_total_last_ytd_gbp || 0;
 
-  let gYtd = 0, gYtdBudget = 0;
+  let gYtdBudget = 0;
   for (let m = 1; m <= currentMonth; m++) {
-    gYtd       += gMonthly[String(m)]     || 0;
     gYtdBudget += gBudgetMths[String(m)]  || 0;
   }
 
-  const gVsBudget   = gYtdBudget > 0 ? gYtd - gYtdBudget : null;
+  // Budgeted territories only — unbudgeted written doesn't flatter the variance
+  const gVsBudget   = gYtdBudget > 0 ? gBudgetedYtdGbp - gYtdBudget : null;
   const gYtdYoyPct  = gLastYearYtd > 0 ? (gFullYear - gLastYearYtd) / gLastYearYtd * 100 : null;
   const gFullYoyPct = gLastYear > 0  ? (gFullYear - gLastYear) / gLastYear * 100 : null;
 
