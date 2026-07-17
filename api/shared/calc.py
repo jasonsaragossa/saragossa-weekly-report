@@ -185,8 +185,9 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
 def contract_manual_metrics(user_entries: dict, today: date) -> dict:
     """
     Weekly-report contract figures from the manual monthly ledger
-    ({"YYYY-M": amount}). Windows include the current (partial) month:
-    YTD = Jan..now, last 12M / rolling 3M = trailing windows ending now.
+    ({"YYYY-M": amount}). Contract data is always a month behind, so every
+    window ends at the PREVIOUS month: YTD = Jan..last month, last 12M /
+    rolling 3M = trailing windows ending last month.
     """
     def month_key(offset):
         y, m = today.year, today.month - offset
@@ -194,9 +195,9 @@ def contract_manual_metrics(user_entries: dict, today: date) -> dict:
             y, m = y - 1, m + 12
         return f"{y}-{m}"
     ytd = sum(v for k, v in user_entries.items()
-              if k.startswith(f"{today.year}-") and int(k.split("-")[1]) <= today.month)
-    l12 = sum(user_entries.get(month_key(o), 0) for o in range(12))
-    r3  = sum(user_entries.get(month_key(o), 0) for o in range(3))
+              if k.startswith(f"{today.year}-") and int(k.split("-")[1]) < today.month)
+    l12 = sum(user_entries.get(month_key(o), 0) for o in range(1, 13))
+    r3  = sum(user_entries.get(month_key(o), 0) for o in range(1, 4))
     return {
         "margin_ytd":       round(ytd, 2),
         "contract_last12m": round(l12, 2),

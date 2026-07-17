@@ -267,9 +267,10 @@ function hpbSubheading(text) {
 const CONTRACT_ENTRY_TERRITORIES = ["London Contract", "Chicago Contract"];
 
 function contractEntryMonths() {
-  // Rolling last 12 months ending with the current month: [{y, m, label}]
+  // Contract data is always a month behind: rolling 12 months ending with
+  // the PREVIOUS month (in July: Jul 25 → Jun 26). [{y, m, label}]
   const out = [];
-  for (let off = 11; off >= 0; off--) {
+  for (let off = 12; off >= 1; off--) {
     let y = currentYear, m = currentMonth - off;
     while (m <= 0) { y -= 1; m += 12; }
     out.push({ y, m, label: `${MONTH_ABBR[m - 1]} ${String(y).slice(2)}` });
