@@ -101,7 +101,7 @@ function renderSettings() {
       <th>Joined Team</th>
       <th>Prev Team</th>
       <th>Prev Territory</th>
-      ${isContract ? "<th>Total Margin YTD</th><th>Contract Last 12M</th><th>Rolling 3M</th>" : "<th>Annual Target</th>"}
+      ${isContract ? "" : "<th>Annual Target</th>"}
       ${isUsPerm ? "<th>Team Lead</th><th>Job Title (Q1–Q4)</th>" : ""}
       <th></th>
     </tr></thead>`;
@@ -466,18 +466,7 @@ function buildUserRow(u, territory) {
         </select></td>
   `;
 
-  const contractFields = isContract ? `
-    <td><input type="number" class="contract-input contract-figure" data-field="margin_ytd"
-         placeholder="0" step="1"
-         value="${ov.crbb7_marginytd != null ? ov.crbb7_marginytd : ""}"></td>
-    <td><input type="number" class="contract-input contract-figure" data-field="contract_last12m"
-         placeholder="0" step="1"
-         value="${ov.crbb7_contractlast12m != null ? ov.crbb7_contractlast12m : ""}"></td>
-    <td><input type="number" class="contract-input contract-figure" data-field="rolling_3m"
-         placeholder="0" step="1"
-         value="${ov.crbb7_rolling3m != null ? ov.crbb7_rolling3m : ""}"></td>
-  ` : "";
-
+  // Contract figures moved to the Analytics "Contract Entry" monthly ledger
   const targetVal = ov.crbb7_target != null ? ov.crbb7_target : "";
   const sym = (territory === "Chicago" || territory === "New York" || territory === "Chicago Contract") ? "$" : "£";
 
@@ -526,7 +515,6 @@ function buildUserRow(u, territory) {
       </label>
     </td>
     ${historyFields}
-    ${contractFields}
     ${isContract ? "" : `<td>
       <input type="number" class="contract-input target-input" data-field="target"
              placeholder="${sym}0" step="1000" min="0"
