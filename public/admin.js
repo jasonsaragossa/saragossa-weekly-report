@@ -308,7 +308,7 @@ function buildContractEntrySection() {
     wrap.className = "table-wrap";
     const table = document.createElement("table");
     table.className = "monthly-table contract-entry-table";
-    const headCells = monthsCols.map(c => `<th class="num">${c.label}</th>`).join("");
+    const headCells = monthsCols.map(c => `<th class="entry-month-col">${c.label}</th>`).join("");
     table.innerHTML = `<thead><tr><th>Consultant</th>${headCells}
       <th class="num">YTD</th><th class="num">Last 12M</th><th class="num">Rolling 3M</th><th></th></tr></thead>`;
     const tbody = document.createElement("tbody");
@@ -318,7 +318,7 @@ function buildContractEntrySection() {
       const ue = entries[m.uid] || {};
       const inputs = monthsCols.map(c => {
         const v = ue[`${c.y}-${c.m}`];
-        return `<td><input type="number" step="1" class="contract-input entry-month-input"
+        return `<td class="entry-month-col"><input type="number" step="1" class="contract-input entry-month-input"
                  data-year="${c.y}" data-month="${c.m}" value="${v != null ? v : ""}"></td>`;
       }).join("");
       tr.innerHTML = `

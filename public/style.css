@@ -642,9 +642,14 @@ tr.team-header:first-child td { border-top: none; }
 .access-add { display: flex; gap: 8px; align-items: center; max-width: 460px; }
 .access-add .team-select { flex: 1; }
 
-/* Contract entry ledger */
-.contract-entry-table .contract-input { width: 72px; }
-.contract-entry-table td { padding: 6px 4px; }
+/* Contract entry ledger — fixed layout so headers sit over their inputs */
+.contract-entry-table { table-layout: fixed; width: 100%; }
+.contract-entry-table th, .contract-entry-table td { padding: 6px 4px; }
+.contract-entry-table th:first-child { width: 140px; }
+.contract-entry-table .entry-month-col { text-align: center; }
+.contract-entry-table th.num { width: 80px; }
+.contract-entry-table th:last-child { width: 64px; }
+.contract-entry-table .contract-input { width: 100%; box-sizing: border-box; }
 
 /* NB client additions */
 .nbclient-controls { margin-bottom: 12px; max-width: 460px; }
