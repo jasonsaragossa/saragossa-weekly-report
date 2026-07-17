@@ -16,7 +16,7 @@ const TEAMS_BY_TERRITORY = {
   "Chicago":          ["Team JD", "Team Matty", "Team Adam", "Team Adam W"],
   "New York":         [],
   "London Contract":  [],
-  "Chicago Contract": [],
+  "Chicago Contract": ["Team Makenzie", "Team Mike B"],
 };
 
 const FINANCE_TEAM_NAME = "Bristol Finance and Compliance";

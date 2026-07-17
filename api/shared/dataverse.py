@@ -163,6 +163,7 @@ _REPORT_TEAM_NAMES = [
     "Team Batt", "Team Charlie", "Team Sion", "Team Harry W",
     "Team Data & Cyber", "Team Data and Cyber", "Team Snoz",
     "Team JD", "Team Matty", "Team Adam", "Team Adam W",
+    "Team Makenzie", "Team Mike B",
 ]
 
 def get_team_membership_map() -> dict:
