@@ -618,14 +618,16 @@ def get_contract_entries() -> dict:
     try:
         rows = odata_get_all(
             "crbb7_contractentries",
-            params={"$select": "crbb7_userid,crbb7_year,crbb7_month,crbb7_amount"},
+            # NB: crbb7_entryyear, not crbb7_year — the original auto-created
+            # int column is range-capped at 1000 and can't hold a year.
+            params={"$select": "crbb7_userid,crbb7_entryyear,crbb7_month,crbb7_amount"},
         )
     except Exception:
         logging.warning("Could not read crbb7_contractentry — no manual contract data")
         return {}
     out = {}
     for r in rows:
-        uid, y, m = r.get("crbb7_userid"), r.get("crbb7_year"), r.get("crbb7_month")
+        uid, y, m = r.get("crbb7_userid"), r.get("crbb7_entryyear"), r.get("crbb7_month")
         if not uid or not y or not m:
             continue
         out.setdefault(uid, {})[f"{int(y)}-{int(m)}"] = float(r.get("crbb7_amount") or 0)
@@ -639,11 +641,11 @@ def upsert_contract_entries(userid: str, entries: list) -> None:
     existing = odata_get_all(
         "crbb7_contractentries",
         params={
-            "$select": "crbb7_contractentryid,crbb7_year,crbb7_month",
+            "$select": "crbb7_contractentryid,crbb7_entryyear,crbb7_month",
             "$filter": f"crbb7_userid eq '{odata_str(userid)}'",
         },
     )
-    by_key = {(r.get("crbb7_year"), r.get("crbb7_month")): r["crbb7_contractentryid"] for r in existing}
+    by_key = {(r.get("crbb7_entryyear"), r.get("crbb7_month")): r["crbb7_contractentryid"] for r in existing}
     for e in entries:
         year, month = int(e["year"]), int(e["month"])
         amount = e.get("amount")
@@ -653,11 +655,11 @@ def upsert_contract_entries(userid: str, entries: list) -> None:
                 odata_delete(f"crbb7_contractentries({rid})")
             continue
         body = {
-            "crbb7_userid": userid,
-            "crbb7_year":   year,
-            "crbb7_month":  month,
-            "crbb7_amount": float(amount),
-            "crbb7_name":   f"{userid} {year}-{month:02d}",
+            "crbb7_userid":    userid,
+            "crbb7_entryyear": year,
+            "crbb7_month":     month,
+            "crbb7_amount":    float(amount),
+            "crbb7_name":      f"{userid} {year}-{month:02d}",
         }
         if rid:
             odata_patch(f"crbb7_contractentries({rid})", body)
