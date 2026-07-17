@@ -20,6 +20,7 @@ from shared.dataverse import (
     get_all_territory_consultants, get_all_active_users, get_finance_team_members,
     upsert_override, delete_override, is_guid, TERRITORY_IDS,
     get_nb_thresholds, upsert_nb_thresholds,
+    get_contract_entries, upsert_contract_entries,
     get_manual_nb_clients, add_manual_nb_client, remove_manual_nb_client, search_accounts,
     get_nb_clients_for_cro, get_nb_alert_state, upsert_nb_alert_state, delete_nb_alert_state,
 )
@@ -73,7 +74,8 @@ def report_data(req: func.HttpRequest) -> func.HttpResponse:
 
         report = build_report(consultants, placements, overrides, today, team_map,
                               live_contracts, fx_rates, nb_thresholds, contract_pl, manual_nb,
-                              nb_alert_state=alert_state)
+                              nb_alert_state=alert_state,
+                              contract_entries=get_contract_entries())
 
         return func.HttpResponse(
             json.dumps({"ok": True, "report": report, "as_of": today.isoformat()}),
@@ -304,6 +306,46 @@ def nb_alert_clients_post(req: func.HttpRequest) -> func.HttpResponse:
         return _server_error()
 
 
+# ── /api/contract-entries (POST) — manual monthly contract ledger ─────────────
+
+@app.route(route="contract-entries", methods=["POST"])
+def contract_entries_post(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_admin(req)
+    if err:
+        return err
+    try:
+        body = req.get_json() or {}
+        uid  = body.get("userid")
+        rows = body.get("entries") or []
+        if not uid or not is_guid(uid):
+            return func.HttpResponse(
+                json.dumps({"ok": False, "error": "valid userid required"}),
+                mimetype="application/json", status_code=400,
+            )
+        clean = []
+        for e in rows:
+            try:
+                year, month = int(e["year"]), int(e["month"])
+                if not (1 <= month <= 12) or not (2000 <= year <= 2100):
+                    raise ValueError
+                amount = e.get("amount")
+                clean.append({"year": year, "month": month,
+                              "amount": float(amount) if amount is not None else None})
+            except (KeyError, TypeError, ValueError):
+                return func.HttpResponse(
+                    json.dumps({"ok": False, "error": "entries need valid year/month/amount"}),
+                    mimetype="application/json", status_code=400,
+                )
+        upsert_contract_entries(uid, clean)
+        return func.HttpResponse(
+            json.dumps({"ok": True, "contract_entries": get_contract_entries()}),
+            mimetype="application/json", status_code=200,
+        )
+    except Exception:
+        logging.exception("contract-entries POST error")
+        return _server_error()
+
+
 # ── /api/nb-thresholds (POST) — save NB-uplift qualification thresholds ────────
 
 @app.route(route="nb-thresholds", methods=["POST"])
@@ -405,13 +447,16 @@ def analytics_report(req: func.HttpRequest) -> func.HttpResponse:
         except Exception:
             logging.warning("admin-report: Bob enrichment failed, using Mercury titles", exc_info=True)
 
+        contract_entries = get_contract_entries()
         report = build_admin_report(
             consultants, placements_this, placements_last,
             overrides, today,
             team_map=team_map, budgets=budgets, fx_rates=fx_rates,
             bob_titles=bob_titles,
             created_this=created_this, created_last=created_last,
+            contract_entries=contract_entries,
         )
+        report["contract_entries"] = contract_entries
 
         return func.HttpResponse(
             json.dumps({"ok": True, **report}),

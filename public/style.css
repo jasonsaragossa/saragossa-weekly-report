@@ -642,6 +642,10 @@ tr.team-header:first-child td { border-top: none; }
 .access-add { display: flex; gap: 8px; align-items: center; max-width: 460px; }
 .access-add .team-select { flex: 1; }
 
+/* Contract entry ledger */
+.contract-entry-table .contract-input { width: 72px; }
+.contract-entry-table td { padding: 6px 4px; }
+
 /* NB client additions */
 .nbclient-controls { margin-bottom: 12px; max-width: 460px; }
 .nbclient-controls .team-select { width: 100%; }

@@ -182,6 +182,28 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
     }
 
 
+def contract_manual_metrics(user_entries: dict, today: date) -> dict:
+    """
+    Weekly-report contract figures from the manual monthly ledger
+    ({"YYYY-M": amount}). Windows include the current (partial) month:
+    YTD = Jan..now, last 12M / rolling 3M = trailing windows ending now.
+    """
+    def month_key(offset):
+        y, m = today.year, today.month - offset
+        while m <= 0:
+            y, m = y - 1, m + 12
+        return f"{y}-{m}"
+    ytd = sum(v for k, v in user_entries.items()
+              if k.startswith(f"{today.year}-") and int(k.split("-")[1]) <= today.month)
+    l12 = sum(user_entries.get(month_key(o), 0) for o in range(12))
+    r3  = sum(user_entries.get(month_key(o), 0) for o in range(3))
+    return {
+        "margin_ytd":       round(ytd, 2),
+        "contract_last12m": round(l12, 2),
+        "rolling_3m":       round(r3, 2),
+    }
+
+
 def compute_wnf(uid: str, live_contracts: list, display_ccy: str, to_gbp: dict = None, to_usd: dict = None) -> float:
     """Returns the user's share of WNF across all live contract placements."""
     fx = (to_gbp or TO_GBP) if display_ccy == "GBP" else (to_usd or TO_USD)
@@ -591,6 +613,7 @@ def build_admin_report(
     bob_titles: dict = None,
     created_this: list = None,
     created_last: list = None,
+    contract_entries: dict = None,
 ) -> dict:
     """
     Builds the admin analytics report: monthly breakdown per consultant,
@@ -635,6 +658,17 @@ def build_admin_report(
     by_territory = defaultdict(list)
 
     _WRITTEN_CONTRACT_TERRITORIES = {"London Contract", "Chicago Contract"}
+
+    def _apply_contract_entries(months: dict, uid: str, terr: str, yr: int) -> dict:
+        """Add the manual contract ledger on top of perm GP for contract territories."""
+        if terr not in _WRITTEN_CONTRACT_TERRITORIES:
+            return months
+        ledger = (contract_entries or {}).get(uid) or {}
+        for m in range(1, 13):
+            v = ledger.get(f"{yr}-{m}")
+            if v:
+                months[str(m)] = round(months[str(m)] + v, 2)
+        return months
 
     def _written_fields(uid, terr, ccy, after_date=None, before_date=None):
         """Member fields for the Written view (created-in-month basis)."""
@@ -682,8 +716,10 @@ def build_admin_report(
 
         if move_date and prev_territory:
             # ── Current territory: placements from move_date onwards ──────────
-            m_this_cur = compute_monthly_breakdown(uid, placements_this, ccy, year,     to_gbp, to_usd, after_date=move_date)
-            m_last_cur = compute_monthly_breakdown(uid, placements_last, ccy, year - 1, to_gbp, to_usd, after_date=move_date)
+            m_this_cur = _apply_contract_entries(
+                compute_monthly_breakdown(uid, placements_this, ccy, year,     to_gbp, to_usd, after_date=move_date), uid, territory, year)
+            m_last_cur = _apply_contract_entries(
+                compute_monthly_breakdown(uid, placements_last, ccy, year - 1, to_gbp, to_usd, after_date=move_date), uid, territory, year - 1)
             tot_this_cur = sum(m_this_cur.values())
             tot_last_cur = sum(m_last_cur.values())
             if is_active or tot_this_cur > 0 or tot_last_cur > 0:
@@ -714,6 +750,7 @@ def build_admin_report(
             m_last_prev = compute_monthly_breakdown(uid, placements_last, prev_ccy, year - 1, to_gbp, to_usd, before_date=move_date)
             tot_this_prev = sum(m_this_prev.values())
             tot_last_prev = sum(m_last_prev.values())
+            # (manual contract entries stay with the member's current territory)
             if tot_this_prev > 0 or tot_last_prev > 0:
                 by_territory[prev_territory].append({
                     "uid":              uid + "__hist",
@@ -736,8 +773,10 @@ def build_admin_report(
                 })
         else:
             # ── No move — use all placements ─────────────────────────────────
-            months_this = compute_monthly_breakdown(uid, placements_this, ccy, year,     to_gbp, to_usd)
-            months_last = compute_monthly_breakdown(uid, placements_last, ccy, year - 1, to_gbp, to_usd)
+            months_this = _apply_contract_entries(
+                compute_monthly_breakdown(uid, placements_this, ccy, year,     to_gbp, to_usd), uid, territory, year)
+            months_last = _apply_contract_entries(
+                compute_monthly_breakdown(uid, placements_last, ccy, year - 1, to_gbp, to_usd), uid, territory, year - 1)
             total_this  = sum(months_this.values())
             total_last  = sum(months_last.values())
 
@@ -983,6 +1022,7 @@ def build_report(
     contract_placements: list = None,
     manual_nb_clients: dict = None,
     nb_alert_state: dict = None,   # uid -> set of client ids already in a milestone
+    contract_entries: dict = None, # uid -> {"YYYY-M": amount} manual contract ledger
 ) -> dict:
     """
     Assembles the full report structure.
@@ -1037,6 +1077,15 @@ def build_report(
                                   (nb_alert_state or {}).get(uid))
         wnf     = compute_wnf(uid, live_contracts, ccy, to_gbp, to_usd)
 
+        # Contract figures: computed from the monthly ledger when entries exist,
+        # otherwise fall back to the legacy one-shot Settings overrides.
+        ledger = (contract_entries or {}).get(uid)
+        cm = contract_manual_metrics(ledger, today) if ledger else {
+            "margin_ytd":       ov.get("crbb7_marginytd"),
+            "contract_last12m": ov.get("crbb7_contractlast12m"),
+            "rolling_3m":       ov.get("crbb7_rolling3m"),
+        }
+
         by_territory[territory].append({
             "uid":              uid,
             "name":             c.get("fullname", ""),
@@ -1045,9 +1094,7 @@ def build_report(
             "createdon":        c.get("createdon", ""),
             "sym":              "£" if ccy == "GBP" else "$",
             "wnf":              wnf,
-            "margin_ytd":       ov.get("crbb7_marginytd"),
-            "contract_last12m": ov.get("crbb7_contractlast12m"),
-            "rolling_3m":       ov.get("crbb7_rolling3m"),
+            **cm,
             **metrics,
         })
 

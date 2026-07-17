@@ -88,6 +88,7 @@ function buildAnalyticsTabs() {
         return f;
       } },
     { id: "atab-budgets",   label: "Budgets",            build: () => buildBudgetSection() },
+    { id: "atab-contract",  label: "Contract Entry",     build: () => buildContractEntrySection() },
     { id: "atab-breakdown", label: "Monthly Breakdown",  build: () => buildBreakdownTabs() },
   ];
   if (reportData.hpb) {
@@ -258,6 +259,133 @@ function hpbSubheading(text) {
   h.className = "hpb-subheading";
   h.textContent = text;
   return h;
+}
+
+
+// ── Contract Entry (manual monthly ledger for contract territories) ───────────
+
+const CONTRACT_ENTRY_TERRITORIES = ["London Contract", "Chicago Contract"];
+
+function contractEntryMonths() {
+  // Rolling last 12 months ending with the current month: [{y, m, label}]
+  const out = [];
+  for (let off = 11; off >= 0; off--) {
+    let y = currentYear, m = currentMonth - off;
+    while (m <= 0) { y -= 1; m += 12; }
+    out.push({ y, m, label: `${MONTH_ABBR[m - 1]} ${String(y).slice(2)}` });
+  }
+  return out;
+}
+
+function buildContractEntrySection() {
+  const section = document.createElement("div");
+  section.className = "admin-section";
+  const entries    = reportData.contract_entries || {};
+  const monthsCols = contractEntryMonths();
+
+  const desc = document.createElement("p");
+  desc.className = "settings-desc";
+  desc.style.marginBottom = "14px";
+  desc.textContent = "Enter each contract consultant's monthly figure (territory currency). " +
+    "The weekly report computes Total Margin YTD, Contract Last 12M and Rolling 3M from this ledger, " +
+    "and the Monthly Breakdown adds these figures on top of perm GP.";
+  section.appendChild(desc);
+
+  for (const territory of CONTRACT_ENTRY_TERRITORIES) {
+    const tdata = reportData.territories[territory];
+    if (!tdata) continue;
+    const members = (tdata.type === "teams" ? tdata.groups.flatMap(g => g.members) : (tdata.members || []))
+      .filter(m => !String(m.uid).endsWith("__hist"));
+    if (!members.length) continue;
+    const sym = tdata.sym;
+
+    const h = document.createElement("h3");
+    h.className = "hpb-territory-heading";
+    h.textContent = territory;
+    section.appendChild(h);
+
+    const wrap = document.createElement("div");
+    wrap.className = "table-wrap";
+    const table = document.createElement("table");
+    table.className = "monthly-table contract-entry-table";
+    const headCells = monthsCols.map(c => `<th class="num">${c.label}</th>`).join("");
+    table.innerHTML = `<thead><tr><th>Consultant</th>${headCells}
+      <th class="num">YTD</th><th class="num">Last 12M</th><th class="num">Rolling 3M</th><th></th></tr></thead>`;
+    const tbody = document.createElement("tbody");
+
+    for (const m of members) {
+      const tr = document.createElement("tr");
+      const ue = entries[m.uid] || {};
+      const inputs = monthsCols.map(c => {
+        const v = ue[`${c.y}-${c.m}`];
+        return `<td><input type="number" step="1" class="contract-input entry-month-input"
+                 data-year="${c.y}" data-month="${c.m}" value="${v != null ? v : ""}"></td>`;
+      }).join("");
+      tr.innerHTML = `
+        <td>${esc(m.name)}</td>
+        ${inputs}
+        <td class="num entry-ytd"></td>
+        <td class="num entry-l12"></td>
+        <td class="num entry-r3"></td>
+        <td><button class="save-btn entry-save" data-uid="${esc(m.uid)}">Save</button></td>`;
+
+      const updateSummary = () => {
+        let ytd = 0, l12 = 0, r3 = 0;
+        tr.querySelectorAll(".entry-month-input").forEach((inp, idx) => {
+          const v = parseFloat(inp.value);
+          if (isNaN(v)) return;
+          l12 += v;
+          if (monthsCols[idx].y === currentYear) ytd += v;
+          if (idx >= monthsCols.length - 3) r3 += v;
+        });
+        tr.querySelector(".entry-ytd").textContent = fmt(ytd, sym) || `${sym}0`;
+        tr.querySelector(".entry-l12").textContent = fmt(l12, sym) || `${sym}0`;
+        tr.querySelector(".entry-r3").textContent  = fmt(r3, sym)  || `${sym}0`;
+      };
+      updateSummary();
+      tr.querySelectorAll(".entry-month-input").forEach(inp => inp.addEventListener("input", updateSummary));
+
+      tr.querySelector(".entry-save").addEventListener("click", async (e) => {
+        const btn = e.currentTarget;
+        const payload = [...tr.querySelectorAll(".entry-month-input")].map(inp => ({
+          year:   parseInt(inp.dataset.year),
+          month:  parseInt(inp.dataset.month),
+          amount: inp.value.trim() !== "" ? parseFloat(inp.value) : null,
+        }));
+        btn.textContent = "Saving…"; btn.disabled = true;
+        try {
+          const resp = await fetch("/api/contract-entries", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userid: btn.dataset.uid, entries: payload }),
+          });
+          const data = await resp.json();
+          if (data.ok) {
+            reportData.contract_entries = data.contract_entries || reportData.contract_entries;
+            btn.textContent = "Saved ✓";
+            setTimeout(() => { btn.textContent = "Save"; btn.disabled = false; }, 2000);
+          } else {
+            alert("Could not save: " + (data.error || "unknown error"));
+            btn.textContent = "Save"; btn.disabled = false;
+          }
+        } catch (err) {
+          alert("Could not save: " + err.message);
+          btn.textContent = "Save"; btn.disabled = false;
+        }
+      });
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    section.appendChild(wrap);
+  }
+
+  const note = document.createElement("p");
+  note.className = "settings-desc";
+  note.style.marginTop = "10px";
+  note.textContent = "Saved figures reach the weekly report on its next load; refresh this page to see them in the Monthly Breakdown.";
+  section.appendChild(note);
+  return section;
 }
 
 
