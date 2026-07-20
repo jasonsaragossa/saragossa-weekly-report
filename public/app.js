@@ -232,7 +232,6 @@ function buildContractTable(tdata) {
     <th>Consultant</th>
     <th>Role</th>
     <th class="num">Total Margin YTD</th>
-    <th class="num">Perm Last 12M</th>
     <th class="num">Contract Last 12M</th>
     <th class="num">Rolling 3M</th>
     <th class="num">Current WNF</th>
@@ -247,7 +246,6 @@ function buildContractTable(tdata) {
       <td>${esc(m.name)}</td>
       <td class="role-cell">${esc(m.role)}</td>
       <td class="num">${m.margin_ytd       != null ? fmt(m.margin_ytd,       m.sym) : "—"}</td>
-      <td class="num">${fmt(m.roll12_total, m.sym)}</td>
       <td class="num">${m.contract_last12m != null ? fmt(m.contract_last12m, m.sym) : "—"}</td>
       <td class="num">${m.rolling_3m       != null ? fmt(m.rolling_3m,       m.sym) : "—"}</td>
       <td class="num">${fmt(m.wnf, m.sym)}</td>
