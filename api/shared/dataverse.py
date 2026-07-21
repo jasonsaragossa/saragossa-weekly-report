@@ -374,7 +374,7 @@ def get_placements_created_in_year(year: int) -> list[dict]:
             "$select": (
                 "crimson_placementid,crimson_type,createdon,"
                 "crimson_name,crimson_startdate,"
-                "recruit_truegrossprofit,"
+                "recruit_truegrossprofit,crimson_specialinstructionsclient,"
                 "crimson_extension,crimson_placementidcode,"
                 "_mercury_parentplacementid_value,"
                 "_mercury_clientrelationshipowner_value,"

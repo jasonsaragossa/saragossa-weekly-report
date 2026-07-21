@@ -1012,6 +1012,84 @@ def build_admin_report(
     }
 
 
+_TYPE_LABELS = {143570000: "Permanent", 143570001: "Contract", 143570002: "Temporary"}
+
+
+def build_month_created(created_placements: list, consultants: list, today: date,
+                        fx_rates: dict = None) -> dict:
+    """
+    Placements CREATED in the current calendar month, grouped by region
+    (territory of the CRO, falling back to consultant then AO; untracked →
+    "Other"). Counts, new-business counts and revenue (full placement GP in
+    the territory's display currency). Contract extensions are excluded.
+    """
+    to_gbp, to_usd = _build_fx_tables(fx_rates) if fx_rates else (TO_GBP, TO_USD)
+    CCY = {
+        "Bristol": "GBP", "London": "GBP", "London Contract": "GBP",
+        "Chicago": "USD", "New York": "USD", "Chicago Contract": "USD",
+        "Cameron Scott": "GBP", "Other": "GBP",
+    }
+    uid_territory = {c["systemuserid"]: _territory_name(c.get("_territoryid_value")) for c in consultants}
+    uid_name      = {c["systemuserid"]: c.get("fullname", "") for c in consultants}
+    _OWNERS = ("_mercury_clientrelationshipowner_value",
+               "_crimson_consultant_value",
+               "_mercury_assignmentowner_value")
+
+    territories = {}
+    for p in (created_placements or []):
+        ptype = p.get("crimson_type")
+        if ptype not in _TYPE_LABELS:
+            continue
+        if ptype in _CONTRACT_TYPE_CODES and _is_extension(p):
+            continue
+        try:
+            d = parse_date(p.get("createdon") or "")
+        except Exception:
+            continue
+        if d.year != today.year or d.month != today.month:
+            continue
+
+        terr = owner_name = None
+        for f in _OWNERS:
+            t = uid_territory.get(p.get(f))
+            if t:
+                terr, owner_name = t, uid_name.get(p.get(f), "")
+                break
+        terr = terr or "Other"
+
+        ccy   = CCY.get(terr, "GBP")
+        fx    = to_gbp if ccy == "GBP" else to_usd
+        gp    = p.get("recruit_truegrossprofit") or 0.0
+        p_ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode")
+        val   = gp * fx.get(p_ccy, 1.0)
+        is_nb = "new business" in (p.get("crimson_specialinstructionsclient") or "").lower()
+
+        entry = territories.setdefault(terr, {
+            "count": 0, "nb_count": 0, "revenue": 0.0,
+            "sym": "£" if ccy == "GBP" else "$", "placements": [],
+        })
+        entry["count"]    += 1
+        entry["nb_count"] += 1 if is_nb else 0
+        entry["revenue"]  = round(entry["revenue"] + val, 2)
+        entry["placements"].append({
+            "client":  (p.get("crimson_clientname") or {}).get("name") or "—",
+            "title":   p.get("crimson_name") or "",
+            "owner":   owner_name or "—",
+            "type":    _TYPE_LABELS.get(ptype, ""),
+            "nb":      is_nb,
+            "fee":     round(val, 2),
+            "created": (p.get("createdon") or "")[:10],
+        })
+
+    for entry in territories.values():
+        entry["placements"].sort(key=lambda x: x["created"], reverse=True)
+
+    return {
+        "label":       f"{['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][today.month - 1]} {today.year}",
+        "territories": territories,
+    }
+
+
 def build_report(
     consultants: list[dict],
     placements: list[dict],

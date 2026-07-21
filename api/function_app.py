@@ -24,7 +24,7 @@ from shared.dataverse import (
     get_manual_nb_clients, add_manual_nb_client, remove_manual_nb_client, search_accounts,
     get_nb_clients_for_cro, get_nb_alert_state, upsert_nb_alert_state, delete_nb_alert_state,
 )
-from shared.calc import build_report, build_admin_report
+from shared.calc import build_report, build_admin_report, build_month_created
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
@@ -77,8 +77,12 @@ def report_data(req: func.HttpRequest) -> func.HttpResponse:
                               nb_alert_state=alert_state,
                               contract_entries=get_contract_entries())
 
+        month_created = build_month_created(
+            get_placements_created_in_year(today.year), consultants, today, fx_rates)
+
         return func.HttpResponse(
-            json.dumps({"ok": True, "report": report, "as_of": today.isoformat()}),
+            json.dumps({"ok": True, "report": report, "as_of": today.isoformat(),
+                        "month_created": month_created}),
             mimetype="application/json",
             status_code=200,
         )
