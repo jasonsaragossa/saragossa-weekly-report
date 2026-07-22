@@ -375,6 +375,7 @@ def get_placements_created_in_year(year: int) -> list[dict]:
                 "crimson_placementid,crimson_type,createdon,"
                 "crimson_name,crimson_startdate,"
                 "recruit_truegrossprofit,crimson_specialinstructionsclient,"
+                "_recruit_candidatecontact_value,statuscode,"
                 "crimson_extension,crimson_placementidcode,"
                 "_mercury_parentplacementid_value,"
                 "_mercury_clientrelationshipowner_value,"
@@ -837,6 +838,162 @@ def search_accounts(query: str, top: int = 25) -> list[dict]:
         },
     )
     return [{"id": a["accountid"], "name": a.get("name", "")} for a in rows[:top]]
+
+
+# ── Board report data sources ─────────────────────────────────────────────────
+
+def get_user_territory_map() -> dict:
+    """{systemuserid: territory name} for ALL users (any territory, incl.
+    Consult/Deploy) — used to bucket placement splits for the board report."""
+    territories = odata_get_all("territories", params={"$select": "territoryid,name"})
+    tid_name = {t["territoryid"]: t.get("name", "") for t in territories}
+    users = odata_get_all(
+        "systemusers",
+        params={"$select": "systemuserid,_territoryid_value"},
+    )
+    return {
+        u["systemuserid"]: tid_name.get(u.get("_territoryid_value"), "")
+        for u in users
+    }
+
+
+def get_cancel_log() -> list:
+    """[{placementid, ptype, detected}] — when we first saw each cancellation."""
+    try:
+        rows = odata_get_all(
+            "crbb7_cancellogs",
+            params={"$select": "crbb7_placementid,crbb7_ptype,crbb7_detected"},
+        )
+    except Exception:
+        logging.warning("Could not read crbb7_cancellog")
+        return []
+    return [
+        {"placementid": r.get("crbb7_placementid"), "ptype": r.get("crbb7_ptype") or "",
+         "detected": r.get("crbb7_detected") or ""}
+        for r in rows if r.get("crbb7_placementid")
+    ]
+
+
+def sync_cancel_log(today_iso: str) -> int:
+    """
+    Records placements newly showing a cancelled status. On the very first run
+    (empty log) the detected date is seeded from each placement's modifiedon —
+    the closest available approximation; thereafter, detected = today. Returns
+    the number of new rows written.
+    """
+    cancel_filter = " or ".join(f"statuscode eq {c}" for c in CANCEL_CODES)
+    cancelled = odata_get_all(
+        "crimson_placements",
+        params={
+            "$select": "crimson_placementid,crimson_type,modifiedon",
+            "$filter": f"({cancel_filter})",
+        },
+    )
+    existing = {e["placementid"] for e in get_cancel_log()}
+    seed_mode = not existing
+    type_labels = {143570000: "Permanent", 143570001: "Contract", 143570002: "Temporary"}
+    added = 0
+    for p in cancelled:
+        pid = p["crimson_placementid"]
+        if pid in existing:
+            continue
+        detected = (p.get("modifiedon") or today_iso)[:10] if seed_mode else today_iso
+        odata_post("crbb7_cancellogs", {
+            "crbb7_placementid": pid,
+            "crbb7_ptype":       type_labels.get(p.get("crimson_type"), "Other"),
+            "crbb7_detected":    detected,
+            "crbb7_name":        f"{pid} {detected}",
+        })
+        added += 1
+    return added
+
+
+def fetch_roi_summary() -> dict:
+    """
+    Tech ROI figures from the ROI & Efficiency Tracker via its keyed endpoint.
+    Returns {"rows": [{group, target, achieved, pct}], "total_achieved": float}
+    or {} when unconfigured/unreachable (the email section degrades gracefully).
+    """
+    base = os.environ.get("ROI_TRACKER_URL")
+    key  = os.environ.get("ROI_TRACKER_API_KEY")
+    if not base or not key:
+        return {}
+    try:
+        year = __import__("datetime").date.today().year
+        resp = requests.get(
+            f"{base.rstrip('/')}/api/roi",
+            params={"from": f"{year}-01-01", "to": f"{year + 1}-01-01"},
+            headers={"x-api-key": key}, timeout=60,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception:
+        logging.warning("Could not fetch ROI tracker figures", exc_info=True)
+        return {}
+    achieved = {g.get("name"): float(g.get("gbp") or 0) for g in data.get("groups", [])}
+    rows = []
+    for t in data.get("tools", []):
+        group  = t.get("group")
+        target = float(t.get("roiTarget") or 0)
+        if not group or target <= 0:
+            continue
+        got = achieved.get(group, 0.0)
+        rows.append({
+            "group":    group,
+            "target":   round(target, 2),
+            "achieved": round(got, 2),
+            "pct":      round(got / target * 100, 1),
+        })
+    rows.sort(key=lambda r: r["target"], reverse=True)
+    return {"rows": rows, "total_achieved": round(sum(achieved.values()), 2)}
+
+
+def get_latest_forecast() -> dict:
+    """
+    Latest placement-predictor snapshot (per-solution xP for the current and
+    next month) plus the most recent digest subject line.
+    """
+    out = {"snapshot_date": None, "current": [], "next": [], "digest_subject": None}
+    try:
+        snaps = odata_get_all(
+            "crbb7_predictionsnapshots",
+            params={
+                "$select": ("crbb7_solution,crbb7_horizon,crbb7_targetmonth,"
+                            "crbb7_expectedtotal,crbb7_confirmedsofar,crbb7_snapshotdate"),
+                "$orderby": "crbb7_snapshotdate desc",
+                "$top": 40,
+            },
+        )
+        if snaps:
+            latest = snaps[0].get("crbb7_snapshotdate")
+            out["snapshot_date"] = (latest or "")[:10]
+            for s in snaps:
+                if s.get("crbb7_snapshotdate") != latest:
+                    continue
+                row = {
+                    "solution":  s.get("crbb7_solution") or "?",
+                    "month":     s.get("crbb7_targetmonth") or "",
+                    "expected":  float(s.get("crbb7_expectedtotal") or 0),
+                    "confirmed": float(s.get("crbb7_confirmedsofar") or 0),
+                }
+                (out["current"] if s.get("crbb7_horizon") == "current" else out["next"]).append(row)
+    except Exception:
+        logging.warning("Could not read prediction snapshots", exc_info=True)
+    try:
+        digests = odata_get_all(
+            "crbb7_modelstatses",
+            params={
+                "$select": "crbb7_summary,crbb7_compute_date",
+                "$filter": "crbb7_kind eq 'digest'",
+                "$orderby": "crbb7_compute_date desc",
+                "$top": 1,
+            },
+        )
+        if digests:
+            out["digest_subject"] = digests[0].get("crbb7_summary")
+    except Exception:
+        logging.warning("Could not read forecast digest", exc_info=True)
+    return out
 
 
 # ── Microsoft Graph email (for scheduled alerts) ──────────────────────────────

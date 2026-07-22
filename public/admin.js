@@ -400,6 +400,30 @@ function buildSummarySection() {
   const h = document.createElement("h2");
   h.className = "admin-section-title";
   h.textContent = "Territory Summary";
+  const boardBtn = document.createElement("button");
+  boardBtn.className = "save-btn";
+  boardBtn.style.marginLeft = "12px";
+  boardBtn.textContent = "Email me the board figures";
+  boardBtn.title = "Sends the board pack (P&L, notes, regional totals, forecast, Tech ROI) to your email";
+  boardBtn.addEventListener("click", async () => {
+    boardBtn.textContent = "Building & sending… (can take ~1 min)";
+    boardBtn.disabled = true;
+    try {
+      const resp = await fetch("/api/board-report", { method: "POST" });
+      const data = await resp.json();
+      if (data.ok) {
+        boardBtn.textContent = `Sent to ${data.sent_to} ✓`;
+        setTimeout(() => { boardBtn.textContent = "Email me the board figures"; boardBtn.disabled = false; }, 5000);
+      } else {
+        alert("Could not send: " + (data.error || "unknown error"));
+        boardBtn.textContent = "Email me the board figures"; boardBtn.disabled = false;
+      }
+    } catch (e) {
+      alert("Could not send: " + e.message);
+      boardBtn.textContent = "Email me the board figures"; boardBtn.disabled = false;
+    }
+  });
+  h.appendChild(boardBtn);
   section.appendChild(h);
 
   const wrap = document.createElement("div");

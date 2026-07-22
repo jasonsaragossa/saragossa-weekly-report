@@ -7,7 +7,7 @@ Routes:
   POST /api/settings      → upsert an override (admin only)
   DELETE /api/settings/{id} → remove an override (admin only)
 """
-import json, logging
+import json, logging, os
 from datetime import date
 
 import azure.functions as func
@@ -347,6 +347,34 @@ def contract_entries_post(req: func.HttpRequest) -> func.HttpResponse:
         )
     except Exception:
         logging.exception("contract-entries POST error")
+        return _server_error()
+
+
+# ── /api/board-report (POST) — email the board figures to the requester ───────
+
+@app.route(route="board-report", methods=["POST"])
+def board_report_post(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_admin(req)
+    if err:
+        return err
+    try:
+        from shared.board import compose_board_email
+        from shared.calc import build_admin_report as _bar
+        from shared.dataverse import graph_send_mail
+        sender = os.environ.get("ALERT_SENDER")
+        if not sender:
+            return func.HttpResponse(
+                json.dumps({"ok": False, "error": "ALERT_SENDER not configured"}),
+                mimetype="application/json", status_code=500,
+            )
+        subject, text, html = compose_board_email(_bar)
+        graph_send_mail(sender, [email], subject, text, body_html=html)
+        return func.HttpResponse(
+            json.dumps({"ok": True, "sent_to": email}),
+            mimetype="application/json", status_code=200,
+        )
+    except Exception:
+        logging.exception("board-report error")
         return _server_error()
 
 

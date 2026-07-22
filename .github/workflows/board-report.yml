@@ -1,0 +1,27 @@
+name: Board figures email
+
+on:
+  workflow_dispatch: {}   # run on demand from the Actions tab
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r api/requirements.txt
+      - name: Send board figures email
+        working-directory: api
+        env:
+          DATAVERSE_URL:           ${{ secrets.DATAVERSE_URL }}
+          DATAVERSE_TENANT_ID:     ${{ secrets.DATAVERSE_TENANT_ID }}
+          DATAVERSE_CLIENT_ID:     ${{ secrets.DATAVERSE_CLIENT_ID }}
+          DATAVERSE_CLIENT_SECRET: ${{ secrets.DATAVERSE_CLIENT_SECRET }}
+          ALERT_SENDER:            ${{ secrets.ALERT_SENDER }}
+          BOARD_REPORT_RECIPIENTS: ${{ secrets.BOARD_REPORT_RECIPIENTS }}
+          ROI_TRACKER_URL:         ${{ secrets.ROI_TRACKER_URL }}
+          ROI_TRACKER_API_KEY:     ${{ secrets.ROI_TRACKER_API_KEY }}
+        run: python board_report.py

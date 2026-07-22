@@ -108,11 +108,21 @@ def main() -> None:
         get_active_consultants, get_placements, get_contract_placements, get_overrides,
         get_team_membership_map, get_live_contract_placements, get_fx_rates,
         get_nb_thresholds, get_nb_alert_state, upsert_nb_alert_state,
-        get_manual_nb_clients, graph_send_mail,
+        get_manual_nb_clients, graph_send_mail, sync_cancel_log,
     )
     from shared.calc import build_report
 
     today = date.today()
+
+    # Daily cancellation log — records the day a placement first shows a
+    # cancelled status, so the board report can count "cancelled in month".
+    try:
+        added = sync_cancel_log(today.isoformat())
+        if added:
+            print(f"Cancellation log: recorded {added} new cancellation(s).")
+    except Exception as e:
+        print(f"Cancellation log sync failed: {e}")
+
     start = date(today.year - 1, today.month, 1).isoformat()
     end   = date(today.year, 12, 31).isoformat()
 
