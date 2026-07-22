@@ -77,12 +77,22 @@ def report_data(req: func.HttpRequest) -> func.HttpResponse:
                               nb_alert_state=alert_state,
                               contract_entries=get_contract_entries())
 
-        month_created = build_month_created(
-            get_placements_created_in_year(today.year), consultants, today, fx_rates)
+        # The created-this-month tab is board-sensitive — admins only. Gated
+        # server-side: non-admins never receive the data at all.
+        month_created = None
+        try:
+            from shared.dataverse import is_admin
+            if is_admin(email):
+                month_created = build_month_created(
+                    get_placements_created_in_year(today.year), consultants, today, fx_rates)
+        except Exception:
+            logging.warning("month-created admin gate failed", exc_info=True)
 
+        payload = {"ok": True, "report": report, "as_of": today.isoformat()}
+        if month_created:
+            payload["month_created"] = month_created
         return func.HttpResponse(
-            json.dumps({"ok": True, "report": report, "as_of": today.isoformat(),
-                        "month_created": month_created}),
+            json.dumps(payload),
             mimetype="application/json",
             status_code=200,
         )
