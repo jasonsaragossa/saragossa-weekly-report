@@ -288,8 +288,8 @@ function buildContractEntrySection() {
   desc.className = "settings-desc";
   desc.style.marginBottom = "14px";
   desc.textContent = "Enter each contract consultant's monthly figure (territory currency). " +
-    "The weekly report computes Total Margin YTD, Contract Last 12M and Rolling 3M from this ledger, " +
-    "and the Monthly Breakdown adds these figures on top of perm GP.";
+    "The weekly report computes Total Margin YTD, Contract Last 12M and Rolling 3M from this ledger. " +
+    "Analytics figures stay perm-only — the ledger feeds the weekly report contract columns alone.";
   section.appendChild(desc);
 
   for (const territory of CONTRACT_ENTRY_TERRITORIES) {
@@ -384,7 +384,7 @@ function buildContractEntrySection() {
   const note = document.createElement("p");
   note.className = "settings-desc";
   note.style.marginTop = "10px";
-  note.textContent = "Saved figures reach the weekly report on its next load; refresh this page to see them in the Monthly Breakdown.";
+  note.textContent = "Saved figures reach the weekly report's contract columns on its next load.";
   section.appendChild(note);
   return section;
 }

@@ -24,7 +24,7 @@ from shared.dataverse import (
     get_manual_nb_clients, add_manual_nb_client, remove_manual_nb_client, search_accounts,
     get_nb_clients_for_cro, get_nb_alert_state, upsert_nb_alert_state, delete_nb_alert_state,
 )
-from shared.calc import build_report, build_admin_report, build_month_created
+from shared.calc import build_report, build_admin_report
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
@@ -77,22 +77,8 @@ def report_data(req: func.HttpRequest) -> func.HttpResponse:
                               nb_alert_state=alert_state,
                               contract_entries=get_contract_entries())
 
-        # The created-this-month tab is board-sensitive — admins only. Gated
-        # server-side: non-admins never receive the data at all.
-        month_created = None
-        try:
-            from shared.dataverse import is_admin
-            if is_admin(email):
-                month_created = build_month_created(
-                    get_placements_created_in_year(today.year), consultants, today, fx_rates)
-        except Exception:
-            logging.warning("month-created admin gate failed", exc_info=True)
-
-        payload = {"ok": True, "report": report, "as_of": today.isoformat()}
-        if month_created:
-            payload["month_created"] = month_created
         return func.HttpResponse(
-            json.dumps(payload),
+            json.dumps({"ok": True, "report": report, "as_of": today.isoformat()}),
             mimetype="application/json",
             status_code=200,
         )
@@ -489,16 +475,16 @@ def analytics_report(req: func.HttpRequest) -> func.HttpResponse:
         except Exception:
             logging.warning("admin-report: Bob enrichment failed, using Mercury titles", exc_info=True)
 
-        contract_entries = get_contract_entries()
         report = build_admin_report(
             consultants, placements_this, placements_last,
             overrides, today,
             team_map=team_map, budgets=budgets, fx_rates=fx_rates,
             bob_titles=bob_titles,
             created_this=created_this, created_last=created_last,
-            contract_entries=contract_entries,
         )
-        report["contract_entries"] = contract_entries
+        # For the Contract Entry ledger grid only — the analytics figures
+        # themselves are perm-only (the ledger feeds just the weekly report).
+        report["contract_entries"] = get_contract_entries()
 
         return func.HttpResponse(
             json.dumps({"ok": True, **report}),

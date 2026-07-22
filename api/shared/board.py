@@ -25,7 +25,7 @@ from shared.dataverse import (
     RETAINER_CANDIDATE_CONTACT_ID,
     get_all_territory_consultants, get_overrides, get_team_membership_map,
     get_placements_full_year, get_placements_created_in_year, get_budgets,
-    get_fx_rates, get_contract_entries, get_user_territory_map,
+    get_fx_rates, get_user_territory_map,
     get_cancel_log, sync_cancel_log, fetch_roi_summary, get_latest_forecast,
     get_first_placement_dates,
 )
@@ -233,7 +233,6 @@ def compose_board_email(build_admin_report_fn) -> tuple:
         team_map=team_map, budgets=budgets, fx_rates=fx_rates,
         created_this=created_this,
         created_last=get_placements_created_in_year(year - 1),
-        contract_entries=get_contract_entries(),
     )
 
     prev_stats = _month_stats(created_prev, started_prev, user_terr, to_gbp, py, pm)

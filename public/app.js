@@ -117,22 +117,6 @@ function renderReport(data) {
     first = false;
   }
 
-  // "Created this month" tab — placements created per region this month
-  const mc = data.month_created;
-  if (mc && Object.keys(mc.territories || {}).length) {
-    const tab = document.createElement("div");
-    tab.className = "tab";
-    tab.textContent = mc.label;
-    tab.dataset.panel = "month";
-    tabsEl.appendChild(tab);
-
-    const panel = document.createElement("div");
-    panel.className = "panel";
-    panel.id = "panel-month";
-    panel.appendChild(buildMonthPanel(mc));
-    panelsEl.appendChild(panel);
-  }
-
   // Tab click handlers
   tabsEl.querySelectorAll(".tab").forEach(tab => {
     tab.addEventListener("click", () => {
@@ -183,39 +167,6 @@ function showNbClients(name, clients) {
       }).join("")}</ul>`
     : `<p class="nb-client-empty">No new-business clients.</p>`;
   overlay.style.display = "flex";
-}
-
-
-// ── "Created this month" panel ────────────────────────────────────────────────
-
-function buildMonthPanel(mc) {
-  const container = document.createElement("div");
-  const order = [...TERRITORY_ORDER, "Cameron Scott", "Other"];
-  for (const t of order) {
-    const td = mc.territories[t];
-    if (!td) continue;
-    const h = document.createElement("h3");
-    h.className = "hpb-territory-heading";
-    h.textContent = `${t} — ${td.count} placement${td.count === 1 ? "" : "s"} · ` +
-      `${td.nb_count} new business · ${fmt(td.revenue, td.sym) || td.sym + "0"}`;
-    container.appendChild(h);
-
-    const rows = td.placements.map(p => `<tr>
-      <td>${esc(p.client)}${p.nb ? ` <span class="gbp-tag">NB</span>` : ""}</td>
-      <td class="role-cell">${esc(p.title)}</td>
-      <td>${esc(p.owner)}</td>
-      <td class="role-cell">${esc(p.type)}</td>
-      <td class="num">${fmt(p.fee, td.sym) || td.sym + "0"}</td>
-      <td class="role-cell">${esc(p.created)}</td>
-    </tr>`).join("");
-    container.appendChild(tableWrap(`<table>
-      <thead><tr>
-        <th>Client</th><th>Job Title</th><th>Owner</th><th>Type</th>
-        <th class="num">Revenue</th><th>Created</th>
-      </tr></thead>
-      <tbody>${rows}</tbody></table>`));
-  }
-  return container;
 }
 
 
