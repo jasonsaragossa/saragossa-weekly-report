@@ -376,6 +376,7 @@ def get_placements_created_in_year(year: int) -> list[dict]:
                 "crimson_name,crimson_startdate,"
                 "recruit_truegrossprofit,crimson_specialinstructionsclient,"
                 "_recruit_candidatecontact_value,statuscode,"
+                "_crimson_clientname_value,"
                 "crimson_extension,crimson_placementidcode,"
                 "_mercury_parentplacementid_value,"
                 "_mercury_clientrelationshipowner_value,"
@@ -906,6 +907,31 @@ def sync_cancel_log(today_iso: str) -> int:
         })
         added += 1
     return added
+
+
+def get_first_placement_dates(client_ids: list) -> dict:
+    """
+    {client_id: earliest createdon} across ALL their non-cancelled placements —
+    a client is only a "new client" in the month of their first-ever placement.
+    """
+    out = {}
+    ids = [c for c in (client_ids or []) if c]
+    cancel_filter = " and ".join(f"statuscode ne {c}" for c in CANCEL_CODES)
+    for i in range(0, len(ids), 20):
+        chunk = ids[i:i + 20]
+        or_f = " or ".join(f"_crimson_clientname_value eq '{cid}'" for cid in chunk)
+        rows = odata_get_all(
+            "crimson_placements",
+            params={
+                "$select": "_crimson_clientname_value,createdon",
+                "$filter": f"({or_f}) and statecode eq 0 and {cancel_filter}",
+            },
+        )
+        for r in rows:
+            cid, created = r.get("_crimson_clientname_value"), r.get("createdon") or ""
+            if cid and created and (cid not in out or created < out[cid]):
+                out[cid] = created
+    return out
 
 
 def fetch_roi_summary() -> dict:

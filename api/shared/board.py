@@ -27,6 +27,7 @@ from shared.dataverse import (
     get_placements_full_year, get_placements_created_in_year, get_budgets,
     get_fx_rates, get_contract_entries, get_user_territory_map,
     get_cancel_log, sync_cancel_log, fetch_roi_summary, get_latest_forecast,
+    get_first_placement_dates,
 )
 
 BUCKET_BY_TERRITORY = {
@@ -77,7 +78,7 @@ def _month_stats(created, started_perm, user_terr, to_gbp, y, m):
         "buckets": buckets, "perm_deals": 0, "contract_deals": 0,
         "perm_pending": 0, "contract_pending": 0,
         "retainer_count": 0, "retainer_invoiced": 0.0,
-        "nb_perm": set(), "nb_contract": set(),
+        "nb_perm": {}, "nb_contract": {},   # {client_id: name}, NB-flagged
         "written_total": 0.0, "invoiced_total": 0.0,
     }
 
@@ -105,9 +106,10 @@ def _month_stats(created, started_perm, user_terr, to_gbp, y, m):
         if p.get("statuscode") == PENDING_STATUS:
             stats[f"{kind}_pending"] += 1
         if "new business" in (p.get("crimson_specialinstructionsclient") or "").lower():
+            cid    = p.get("_crimson_clientname_value")
             client = (p.get("crimson_clientname") or {}).get("name")
-            if client:
-                stats[f"nb_{kind}"].add(client)
+            if cid and client:
+                stats[f"nb_{kind}"][cid] = client
 
         # Placement counts: 0.5 to the Consultant slot, 0.5 to the AO slot
         for slot in _OWNER_SLOTS:
@@ -152,8 +154,6 @@ def _month_stats(created, started_perm, user_terr, to_gbp, y, m):
             if b:
                 buckets[b]["invoiced"] += gbp * share
 
-    stats["nb_perm"] = sorted(stats["nb_perm"])
-    stats["nb_contract"] = sorted(stats["nb_contract"])
     return stats
 
 
@@ -238,13 +238,32 @@ def compose_board_email(build_admin_report_fn) -> tuple:
 
     prev_stats = _month_stats(created_prev, started_prev, user_terr, to_gbp, py, pm)
     curr_stats = _month_stats(created_this, placements_this, user_terr, to_gbp, year, today.month)
+
+    # "New client" = a client whose FIRST-EVER placement was created in that
+    # month — NB-flagged repeat business at an existing client doesn't count.
+    cand_ids = (set(prev_stats["nb_perm"]) | set(prev_stats["nb_contract"])
+                | set(curr_stats["nb_perm"]) | set(curr_stats["nb_contract"]))
+    first_dates = get_first_placement_dates(list(cand_ids))
+
+    def _truly_new(nb_map, y, m):
+        prefix = f"{y}-{m:02d}"
+        return sorted(name for cid, name in nb_map.items()
+                      if (first_dates.get(cid) or "").startswith(prefix))
+
+    prev_stats["nb_perm"]     = _truly_new(prev_stats["nb_perm"], py, pm)
+    prev_stats["nb_contract"] = _truly_new(prev_stats["nb_contract"], py, pm)
+    curr_stats["nb_perm"]     = _truly_new(curr_stats["nb_perm"], year, today.month)
+    curr_stats["nb_contract"] = _truly_new(curr_stats["nb_contract"], year, today.month)
+
     prev_cancel = _cancelled_in_month(cancel_log, py, pm)
     curr_cancel = _cancelled_in_month(cancel_log, year, today.month)
     regional    = _regional_totals(report)
     forecast    = get_latest_forecast()
     roi         = fetch_roi_summary()
 
-    subject = f"Board figures · {_MONTHS[pm - 1]} {py} + {_MONTHS[today.month - 1]} to date"
+    from datetime import datetime
+    stamp = datetime.utcnow().strftime("%d %b %H:%M")
+    subject = f"Board figures · {_MONTHS[pm - 1]} {py} + {_MONTHS[today.month - 1]} to date · {stamp}"
     html = _render_html(today, py, pm, prev_stats, curr_stats,
                         prev_cancel, curr_cancel, regional, forecast, roi)
     text = f"Board figures for {_MONTHS[pm - 1]} {py} — open in an HTML mail client."
