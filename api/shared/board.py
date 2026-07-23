@@ -26,7 +26,8 @@ from shared.dataverse import (
     get_all_territory_consultants, get_overrides, get_team_membership_map,
     get_placements_full_year, get_placements_created_in_year, get_budgets,
     get_fx_rates, get_user_territory_map,
-    get_cancelled_created_in_year, fetch_roi_summary, get_latest_forecast,
+    get_cancelled_created_in_year, get_cancellations_by_status_change,
+    fetch_roi_summary, get_latest_forecast,
     get_first_placement_dates,
 )
 
@@ -254,10 +255,18 @@ def compose_board_email(build_admin_report_fn) -> tuple:
     curr_stats["nb_perm"]     = _truly_new(curr_stats["nb_perm"], year, today.month)
     curr_stats["nb_contract"] = _truly_new(curr_stats["nb_contract"], year, today.month)
 
-    cancelled_this = get_cancelled_created_in_year(year)
-    cancelled_prev = cancelled_this if py == year else get_cancelled_created_in_year(py)
-    prev_cancel = _cancelled_in_month(cancelled_prev, py, pm)
-    curr_cancel = _cancelled_in_month(cancelled_this, year, today.month)
+    # Cancelled = status CHANGED to cancelled during the month (audit log).
+    # Falls back to created-in-month-now-cancelled if audits are unreadable.
+    try:
+        prev_cancel = get_cancellations_by_status_change(py, pm)
+        curr_cancel = get_cancellations_by_status_change(year, today.month)
+    except Exception:
+        logging.warning("audit-based cancellations unavailable — using created-basis fallback",
+                        exc_info=True)
+        cancelled_this = get_cancelled_created_in_year(year)
+        cancelled_prev = cancelled_this if py == year else get_cancelled_created_in_year(py)
+        prev_cancel = _cancelled_in_month(cancelled_prev, py, pm)
+        curr_cancel = _cancelled_in_month(cancelled_this, year, today.month)
     regional    = _regional_totals(report)
     forecast    = get_latest_forecast()
     roi         = fetch_roi_summary()

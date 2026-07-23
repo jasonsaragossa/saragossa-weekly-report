@@ -963,6 +963,61 @@ def get_cancelled_created_in_year(year: int) -> list:
     )
 
 
+def get_cancellations_by_status_change(year: int, month: int) -> dict:
+    """
+    {"Permanent": n, "Contract": n, ...} — placements whose statuscode CHANGED
+    to a cancelled value during the given month, read from the audit log
+    (Jason's rule: cancelled-in-month means the status flipped that month).
+    Raises if the audit log can't be read so callers can fall back.
+    """
+    import json as _json
+    from datetime import date as _d
+    start = _d(year, month, 1)
+    end   = _d(year + (1 if month == 12 else 0), 1 if month == 12 else month + 1, 1)
+
+    # Candidates: currently cancelled and touched on/after the month start —
+    # the cancelling edit itself bumps modifiedon, so this is a superset.
+    cancel_filter = " or ".join(f"statuscode eq {c}" for c in CANCEL_CODES)
+    candidates = odata_get_all(
+        "crimson_placements",
+        params={
+            "$select": "crimson_placementid,crimson_type",
+            "$filter": f"({cancel_filter}) and modifiedon ge {start.isoformat()}",
+        },
+    )
+    type_labels = {143570000: "Permanent", 143570001: "Contract", 143570002: "Temporary"}
+    cancel_strs = {str(c) for c in CANCEL_CODES}
+    counts = {}
+    for i in range(0, len(candidates), 15):
+        chunk = candidates[i:i + 15]
+        by_id = {p["crimson_placementid"]: p for p in chunk}
+        or_f  = " or ".join(f"_objectid_value eq '{pid}'" for pid in by_id)
+        rows  = odata_get_all(
+            "audits",
+            params={
+                "$select": "_objectid_value,changedata,createdon",
+                "$filter": (f"({or_f}) and createdon ge {start.isoformat()}"
+                            f" and createdon lt {end.isoformat()}"),
+            },
+        )
+        seen = set()
+        for r in rows:
+            pid = r.get("_objectid_value")
+            if not pid or pid in seen:
+                continue
+            try:
+                changed = _json.loads(r.get("changedata") or "{}").get("changedAttributes", [])
+            except Exception:
+                continue
+            for a in changed:
+                if a.get("logicalName") == "statuscode" and str(a.get("newValue")) in cancel_strs:
+                    seen.add(pid)
+                    label = type_labels.get(by_id.get(pid, {}).get("crimson_type"), "Other")
+                    counts[label] = counts.get(label, 0) + 1
+                    break
+    return counts
+
+
 def fetch_roi_summary() -> dict:
     """
     Tech ROI figures from the ROI & Efficiency Tracker via its keyed endpoint.
