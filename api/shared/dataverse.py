@@ -859,18 +859,23 @@ def get_user_territory_map() -> dict:
 
 
 def get_cancel_log() -> list:
-    """[{placementid, ptype, detected}] — when we first saw each cancellation."""
+    """
+    [{placementid, ptype, detected, logged}] — `detected` is the cancellation
+    date we recorded; `logged` is when the log row itself was written. Seeded
+    rows (detected approximated from modifiedon) have detected <= their seed
+    day; only organically-detected rows are reliably dated.
+    """
     try:
         rows = odata_get_all(
             "crbb7_cancellogs",
-            params={"$select": "crbb7_placementid,crbb7_ptype,crbb7_detected"},
+            params={"$select": "crbb7_placementid,crbb7_ptype,crbb7_detected,createdon"},
         )
     except Exception:
         logging.warning("Could not read crbb7_cancellog")
         return []
     return [
         {"placementid": r.get("crbb7_placementid"), "ptype": r.get("crbb7_ptype") or "",
-         "detected": r.get("crbb7_detected") or ""}
+         "detected": r.get("crbb7_detected") or "", "logged": (r.get("createdon") or "")[:10]}
         for r in rows if r.get("crbb7_placementid")
     ]
 
@@ -960,7 +965,9 @@ def fetch_roi_summary() -> dict:
     rows = []
     for t in data.get("tools", []):
         group  = t.get("group")
-        target = float(t.get("roiTarget") or 0)
+        # roiTarget is a MULTIPLE ("return 10x cost"); the £ target is the
+        # resolved yearlyTargetGbp (annual cost × multiple).
+        target = float(t.get("yearlyTargetGbp") or 0)
         if not group or target <= 0:
             continue
         got = achieved.get(group, 0.0)
