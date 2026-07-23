@@ -852,10 +852,15 @@ def get_user_territory_map() -> dict:
         "systemusers",
         params={"$select": "systemuserid,_territoryid_value"},
     )
-    return {
+    out = {
         u["systemuserid"]: tid_name.get(u.get("_territoryid_value"), "")
         for u in users
     }
+    # Synthetic territories: users with no Mercury territory that the app
+    # treats as their own region (e.g. Cameron Scott).
+    for uid, terr in _UNASSIGNED_HOUSE_USERS.items():
+        out[uid] = terr
+    return out
 
 
 def get_cancel_log() -> list:
@@ -937,6 +942,25 @@ def get_first_placement_dates(client_ids: list) -> dict:
             if cid and created and (cid not in out or created < out[cid]):
                 out[cid] = created
     return out
+
+
+def get_cancelled_created_in_year(year: int) -> list:
+    """
+    Placements CREATED in the year that are NOW cancelled — the board email's
+    cancellation rule: "created in the month in question, now cancelled".
+    """
+    cancel_filter = " or ".join(f"statuscode eq {c}" for c in CANCEL_CODES)
+    return odata_get_all(
+        "crimson_placements",
+        params={
+            "$select": "crimson_placementid,crimson_type,createdon",
+            "$filter": (
+                f"({cancel_filter})"
+                f" and createdon ge {year}-01-01T00:00:00Z"
+                f" and createdon lt {year + 1}-01-01T00:00:00Z"
+            ),
+        },
+    )
 
 
 def fetch_roi_summary() -> dict:

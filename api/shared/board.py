@@ -26,7 +26,7 @@ from shared.dataverse import (
     get_all_territory_consultants, get_overrides, get_team_membership_map,
     get_placements_full_year, get_placements_created_in_year, get_budgets,
     get_fx_rates, get_user_territory_map,
-    get_cancel_log, sync_cancel_log, fetch_roi_summary, get_latest_forecast,
+    get_cancelled_created_in_year, fetch_roi_summary, get_latest_forecast,
     get_first_placement_dates,
 )
 
@@ -157,24 +157,18 @@ def _month_stats(created, started_perm, user_terr, to_gbp, y, m):
     return stats
 
 
-def _cancel_seed_day(cancel_log):
-    """The day the log was first seeded — rows detected on/before it carry
-    approximated dates (from modifiedon) and must not be counted per month."""
-    if not cancel_log:
-        return None
-    return min(e.get("logged") or "9999-99-99" for e in cancel_log)
+_CANCEL_TYPE_LABELS = {143570000: "Permanent", 143570001: "Contract", 143570002: "Temporary"}
 
 
-def _cancelled_in_month(cancel_log, y, m, seed_day=None):
+def _cancelled_in_month(cancelled_placements, y, m):
+    """Placements CREATED in (y, m) that are now cancelled, counted by type."""
     prefix = f"{y}-{m:02d}"
     out = {}
-    for e in cancel_log:
-        detected = e.get("detected") or ""
-        if not detected.startswith(prefix):
+    for p in (cancelled_placements or []):
+        if not (p.get("createdon") or "").startswith(prefix):
             continue
-        if seed_day and detected <= seed_day:
-            continue  # seeded/approximate date — excluded from monthly counts
-        out[e.get("ptype") or "Other"] = out.get(e.get("ptype") or "Other", 0) + 1
+        label = _CANCEL_TYPE_LABELS.get(p.get("crimson_type"), "Other")
+        out[label] = out.get(label, 0) + 1
     return out
 
 
@@ -218,11 +212,6 @@ def compose_board_email(build_admin_report_fn) -> tuple:
     # Previous full month
     py, pm = (year, today.month - 1) if today.month > 1 else (year - 1, 12)
 
-    try:
-        sync_cancel_log(today.isoformat())
-    except Exception:
-        logging.warning("cancel-log sync failed", exc_info=True)
-
     consultants     = get_all_territory_consultants()
     overrides       = get_overrides()
     team_map        = get_team_membership_map()
@@ -233,7 +222,6 @@ def compose_board_email(build_admin_report_fn) -> tuple:
     started_prev    = placements_this if py == year else placements_last
     budgets         = get_budgets()
     user_terr       = get_user_territory_map()
-    cancel_log      = get_cancel_log()
     try:
         fx_rates = get_fx_rates()
     except Exception:
@@ -266,19 +254,10 @@ def compose_board_email(build_admin_report_fn) -> tuple:
     curr_stats["nb_perm"]     = _truly_new(curr_stats["nb_perm"], year, today.month)
     curr_stats["nb_contract"] = _truly_new(curr_stats["nb_contract"], year, today.month)
 
-    seed_day    = _cancel_seed_day(cancel_log)
-    prev_cancel = _cancelled_in_month(cancel_log, py, pm, seed_day)
-    curr_cancel = _cancelled_in_month(cancel_log, year, today.month, seed_day)
-    # Months that started before tracking began get an honesty note
-    cancel_note = ""
-    if seed_day:
-        try:
-            sd = parse_date(seed_day)
-            cancel_note = f"tracked from {sd.day} {_MONTHS[sd.month - 1][:3]}"
-        except Exception:
-            pass
-    prev_cancel_note = cancel_note if seed_day and f"{py}-{pm:02d}" <= seed_day[:7] else ""
-    curr_cancel_note = cancel_note if seed_day and f"{year}-{today.month:02d}" <= seed_day[:7] else ""
+    cancelled_this = get_cancelled_created_in_year(year)
+    cancelled_prev = cancelled_this if py == year else get_cancelled_created_in_year(py)
+    prev_cancel = _cancelled_in_month(cancelled_prev, py, pm)
+    curr_cancel = _cancelled_in_month(cancelled_this, year, today.month)
     regional    = _regional_totals(report)
     forecast    = get_latest_forecast()
     roi         = fetch_roi_summary()
@@ -287,8 +266,7 @@ def compose_board_email(build_admin_report_fn) -> tuple:
     stamp = datetime.utcnow().strftime("%d %b %H:%M")
     subject = f"Board figures · {_MONTHS[pm - 1]} {py} + {_MONTHS[today.month - 1]} to date · {stamp}"
     html = _render_html(today, py, pm, prev_stats, curr_stats,
-                        prev_cancel, curr_cancel, regional, forecast, roi,
-                        prev_cancel_note, curr_cancel_note)
+                        prev_cancel, curr_cancel, regional, forecast, roi)
     text = f"Board figures for {_MONTHS[pm - 1]} {py} — open in an HTML mail client."
     return subject, text, html
 
@@ -306,7 +284,7 @@ def _num(n):
 
 
 def _render_html(today, py, pm, prev, curr, prev_cancel, curr_cancel,
-                 regional, forecast, roi, prev_cancel_note="", curr_cancel_note=""):
+                 regional, forecast, roi):
     from html import escape
     prev_label = f"{_MONTHS[pm - 1]} {py}"
     curr_label = f"{_MONTHS[today.month - 1]} {today.year}"
@@ -341,14 +319,12 @@ def _render_html(today, py, pm, prev, curr, prev_cancel, curr_cancel,
                  f'<th {th}>Perm Written GBP</th><th {th}>Perm Invoiced GBP</th></tr>{rows_html}</table>')
 
     # ── Notes ──
-    def notes_block(label, s, cancel, cancel_note=""):
+    def notes_block(label, s, cancel):
         deals = s["perm_deals"] + s["contract_deals"]
         pend  = s["perm_pending"] + s["contract_pending"]
         nb_p  = ", ".join(escape(c) for c in s["nb_perm"]) or "none"
         nb_c  = ", ".join(escape(c) for c in s["nb_contract"]) or "none"
         cx    = ", ".join(f"{n} {escape(t.lower())}" for t, n in sorted(cancel.items())) or "none"
-        if cancel_note:
-            cx += f" ({escape(cancel_note)})"
         pend_note = f" (of which {pend} at Pending)" if pend else ""
         return (f'<p style="margin:0 0 4px;font-size:14px;color:#101820;"><strong>{escape(label)} — '
                 f'{deals} deals{pend_note}</strong></p>'
@@ -358,9 +334,9 @@ def _render_html(today, py, pm, prev, curr, prev_cancel, curr_cancel,
                 f'New clients: {len(s["nb_contract"])} ({nb_c})</p>'
                 f'<p style="margin:0 0 14px;font-size:13px;color:#3c4448;">Cancelled placements: {cx}</p>')
 
-    notes = notes_block(f"{_MONTHS[pm - 1]}", prev, prev_cancel, prev_cancel_note) \
+    notes = notes_block(f"{_MONTHS[pm - 1]}", prev, prev_cancel) \
           + notes_block(f"{_MONTHS[today.month - 1]} to date ({today.day}{_ordinal(today.day)})",
-                        curr, curr_cancel, curr_cancel_note)
+                        curr, curr_cancel)
 
     # ── Regional totals ──
     reg_rows = ""
