@@ -103,20 +103,24 @@ def _month_stats(created, started_perm, user_terr, to_gbp, y, m):
         else:
             continue
 
-        stats[f"{kind}_deals"] += 1
-        if p.get("statuscode") == PENDING_STATUS:
-            stats[f"{kind}_pending"] += 1
         if "new business" in (p.get("crimson_specialinstructionsclient") or "").lower():
             cid    = p.get("_crimson_clientname_value")
             client = (p.get("crimson_clientname") or {}).get("name")
             if cid and client:
                 stats[f"nb_{kind}"][cid] = client
 
-        # Placement counts: 0.5 to the Consultant slot, 0.5 to the AO slot
+        # Placement counts: 0.5 to the Consultant slot, 0.5 to the AO slot.
+        # The Notes deal counts accumulate the SAME credits as the P&L table,
+        # so the two can never disagree (territory-less owners count nowhere).
+        credited = 0.0
         for slot in _OWNER_SLOTS:
             b = _bucket_for(user_terr.get(p.get(slot)))
             if b:
                 buckets[b][kind] += 0.5
+                credited += 0.5
+        stats[f"{kind}_deals"] += credited
+        if credited and p.get("statuscode") == PENDING_STATUS:
+            stats[f"{kind}_pending"] += 1
 
         # Written £ (perm only): full GP distributed by the standard split
         if kind == "perm":
@@ -336,10 +340,10 @@ def _render_html(today, py, pm, prev, curr, prev_cancel, curr_cancel,
         cx    = ", ".join(f"{n} {escape(t.lower())}" for t, n in sorted(cancel.items())) or "none"
         pend_note = f" (of which {pend} at Pending)" if pend else ""
         return (f'<p style="margin:0 0 4px;font-size:14px;color:#101820;"><strong>{escape(label)} — '
-                f'{deals} deals{pend_note}</strong></p>'
-                f'<p style="margin:0 0 2px;font-size:13px;color:#3c4448;">Perm: {s["perm_deals"]} · '
+                f'{_num(deals)} deals{pend_note}</strong></p>'
+                f'<p style="margin:0 0 2px;font-size:13px;color:#3c4448;">Perm: {_num(s["perm_deals"])} · '
                 f'New clients: {len(s["nb_perm"])} ({nb_p})</p>'
-                f'<p style="margin:0 0 2px;font-size:13px;color:#3c4448;">Contract: {s["contract_deals"]} · '
+                f'<p style="margin:0 0 2px;font-size:13px;color:#3c4448;">Contract: {_num(s["contract_deals"])} · '
                 f'New clients: {len(s["nb_contract"])} ({nb_c})</p>'
                 f'<p style="margin:0 0 14px;font-size:13px;color:#3c4448;">Cancelled placements: {cx}</p>')
 
