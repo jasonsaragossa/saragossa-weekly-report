@@ -986,35 +986,32 @@ def get_cancellations_by_status_change(year: int, month: int) -> dict:
         },
     )
     type_labels = {143570000: "Permanent", 143570001: "Contract", 143570002: "Temporary"}
-    cancel_strs = {str(c) for c in CANCEL_CODES}
+    start_s, end_s = start.isoformat(), end.isoformat()
     counts = {}
-    for i in range(0, len(candidates), 15):
-        chunk = candidates[i:i + 15]
-        by_id = {p["crimson_placementid"]: p for p in chunk}
-        or_f  = " or ".join(f"_objectid_value eq '{pid}'" for pid in by_id)
-        rows  = odata_get_all(
-            "audits",
-            params={
-                "$select": "_objectid_value,changedata,createdon",
-                "$filter": (f"({or_f}) and createdon ge {start.isoformat()}"
-                            f" and createdon lt {end.isoformat()}"),
-            },
+    # RetrieveRecordChangeHistory is the API that the "View Audit History"
+    # privilege covers (raw audit-table reads need a separate privilege).
+    for p in candidates:
+        pid = p["crimson_placementid"]
+        resp = requests.get(
+            f"{DATAVERSE_URL}/api/data/v9.1/RetrieveRecordChangeHistory(Target=@t)",
+            params={"@t": _json.dumps({"@odata.id": f"crimson_placements({pid})"})},
+            headers=_headers(), timeout=60,
         )
-        seen = set()
-        for r in rows:
-            pid = r.get("_objectid_value")
-            if not pid or pid in seen:
+        resp.raise_for_status()
+        details = (resp.json().get("AuditDetailCollection") or {}).get("AuditDetails") or []
+        for d in details:
+            created = ((d.get("AuditRecord") or {}).get("createdon") or "")[:10]
+            if not (start_s <= created < end_s):
                 continue
+            sc = (d.get("NewValue") or {}).get("statuscode")
             try:
-                changed = _json.loads(r.get("changedata") or "{}").get("changedAttributes", [])
-            except Exception:
-                continue
-            for a in changed:
-                if a.get("logicalName") == "statuscode" and str(a.get("newValue")) in cancel_strs:
-                    seen.add(pid)
-                    label = type_labels.get(by_id.get(pid, {}).get("crimson_type"), "Other")
-                    counts[label] = counts.get(label, 0) + 1
-                    break
+                cancelled = sc is not None and int(sc) in CANCEL_CODES
+            except (TypeError, ValueError):
+                cancelled = False
+            if cancelled:
+                label = type_labels.get(p.get("crimson_type"), "Other")
+                counts[label] = counts.get(label, 0) + 1
+                break
     return counts
 
 
