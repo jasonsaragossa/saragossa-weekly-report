@@ -364,9 +364,13 @@ def board_report_post(req: func.HttpRequest) -> func.HttpResponse:
                 mimetype="application/json", status_code=500,
             )
         subject, text, html = compose_board_email(_bar)
-        graph_send_mail(sender, [email], subject, text, body_html=html)
+        # Always copy in the standing board recipients alongside the requester
+        extras = [e.strip() for e in
+                  os.environ.get("BOARD_REPORT_EXTRA_RECIPIENTS", "").split(",") if e.strip()]
+        recipients = list(dict.fromkeys([email] + extras))
+        graph_send_mail(sender, recipients, subject, text, body_html=html)
         return func.HttpResponse(
-            json.dumps({"ok": True, "sent_to": email}),
+            json.dumps({"ok": True, "sent_to": ", ".join(recipients)}),
             mimetype="application/json", status_code=200,
         )
     except Exception:
