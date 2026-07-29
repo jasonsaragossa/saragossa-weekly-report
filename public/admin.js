@@ -410,7 +410,13 @@ function buildSummarySection() {
     boardBtn.disabled = true;
     try {
       const resp = await fetch("/api/board-report", { method: "POST" });
-      const data = await resp.json();
+      let data;
+      try {
+        data = await resp.json();
+      } catch {
+        // Non-JSON body = the Azure gateway cut the call off (45s limit)
+        throw new Error("the build took too long and timed out — please try again");
+      }
       if (data.ok) {
         boardBtn.textContent = `Sent to ${data.sent_to} ✓`;
         setTimeout(() => { boardBtn.textContent = "Email me the board figures"; boardBtn.disabled = false; }, 5000);

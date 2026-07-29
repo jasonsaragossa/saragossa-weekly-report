@@ -987,10 +987,10 @@ def get_cancellations_by_status_change(year: int, month: int) -> dict:
     )
     type_labels = {143570000: "Permanent", 143570001: "Contract", 143570002: "Temporary"}
     start_s, end_s = start.isoformat(), end.isoformat()
-    counts = {}
     # RetrieveRecordChangeHistory is the API that the "View Audit History"
     # privilege covers (raw audit-table reads need a separate privilege).
-    for p in candidates:
+    # One call per candidate — parallelised to stay inside the SWA 45s limit.
+    def _cancelled_in_window(p) -> bool:
         pid = p["crimson_placementid"]
         resp = requests.get(
             f"{DATAVERSE_URL}/api/data/v9.1/RetrieveRecordChangeHistory(Target=@t)",
@@ -1005,13 +1005,19 @@ def get_cancellations_by_status_change(year: int, month: int) -> dict:
                 continue
             sc = (d.get("NewValue") or {}).get("statuscode")
             try:
-                cancelled = sc is not None and int(sc) in CANCEL_CODES
+                if sc is not None and int(sc) in CANCEL_CODES:
+                    return True
             except (TypeError, ValueError):
-                cancelled = False
-            if cancelled:
+                pass
+        return False
+
+    from concurrent.futures import ThreadPoolExecutor
+    counts = {}
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for p, hit in zip(candidates, pool.map(_cancelled_in_window, candidates)):
+            if hit:
                 label = type_labels.get(p.get("crimson_type"), "Other")
                 counts[label] = counts.get(label, 0) + 1
-                break
     return counts
 
 

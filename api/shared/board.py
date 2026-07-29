@@ -217,27 +217,56 @@ def compose_board_email(build_admin_report_fn) -> tuple:
     # Previous full month
     py, pm = (year, today.month - 1) if today.month > 1 else (year - 1, 12)
 
-    consultants     = get_all_territory_consultants()
-    overrides       = get_overrides()
-    team_map        = get_team_membership_map()
-    placements_this = get_placements_full_year(year)
-    placements_last = get_placements_full_year(year - 1)
-    created_this    = get_placements_created_in_year(year)
-    created_prev    = created_this if py == year else get_placements_created_in_year(py)
-    started_prev    = placements_this if py == year else placements_last
-    budgets         = get_budgets()
-    user_terr       = get_user_territory_map()
-    try:
-        fx_rates = get_fx_rates()
-    except Exception:
-        fx_rates = None
+    # All of these are independent round-trips — fetch concurrently so the
+    # whole compose stays inside the SWA 45-second API gateway limit.
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        futs = {
+            "consultants":     pool.submit(get_all_territory_consultants),
+            "overrides":       pool.submit(get_overrides),
+            "team_map":        pool.submit(get_team_membership_map),
+            "placements_this": pool.submit(get_placements_full_year, year),
+            "placements_last": pool.submit(get_placements_full_year, year - 1),
+            "created_this":    pool.submit(get_placements_created_in_year, year),
+            "created_last":    pool.submit(get_placements_created_in_year, year - 1),
+            "budgets":         pool.submit(get_budgets),
+            "user_terr":       pool.submit(get_user_territory_map),
+            "fx_rates":        pool.submit(get_fx_rates),
+            "prev_cancel":     pool.submit(get_cancellations_by_status_change, py, pm),
+            "curr_cancel":     pool.submit(get_cancellations_by_status_change, year, today.month),
+            "forecast":        pool.submit(get_latest_forecast),
+            "roi":             pool.submit(fetch_roi_summary),
+        }
+        consultants     = futs["consultants"].result()
+        overrides       = futs["overrides"].result()
+        team_map        = futs["team_map"].result()
+        placements_this = futs["placements_this"].result()
+        placements_last = futs["placements_last"].result()
+        created_this    = futs["created_this"].result()
+        created_last    = futs["created_last"].result()
+        budgets         = futs["budgets"].result()
+        user_terr       = futs["user_terr"].result()
+        try:
+            fx_rates = futs["fx_rates"].result()
+        except Exception:
+            fx_rates = None
+        try:
+            prev_cancel = futs["prev_cancel"].result()
+            curr_cancel = futs["curr_cancel"].result()
+        except Exception:
+            prev_cancel = curr_cancel = None  # fallback below
+        forecast = futs["forecast"].result()
+        roi      = futs["roi"].result()
+
+    created_prev = created_this if py == year else created_last
+    started_prev = placements_this if py == year else placements_last
     to_gbp, _ = _build_fx_tables(fx_rates) if fx_rates else (TO_GBP, TO_USD)
 
     report = build_admin_report_fn(
         consultants, placements_this, placements_last, overrides, today,
         team_map=team_map, budgets=budgets, fx_rates=fx_rates,
         created_this=created_this,
-        created_last=get_placements_created_in_year(year - 1),
+        created_last=created_last,
     )
 
     prev_stats = _month_stats(created_prev, started_prev, user_terr, to_gbp, py, pm)
@@ -259,21 +288,16 @@ def compose_board_email(build_admin_report_fn) -> tuple:
     curr_stats["nb_perm"]     = _truly_new(curr_stats["nb_perm"], year, today.month)
     curr_stats["nb_contract"] = _truly_new(curr_stats["nb_contract"], year, today.month)
 
-    # Cancelled = status CHANGED to cancelled during the month (audit log).
-    # Falls back to created-in-month-now-cancelled if audits are unreadable.
-    try:
-        prev_cancel = get_cancellations_by_status_change(py, pm)
-        curr_cancel = get_cancellations_by_status_change(year, today.month)
-    except Exception:
-        logging.warning("audit-based cancellations unavailable — using created-basis fallback",
-                        exc_info=True)
+    # Cancelled = status CHANGED to cancelled during the month (audit log,
+    # fetched above). Falls back to created-in-month-now-cancelled if audits
+    # were unreadable.
+    if prev_cancel is None or curr_cancel is None:
+        logging.warning("audit-based cancellations unavailable — using created-basis fallback")
         cancelled_this = get_cancelled_created_in_year(year)
         cancelled_prev = cancelled_this if py == year else get_cancelled_created_in_year(py)
         prev_cancel = _cancelled_in_month(cancelled_prev, py, pm)
         curr_cancel = _cancelled_in_month(cancelled_this, year, today.month)
     regional    = _regional_totals(report)
-    forecast    = get_latest_forecast()
-    roi         = fetch_roi_summary()
 
     from datetime import datetime
     stamp = datetime.utcnow().strftime("%d %b %H:%M")
