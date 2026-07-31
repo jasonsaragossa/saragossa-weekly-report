@@ -178,7 +178,7 @@ function showNbClients(name, clients) {
 
 // ── New-business target drill-in ──────────────────────────────────────────────
 
-async function showNbTarget(who) {
+async function showNbTarget(who, asOf) {
   let overlay = document.getElementById("nbt-modal");
   if (!overlay) {
     overlay = document.createElement("div");
@@ -202,7 +202,8 @@ async function showNbTarget(who) {
 
   let data;
   try {
-    const resp = await fetch(`/api/nb-target?who=${encodeURIComponent(who)}`);
+    const qs = `who=${encodeURIComponent(who)}` + (asOf ? `&as_of=${encodeURIComponent(asOf)}` : "");
+    const resp = await fetch(`/api/nb-target?${qs}`);
     if (resp.status === 403) {
       overlay.querySelector("#nbt-body").innerHTML =
         `<p class="nb-client-empty">Only this consultant and admins can view this.</p>`;
@@ -234,8 +235,15 @@ async function showNbTarget(who) {
     overlay.querySelector("#nbt-body").innerHTML = `
       <div class="nbt-summary">
         <div class="nbt-total">${fmt(total, "£")} <span class="nbt-of">of ${fmt(data.target, "£")} target · ${pct.toFixed(1)}%</span></div>
+        ${asOf ? `<div class="nbt-projected">Projected position at ${new Date(data.as_of + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })} — includes placements already booked to start by then</div>` : ""}
         <div class="nbt-bar"><div class="nbt-bar-fill${total >= data.target ? " nbt-bar-hit" : ""}" style="width:${pct}%"></div></div>
-        <label class="nbt-toggle"><input type="checkbox" id="nbt-contract" ${includeContract ? "checked" : ""}> Include contract</label>
+        <div class="nbt-controls">
+          <label class="nbt-toggle"><input type="checkbox" id="nbt-contract" ${includeContract ? "checked" : ""}> Include contract</label>
+          <label class="nbt-toggle">Position as at
+            <input type="date" id="nbt-date" value="${esc(data.as_of)}">
+          </label>
+          ${asOf ? `<button class="nbt-today" id="nbt-today">Back to today</button>` : ""}
+        </div>
       </div>
       <div class="table-wrap"><table>
         <thead><tr><th>Client</th><th class="num">First placement</th><th class="num">Perm 12M</th><th class="num">Contract 12M</th><th class="num">Total 12M</th></tr></thead>
@@ -246,6 +254,11 @@ async function showNbTarget(who) {
         (${new Date(data.roll12_start + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} – today) ·
         contract = initial contracts only, extensions excluded · all figures GBP</p>`;
     overlay.querySelector("#nbt-contract").addEventListener("change", (e) => render(e.target.checked));
+    overlay.querySelector("#nbt-date").addEventListener("change", (e) => {
+      if (e.target.value) showNbTarget(who, e.target.value);
+    });
+    const todayBtn = overlay.querySelector("#nbt-today");
+    if (todayBtn) todayBtn.addEventListener("click", () => showNbTarget(who));
   };
   render(true);
 }

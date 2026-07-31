@@ -408,9 +408,21 @@ def nb_target_get(req: func.HttpRequest) -> func.HttpResponse:
                 json.dumps({"ok": False, "error": "forbidden"}),
                 mimetype="application/json", status_code=403,
             )
+    # "as at" date — lets the consultant roll the 12-month window forward to see
+    # where already-booked future starts will put them.
+    as_of = None
+    raw = (req.params.get("as_of") or "").strip()
+    if raw:
+        try:
+            as_of = date.fromisoformat(raw[:10])
+        except ValueError:
+            return func.HttpResponse(
+                json.dumps({"ok": False, "error": "Invalid as_of date"}),
+                mimetype="application/json", status_code=400,
+            )
     try:
         from shared.nbtarget import build_nb_target
-        data = build_nb_target(person["uid"])
+        data = build_nb_target(person["uid"], as_of)
         data.update({"ok": True, "name": person["name"]})
         return func.HttpResponse(
             json.dumps(data), mimetype="application/json", status_code=200,

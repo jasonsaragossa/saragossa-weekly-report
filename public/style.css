@@ -1067,3 +1067,31 @@ tbody tr.other-row:hover td {
 }
 .nbt-toggle input { accent-color: var(--accent); }
 .nbt-note { font-size: 10px; color: var(--mid); line-height: 1.5; margin-top: 12px; }
+.nbt-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.nbt-controls input[type="date"] {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--white);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 3px 6px;
+  color-scheme: dark;
+}
+.nbt-today {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--mid);
+  font-size: 10px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.nbt-today:hover { color: var(--accent); border-color: var(--accent); }
+.nbt-projected {
+  font-size: 10px;
+  color: var(--accent);
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
