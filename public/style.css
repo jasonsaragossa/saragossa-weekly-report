@@ -1035,3 +1035,35 @@ tbody tr.other-row:hover td {
   font-size: 0.82rem;
   font-weight: 600;
 }
+
+/* ── New-business target drill-in (weekly report) ──────────────────────────── */
+.nbt-link { cursor: pointer; border-bottom: 1px dotted var(--accent); }
+.nbt-link:hover { color: var(--accent); }
+.nbt-summary { padding: 4px 2px 14px; }
+.nbt-total {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--white);
+  font-variant-numeric: tabular-nums;
+}
+.nbt-of { font-size: 0.8rem; font-weight: 400; color: var(--mid); margin-left: 6px; }
+.nbt-bar {
+  height: 8px;
+  background: rgba(255,255,255,.08);
+  border-radius: 4px;
+  margin: 10px 0;
+  overflow: hidden;
+}
+.nbt-bar-fill { height: 100%; background: var(--accent); border-radius: 4px; }
+.nbt-bar-hit { background: #35a56b; }
+.nbt-toggle {
+  font-size: 11px;
+  color: var(--mid);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+.nbt-toggle input { accent-color: var(--accent); }
+.nbt-note { font-size: 10px; color: var(--mid); line-height: 1.5; margin-top: 12px; }

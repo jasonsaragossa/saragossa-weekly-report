@@ -378,6 +378,48 @@ def board_report_post(req: func.HttpRequest) -> func.HttpResponse:
         return _server_error()
 
 
+# ── /api/nb-target (GET) — new-business £1m target drill-in ───────────────────
+# Visible to the tracked person themselves and to admins.
+
+NB_TARGET_PEOPLE = {
+    "charlie@saragossa.io": {
+        "uid": "18a4c869-3264-ee11-8def-6045bd0c1c1b",  # Charlie Smith (Mercury)
+        "name": "Charlie Smith",
+    },
+}
+
+
+@app.route(route="nb-target", methods=["GET"])
+def nb_target_get(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_auth(req)
+    if err:
+        return err
+    who = (req.params.get("who") or "charlie@saragossa.io").lower()
+    person = NB_TARGET_PEOPLE.get(who)
+    if not person:
+        return func.HttpResponse(
+            json.dumps({"ok": False, "error": "No NB target configured for this person"}),
+            mimetype="application/json", status_code=404,
+        )
+    if email.lower() != who:
+        from shared.dataverse import is_admin
+        if not is_admin(email):
+            return func.HttpResponse(
+                json.dumps({"ok": False, "error": "forbidden"}),
+                mimetype="application/json", status_code=403,
+            )
+    try:
+        from shared.nbtarget import build_nb_target
+        data = build_nb_target(person["uid"])
+        data.update({"ok": True, "name": person["name"]})
+        return func.HttpResponse(
+            json.dumps(data), mimetype="application/json", status_code=200,
+        )
+    except Exception:
+        logging.exception("nb-target error")
+        return _server_error()
+
+
 # ── /api/nb-thresholds (POST) — save NB-uplift qualification thresholds ────────
 
 @app.route(route="nb-thresholds", methods=["POST"])

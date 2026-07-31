@@ -17,6 +17,10 @@ const CONTRACT_TERRITORIES = new Set(["London Contract", "Chicago Contract"]);
 // Highlight a consultant's NB-client count once it reaches this many
 const NB_CLIENT_ALERT = 5;
 
+// Consultants with a personal new-business target — clicking their name opens
+// the drill-in (the API only allows the person themselves and admins to view)
+const NB_TARGET_LINKS = { "Charlie Smith": "charlie@saragossa.io" };
+
 // ── Boot ─────────────────────────────────────────────────────────────────────
 
 (async () => {
@@ -129,6 +133,8 @@ function renderReport(data) {
 
   // NB-clients drill-down
   panelsEl.addEventListener("click", (e) => {
+    const tgt = e.target.closest(".nbt-link");
+    if (tgt) { showNbTarget(tgt.dataset.who); return; }
     const el = e.target.closest(".nb-clients-link");
     if (!el) return;
     let names = [];
@@ -170,6 +176,81 @@ function showNbClients(name, clients) {
 }
 
 
+// ── New-business target drill-in ──────────────────────────────────────────────
+
+async function showNbTarget(who) {
+  let overlay = document.getElementById("nbt-modal");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "nbt-modal";
+    overlay.className = "modal-overlay";
+    overlay.style.display = "none";
+    overlay.innerHTML = `<div class="modal-box">
+      <div class="modal-header">
+        <span class="modal-title" id="nbt-title"></span>
+        <button class="modal-close" id="nbt-close" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body" id="nbt-body"></div>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.style.display = "none"; });
+    overlay.querySelector("#nbt-close").addEventListener("click", () => { overlay.style.display = "none"; });
+  }
+  overlay.querySelector("#nbt-title").textContent = "New Business Clients";
+  overlay.querySelector("#nbt-body").innerHTML = `<p class="nb-client-empty">Loading…</p>`;
+  overlay.style.display = "flex";
+
+  let data;
+  try {
+    const resp = await fetch(`/api/nb-target?who=${encodeURIComponent(who)}`);
+    if (resp.status === 403) {
+      overlay.querySelector("#nbt-body").innerHTML =
+        `<p class="nb-client-empty">Only this consultant and admins can view this.</p>`;
+      return;
+    }
+    data = await resp.json();
+    if (!data.ok) throw new Error(data.error || "unknown error");
+  } catch (e) {
+    overlay.querySelector("#nbt-body").innerHTML =
+      `<p class="nb-client-empty">Could not load: ${esc(e.message)}</p>`;
+    return;
+  }
+
+  overlay.querySelector("#nbt-title").textContent = `${data.name} — New Business Clients`;
+
+  const render = (includeContract) => {
+    const total = data.perm_total + (includeContract ? data.contract_total : 0);
+    const pct = Math.min(100, (total / data.target) * 100);
+    const rows = data.clients.map(c => {
+      const t = c.perm12 + (includeContract ? c.contract12 : 0);
+      return `<tr>
+        <td>${esc(c.name)}</td>
+        <td class="num">${new Date(c.first_date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</td>
+        <td class="num">${fmt(c.perm12, "£")}</td>
+        <td class="num">${includeContract ? fmt(c.contract12, "£") : "—"}</td>
+        <td class="num"><strong>${fmt(t, "£")}</strong></td>
+      </tr>`;
+    }).join("");
+    overlay.querySelector("#nbt-body").innerHTML = `
+      <div class="nbt-summary">
+        <div class="nbt-total">${fmt(total, "£")} <span class="nbt-of">of ${fmt(data.target, "£")} target · ${pct.toFixed(1)}%</span></div>
+        <div class="nbt-bar"><div class="nbt-bar-fill${total >= data.target ? " nbt-bar-hit" : ""}" style="width:${pct}%"></div></div>
+        <label class="nbt-toggle"><input type="checkbox" id="nbt-contract" ${includeContract ? "checked" : ""}> Include contract</label>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Client</th><th class="num">First placement</th><th class="num">Perm 12M</th><th class="num">Contract 12M</th><th class="num">Total 12M</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="5" class="nb-client-empty">No new clients yet.</td></tr>`}</tbody>
+      </table></div>
+      <p class="nbt-note">New clients = first-ever placement on/after 1 Jan 2025 with ${esc(data.name)} as CRO ·
+        all placements at those clients count · full placement GP, rolling 12 months by start date
+        (${new Date(data.roll12_start + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} – today) ·
+        contract = initial contracts only, extensions excluded · all figures GBP</p>`;
+    overlay.querySelector("#nbt-contract").addEventListener("change", (e) => render(e.target.checked));
+  };
+  render(true);
+}
+
+
 // ── Table builders ────────────────────────────────────────────────────────────
 
 function permHeaders() {
@@ -185,9 +266,15 @@ function permHeaders() {
   </tr></thead>`;
 }
 
+function nameCell(name) {
+  const who = NB_TARGET_LINKS[name];
+  if (!who) return esc(name);
+  return `<span class="nbt-link" data-who="${esc(who)}" title="New business target">${esc(name)}</span>`;
+}
+
 function permRow(m) {
   return `<tr>
-    <td>${esc(m.name)}</td>
+    <td>${nameCell(m.name)}</td>
     <td class="role-cell">${esc(m.role)}</td>
     <td class="num">${fmt(m.ytd, m.sym)}</td>
     <td class="num">${fmt(m.written, m.sym)}</td>
