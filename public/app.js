@@ -222,15 +222,29 @@ async function showNbTarget(who, asOf) {
   const render = (includeContract) => {
     const total = data.perm_total + (includeContract ? data.contract_total : 0);
     const pct = Math.min(100, (total / data.target) * 100);
-    const rows = data.clients.map(c => {
+    const rows = data.clients.map((c, i) => {
       const t = c.perm12 + (includeContract ? c.contract12 : 0);
-      return `<tr>
-        <td>${esc(c.name)}</td>
+      const pls = (c.placements || []).filter(p => includeContract || p.kind === "Perm");
+      const detail = pls.map(p => `<tr class="nbt-pl${p.counts ? "" : " nbt-pl-out"}">
+          <td>${esc(p.job_title)}</td>
+          <td>${esc(p.candidate)}</td>
+          <td class="num">${new Date(p.start_date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</td>
+          <td class="num">${esc(p.currency)} ${Math.round(p.fee).toLocaleString("en-GB")}</td>
+          <td class="num">${p.counts ? fmt(p.fee_gbp, "£") : `<span class="nbt-out-tag">${p.kind === "Extension" ? "extension" : "outside 12M"}</span>`}</td>
+        </tr>`).join("");
+      return `<tr class="nbt-client-row" data-idx="${i}">
+        <td><span class="nbt-caret">▶</span> ${esc(c.name)}</td>
         <td class="num">${new Date(c.first_date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</td>
         <td class="num">${fmt(c.perm12, "£")}</td>
         <td class="num">${includeContract ? fmt(c.contract12, "£") : "—"}</td>
         <td class="num"><strong>${fmt(t, "£")}</strong></td>
-      </tr>`;
+      </tr>
+      <tr class="nbt-detail-row" id="nbt-detail-${i}" style="display:none"><td colspan="5">
+        <table class="nbt-detail">
+          <thead><tr><th>Job title</th><th>Candidate</th><th class="num">Start date</th><th class="num">Fee</th><th class="num">Counts (GBP)</th></tr></thead>
+          <tbody>${detail || `<tr><td colspan="5" class="nb-client-empty">No placements.</td></tr>`}</tbody>
+        </table>
+      </td></tr>`;
     }).join("");
     overlay.querySelector("#nbt-body").innerHTML = `
       <div class="nbt-summary">
@@ -253,6 +267,14 @@ async function showNbTarget(who, asOf) {
         all placements at those clients count · full placement GP, rolling 12 months by start date
         (${new Date(data.roll12_start + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} – today) ·
         contract = initial contracts only, extensions excluded · all figures GBP</p>`;
+    overlay.querySelectorAll(".nbt-client-row").forEach(row => {
+      row.addEventListener("click", () => {
+        const det = overlay.querySelector("#nbt-detail-" + row.dataset.idx);
+        const open = det.style.display !== "none";
+        det.style.display = open ? "none" : "table-row";
+        row.querySelector(".nbt-caret").textContent = open ? "▶" : "▼";
+      });
+    });
     overlay.querySelector("#nbt-contract").addEventListener("change", (e) => render(e.target.checked));
     overlay.querySelector("#nbt-date").addEventListener("change", (e) => {
       if (e.target.value) showNbTarget(who, e.target.value);

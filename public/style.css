@@ -1095,3 +1095,18 @@ tbody tr.other-row:hover td {
   text-transform: uppercase;
   letter-spacing: .06em;
 }
+.nbt-client-row { cursor: pointer; }
+.nbt-caret { color: var(--accent); font-size: 8px; margin-right: 6px; }
+.nbt-detail-row > td { padding: 0 0 8px 26px !important; background: rgba(255,255,255,.02); }
+table.nbt-detail { width: 100%; border-collapse: collapse; }
+table.nbt-detail th {
+  font-size: 9px;
+  color: var(--mid);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+table.nbt-detail td { font-size: 11px; padding: 5px 8px; border-bottom: 1px solid rgba(255,255,255,.05); }
+tr.nbt-pl-out td { color: var(--mid); }
+.nbt-out-tag { font-size: 9px; text-transform: uppercase; letter-spacing: .06em; }

@@ -52,14 +52,15 @@ def _fetch_client_placements(client_ids: list[str]) -> list[dict]:
             "crimson_placements",
             params={
                 "$select": (
-                    f"crimson_placementid,{_CLIENT},crimson_startdate,"
+                    f"crimson_placementid,{_CLIENT},crimson_startdate,crimson_name,"
                     f"crimson_type,recruit_truegrossprofit,crimson_extension,"
                     f"crimson_placementidcode,_mercury_parentplacementid_value,{_CRO}"
                 ),
                 "$filter": f"({or_f}) and statecode eq 0 and {cancel_filter}",
                 "$expand": (
                     "recruit_truegrossprofitcurrency($select=isocurrencycode),"
-                    "crimson_clientname($select=name)"
+                    "crimson_clientname($select=name),"
+                    "recruit_candidatecontact($select=fullname)"
                 ),
             },
         ))
@@ -93,17 +94,31 @@ def build_nb_target(uid: str, today: date = None) -> dict:
             continue
 
         perm12 = contract12 = 0.0
+        placements = []
         for p in rows:
             d = parse_date(p["crimson_startdate"])
-            if not (roll12_start <= d <= today):
-                continue
             gp = p.get("recruit_truegrossprofit") or 0.0
-            ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode")
+            ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode") or "GBP"
             val = gp * to_gbp.get(ccy, 1.0)
-            if p.get("crimson_type") == _PERM_TYPE_CODE:
-                perm12 += val
-            elif not _is_extension(p):
-                contract12 += val
+            is_perm = p.get("crimson_type") == _PERM_TYPE_CODE
+            extension = (not is_perm) and _is_extension(p)
+            counts = (roll12_start <= d <= today) and not extension
+            if counts:
+                if is_perm:
+                    perm12 += val
+                else:
+                    contract12 += val
+            placements.append({
+                "job_title": p.get("crimson_name") or "(no job title)",
+                "candidate": (p.get("recruit_candidatecontact") or {}).get("fullname") or "(no candidate)",
+                "start_date": d.isoformat(),
+                "fee": round(gp, 2),
+                "currency": ccy,
+                "fee_gbp": round(val, 2),
+                "kind": "Perm" if is_perm else ("Extension" if extension else "Contract"),
+                "counts": counts,
+            })
+        placements.sort(key=lambda x: x["start_date"], reverse=True)
 
         clients.append({
             "name": (rows[0].get("crimson_clientname") or {}).get("name") or "(client)",
@@ -111,6 +126,7 @@ def build_nb_target(uid: str, today: date = None) -> dict:
             "perm12": round(perm12, 2),
             "contract12": round(contract12, 2),
             "total12": round(perm12 + contract12, 2),
+            "placements": placements,
         })
 
     clients.sort(key=lambda c: (-c["total12"], c["name"].lower()))
