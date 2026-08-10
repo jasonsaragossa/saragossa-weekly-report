@@ -290,12 +290,24 @@ CANCEL_CODES = [
 ]
 CANCELLED_DIDNOTSTART = 143570009  # kept as alias used elsewhere
 
+# "Cancelled - Rebated" is NOT a normal cancellation: the placement still
+# counts and the fee still credits in its start month — only the rebated
+# amount is clawed back, in the month it was rebated. These records go
+# inactive in Mercury, so every fetch has to opt them back in explicitly.
+REBATED_STATUS = 975310000
+REBATE_FIELDS = "recruit_rebateamount,recruit_rebatedon,statuscode"
+
+
+def active_or_rebated_filter() -> str:
+    """OData predicate: live placements, plus rebated ones (see REBATED_STATUS)."""
+    cancel_filter = " and ".join(f"statuscode ne {c}" for c in CANCEL_CODES)
+    return f"((statecode eq 0 and {cancel_filter}) or statuscode eq {REBATED_STATUS})"
+
 def get_placements(start_date: str, end_date: str) -> list[dict]:
     """
     Fetches all active perm placements where crimson_startdate is in range.
     No row cap — paginated automatically.
     """
-    cancel_filter = " and ".join(f"statuscode ne {c}" for c in CANCEL_CODES)
     return odata_get_all(
         "crimson_placements",
         params={
@@ -309,14 +321,14 @@ def get_placements(start_date: str, end_date: str) -> list[dict]:
                 "_mercury_clientrelationshipowner_value,"
                 "_crimson_consultant_value,"
                 "_mercury_assignmentowner_value,"
-                "_mercury_contractorrelationship_userid_value"
+                "_mercury_contractorrelationship_userid_value,"
+                f"crimson_name,{REBATE_FIELDS}"
             ),
             "$filter": (
                 f"crimson_type eq {PERM_TYPE}"
-                f" and statecode eq 0"
                 f" and crimson_startdate ge {start_date}"
                 f" and crimson_startdate le {end_date}"
-                f" and {cancel_filter}"
+                f" and {active_or_rebated_filter()}"
             ),
             "$expand": (
                 "recruit_truegrossprofitcurrency($select=isocurrencycode),"
@@ -331,8 +343,7 @@ def get_contract_placements(start_date: str, end_date: str) -> list[dict]:
     Contract/temp placements with a start date in range — used for the
     cross-type NB-client count and the CRO's NB uplift on contract deals.
     """
-    cancel_filter = " and ".join(f"statuscode ne {c}" for c in CANCEL_CODES)
-    type_filter   = " or ".join(f"crimson_type eq {t}" for t in CONTRACT_TYPES)
+    type_filter = " or ".join(f"crimson_type eq {t}" for t in CONTRACT_TYPES)
     return odata_get_all(
         "crimson_placements",
         params={
@@ -344,14 +355,14 @@ def get_contract_placements(start_date: str, end_date: str) -> list[dict]:
                 "_mercury_clientrelationshipowner_value,"
                 "_crimson_consultant_value,"
                 "_mercury_assignmentowner_value,"
-                "_mercury_contractorrelationship_userid_value"
+                "_mercury_contractorrelationship_userid_value,"
+                f"crimson_name,{REBATE_FIELDS}"
             ),
             "$filter": (
                 f"({type_filter})"
-                f" and statecode eq 0"
                 f" and crimson_startdate ge {start_date}"
                 f" and crimson_startdate le {end_date}"
-                f" and {cancel_filter}"
+                f" and {active_or_rebated_filter()}"
             ),
             "$expand": (
                 "crimson_clientname($select=name),"
@@ -367,7 +378,6 @@ def get_placements_created_in_year(year: int) -> list[dict]:
     for the "Written" monthly view. Includes extension markers so initial
     contracts can be told apart from extensions.
     """
-    cancel_filter = " and ".join(f"statuscode ne {c}" for c in CANCEL_CODES)
     return odata_get_all(
         "crimson_placements",
         params={
@@ -382,13 +392,13 @@ def get_placements_created_in_year(year: int) -> list[dict]:
                 "_mercury_clientrelationshipowner_value,"
                 "_crimson_consultant_value,"
                 "_mercury_assignmentowner_value,"
-                "_mercury_contractorrelationship_userid_value"
+                "_mercury_contractorrelationship_userid_value,"
+                f"{REBATE_FIELDS}"
             ),
             "$filter": (
-                f"statecode eq 0"
-                f" and createdon ge {year}-01-01T00:00:00Z"
+                f"createdon ge {year}-01-01T00:00:00Z"
                 f" and createdon lt {year + 1}-01-01T00:00:00Z"
-                f" and {cancel_filter}"
+                f" and {active_or_rebated_filter()}"
             ),
             "$expand": (
                 "recruit_truegrossprofitcurrency($select=isocurrencycode),"
@@ -464,7 +474,6 @@ def get_placements_full_year(year: int) -> list[dict]:
     Fetch all active or completed perm placements for a given calendar year.
     Includes expanded client name and owner names for the "Other" drilldown.
     """
-    cancel_filter = " and ".join(f"statuscode ne {c}" for c in CANCEL_CODES)
     return odata_get_all(
         "crimson_placements",
         params={
@@ -475,13 +484,14 @@ def get_placements_full_year(year: int) -> list[dict]:
                 "_mercury_clientrelationshipowner_value,"
                 "_crimson_consultant_value,"
                 "_mercury_assignmentowner_value,"
-                "_mercury_contractorrelationship_userid_value"
+                "_mercury_contractorrelationship_userid_value,"
+                f"{REBATE_FIELDS}"
             ),
             "$filter": (
                 f"crimson_type eq {PERM_TYPE}"
                 f" and crimson_startdate ge {year}-01-01"
                 f" and crimson_startdate le {year}-12-31"
-                f" and {cancel_filter}"
+                f" and {active_or_rebated_filter()}"
             ),
             "$expand": (
                 "recruit_truegrossprofitcurrency($select=isocurrencycode),"
@@ -765,7 +775,6 @@ def get_nb_clients_for_cro(uid: str, start_date: str, end_date: str) -> dict:
     placement type. Mirrors the client-counting rules in compute_metrics.
     `uid` must be a validated GUID.
     """
-    cancel_filter = " and ".join(f"statuscode ne {c}" for c in CANCEL_CODES)
     rows = odata_get_all(
         "crimson_placements",
         params={
@@ -775,10 +784,9 @@ def get_nb_clients_for_cro(uid: str, start_date: str, end_date: str) -> dict:
             ),
             "$filter": (
                 f"_mercury_clientrelationshipowner_value eq '{uid}'"
-                f" and statecode eq 0"
+                f" and {active_or_rebated_filter()}"
                 f" and crimson_startdate ge {start_date}"
                 f" and crimson_startdate le {end_date}"
-                f" and {cancel_filter}"
             ),
             "$expand": "crimson_clientname($select=name)",
         },
@@ -923,10 +931,10 @@ def get_first_placement_dates(client_ids: list) -> dict:
     """
     {client_id: earliest createdon} across ALL their non-cancelled placements —
     a client is only a "new client" in the month of their first-ever placement.
+    Rebated placements still count (money-only claw-back), so they are included.
     """
     out = {}
     ids = [c for c in (client_ids or []) if c]
-    cancel_filter = " and ".join(f"statuscode ne {c}" for c in CANCEL_CODES)
     for i in range(0, len(ids), 20):
         chunk = ids[i:i + 20]
         or_f = " or ".join(f"_crimson_clientname_value eq '{cid}'" for cid in chunk)
@@ -934,7 +942,7 @@ def get_first_placement_dates(client_ids: list) -> dict:
             "crimson_placements",
             params={
                 "$select": "_crimson_clientname_value,createdon",
-                "$filter": f"({or_f}) and statecode eq 0 and {cancel_filter}",
+                "$filter": f"({or_f}) and {active_or_rebated_filter()}",
             },
         )
         for r in rows:
@@ -948,12 +956,13 @@ def get_cancelled_created_in_year(year: int) -> list:
     """
     Placements CREATED in the year that are NOW cancelled — the board email's
     cancellation rule: "created in the month in question, now cancelled".
+    Includes rebated ones so the caller can report them separately.
     """
     cancel_filter = " or ".join(f"statuscode eq {c}" for c in CANCEL_CODES)
     return odata_get_all(
         "crimson_placements",
         params={
-            "$select": "crimson_placementid,crimson_type,createdon",
+            "$select": "crimson_placementid,crimson_type,createdon,statuscode",
             "$filter": (
                 f"({cancel_filter})"
                 f" and createdon ge {year}-01-01T00:00:00Z"
@@ -965,9 +974,11 @@ def get_cancelled_created_in_year(year: int) -> list:
 
 def get_cancellations_by_status_change(year: int, month: int) -> dict:
     """
-    {"Permanent": n, "Contract": n, ...} — placements whose statuscode CHANGED
-    to a cancelled value during the given month, read from the audit log
-    (Jason's rule: cancelled-in-month means the status flipped that month).
+    {"cancelled": {"Permanent": n, ...}, "rebated": {"Permanent": n, ...}} —
+    placements whose statuscode CHANGED to a cancelled value during the given
+    month, read from the audit log (Jason's rule: cancelled-in-month means the
+    status flipped that month). "Cancelled - Rebated" is reported separately:
+    the placement still counts as a deal, only money is clawed back.
     Raises if the audit log can't be read so callers can fall back.
     """
     import json as _json
@@ -990,7 +1001,8 @@ def get_cancellations_by_status_change(year: int, month: int) -> dict:
     # RetrieveRecordChangeHistory is the API that the "View Audit History"
     # privilege covers (raw audit-table reads need a separate privilege).
     # One call per candidate — parallelised to stay inside the SWA 45s limit.
-    def _cancelled_in_window(p) -> bool:
+    def _cancel_code_in_window(p):
+        """The cancel statuscode this placement moved to during the month, or None."""
         pid = p["crimson_placementid"]
         resp = requests.get(
             f"{DATAVERSE_URL}/api/data/v9.1/RetrieveRecordChangeHistory(Target=@t)",
@@ -1006,19 +1018,21 @@ def get_cancellations_by_status_change(year: int, month: int) -> dict:
             sc = (d.get("NewValue") or {}).get("statuscode")
             try:
                 if sc is not None and int(sc) in CANCEL_CODES:
-                    return True
+                    return int(sc)
             except (TypeError, ValueError):
                 pass
-        return False
+        return None
 
     from concurrent.futures import ThreadPoolExecutor
-    counts = {}
+    counts, rebated = {}, {}
     with ThreadPoolExecutor(max_workers=8) as pool:
-        for p, hit in zip(candidates, pool.map(_cancelled_in_window, candidates)):
-            if hit:
-                label = type_labels.get(p.get("crimson_type"), "Other")
-                counts[label] = counts.get(label, 0) + 1
-    return counts
+        for p, code in zip(candidates, pool.map(_cancel_code_in_window, candidates)):
+            if code is None:
+                continue
+            label = type_labels.get(p.get("crimson_type"), "Other")
+            target = rebated if code == REBATED_STATUS else counts
+            target[label] = target.get(label, 0) + 1
+    return {"cancelled": counts, "rebated": rebated}
 
 
 def fetch_roi_summary() -> dict:

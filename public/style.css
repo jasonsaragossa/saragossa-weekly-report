@@ -1110,3 +1110,14 @@ table.nbt-detail th {
 table.nbt-detail td { font-size: 11px; padding: 5px 8px; border-bottom: 1px solid rgba(255,255,255,.05); }
 tr.nbt-pl-out td { color: var(--mid); }
 .nbt-out-tag { font-size: 9px; text-transform: uppercase; letter-spacing: .06em; }
+
+/* Rebate marker on the weekly report row */
+.rebate-note {
+  display: block;
+  font-size: 10px;
+  color: #d98b8b;
+  margin-top: 2px;
+  font-family: var(--font);
+}
+.rebate-link { cursor: pointer; }
+.rebate-link:hover { text-decoration: underline; }

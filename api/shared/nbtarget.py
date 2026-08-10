@@ -14,8 +14,9 @@ Rules (agreed with Jason, Jul 2026):
 from datetime import date
 
 from shared.calc import (TO_GBP, _build_fx_tables, _is_extension, parse_date,
-                         _PERM_TYPE_CODE)
-from shared.dataverse import CANCEL_CODES, get_fx_rates, odata_get_all
+                         _PERM_TYPE_CODE, rebate_of)
+from shared.dataverse import (REBATE_FIELDS, active_or_rebated_filter,
+                              get_fx_rates, odata_get_all)
 
 NEW_CLIENT_SINCE = date(2025, 1, 1)
 TARGET_GBP = 1_000_000
@@ -26,7 +27,6 @@ _CLIENT = "_crimson_clientname_value"
 
 def _fetch_candidate_client_ids(uid: str) -> list[str]:
     """Clients where the tracked person is CRO on a placement started since the cutoff."""
-    cancel_filter = " and ".join(f"statuscode ne {c}" for c in CANCEL_CODES)
     rows = odata_get_all(
         "crimson_placements",
         params={
@@ -34,7 +34,7 @@ def _fetch_candidate_client_ids(uid: str) -> list[str]:
             "$filter": (
                 f"{_CRO} eq '{uid}'"
                 f" and crimson_startdate ge {NEW_CLIENT_SINCE.isoformat()}"
-                f" and statecode eq 0 and {cancel_filter}"
+                f" and {active_or_rebated_filter()}"
             ),
         },
     )
@@ -43,7 +43,6 @@ def _fetch_candidate_client_ids(uid: str) -> list[str]:
 
 def _fetch_client_placements(client_ids: list[str]) -> list[dict]:
     """ALL non-cancelled placements (any owner) at the given clients."""
-    cancel_filter = " and ".join(f"statuscode ne {c}" for c in CANCEL_CODES)
     out = []
     for i in range(0, len(client_ids), 20):
         chunk = client_ids[i:i + 20]
@@ -54,9 +53,10 @@ def _fetch_client_placements(client_ids: list[str]) -> list[dict]:
                 "$select": (
                     f"crimson_placementid,{_CLIENT},crimson_startdate,crimson_name,"
                     f"crimson_type,recruit_truegrossprofit,crimson_extension,"
-                    f"crimson_placementidcode,_mercury_parentplacementid_value,{_CRO}"
+                    f"crimson_placementidcode,_mercury_parentplacementid_value,{_CRO},"
+                    f"{REBATE_FIELDS}"
                 ),
-                "$filter": f"({or_f}) and statecode eq 0 and {cancel_filter}",
+                "$filter": f"({or_f}) and {active_or_rebated_filter()}",
                 "$expand": (
                     "recruit_truegrossprofitcurrency($select=isocurrencycode),"
                     "crimson_clientname($select=name),"
@@ -97,7 +97,10 @@ def build_nb_target(uid: str, today: date = None) -> dict:
         placements = []
         for p in rows:
             d = parse_date(p["crimson_startdate"])
-            gp = p.get("recruit_truegrossprofit") or 0.0
+            # The client still counts (rebates are money-only) but the £1m
+            # total credits the fee actually kept.
+            reb = rebate_of(p)[0]
+            gp = (p.get("recruit_truegrossprofit") or 0.0) - reb
             ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode") or "GBP"
             val = gp * to_gbp.get(ccy, 1.0)
             is_perm = p.get("crimson_type") == _PERM_TYPE_CODE
@@ -115,6 +118,7 @@ def build_nb_target(uid: str, today: date = None) -> dict:
                 "fee": round(gp, 2),
                 "currency": ccy,
                 "fee_gbp": round(val, 2),
+                "rebated": round(reb, 2),
                 "kind": "Perm" if is_perm else ("Extension" if extension else "Contract"),
                 "counts": counts,
             })

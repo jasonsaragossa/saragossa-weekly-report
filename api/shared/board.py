@@ -19,7 +19,7 @@ from datetime import date
 
 from shared.calc import (
     _build_fx_tables, TO_GBP, TO_USD, split_factor, parse_date,
-    _is_extension, _CONTRACT_TYPE_CODES, _PERM_TYPE_CODE,
+    _is_extension, _CONTRACT_TYPE_CODES, _PERM_TYPE_CODE, rebate_of,
 )
 from shared.dataverse import (
     RETAINER_CANDIDATE_CONTACT_ID,
@@ -122,9 +122,10 @@ def _month_stats(created, started_perm, user_terr, to_gbp, y, m):
         if credited and p.get("statuscode") == PENDING_STATUS:
             stats[f"{kind}_pending"] += 1
 
-        # Written £ (perm only): full GP distributed by the standard split
+        # Written £ (perm only): full GP distributed by the standard split.
+        # A rebate nets off the placement's own month (counts stay untouched).
         if kind == "perm":
-            gp  = p.get("recruit_truegrossprofit") or 0.0
+            gp  = (p.get("recruit_truegrossprofit") or 0.0) - rebate_of(p)[0]
             ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode")
             gbp = gp * to_gbp.get(ccy, 1.0)
             stats["written_total"] += gbp
@@ -144,7 +145,7 @@ def _month_stats(created, started_perm, user_terr, to_gbp, y, m):
             continue
         if d.year != y or d.month != m:
             continue
-        gp  = p.get("recruit_truegrossprofit") or 0.0
+        gp  = (p.get("recruit_truegrossprofit") or 0.0) - rebate_of(p)[0]
         ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode")
         gbp = gp * to_gbp.get(ccy, 1.0)
         if _is_retainer(p):
@@ -166,15 +167,20 @@ _CANCEL_TYPE_LABELS = {143570000: "Permanent", 143570001: "Contract", 143570002:
 
 
 def _cancelled_in_month(cancelled_placements, y, m):
-    """Placements CREATED in (y, m) that are now cancelled, counted by type."""
+    """
+    Placements CREATED in (y, m) that are now cancelled, counted by type.
+    Rebates are reported separately — they still count as deals.
+    """
+    from shared.dataverse import REBATED_STATUS
     prefix = f"{y}-{m:02d}"
-    out = {}
+    out, reb = {}, {}
     for p in (cancelled_placements or []):
         if not (p.get("createdon") or "").startswith(prefix):
             continue
-        label = _CANCEL_TYPE_LABELS.get(p.get("crimson_type"), "Other")
-        out[label] = out.get(label, 0) + 1
-    return out
+        label  = _CANCEL_TYPE_LABELS.get(p.get("crimson_type"), "Other")
+        target = reb if p.get("statuscode") == REBATED_STATUS else out
+        target[label] = target.get(label, 0) + 1
+    return {"cancelled": out, "rebated": reb}
 
 
 def _regional_totals(report):
@@ -361,7 +367,10 @@ def _render_html(today, py, pm, prev, curr, prev_cancel, curr_cancel,
         pend  = s["perm_pending"] + s["contract_pending"]
         nb_p  = ", ".join(escape(c) for c in s["nb_perm"]) or "none"
         nb_c  = ", ".join(escape(c) for c in s["nb_contract"]) or "none"
-        cx    = ", ".join(f"{n} {escape(t.lower())}" for t, n in sorted(cancel.items())) or "none"
+        cancelled = (cancel or {}).get("cancelled") or {}
+        rebated   = (cancel or {}).get("rebated") or {}
+        cx    = ", ".join(f"{n} {escape(t.lower())}" for t, n in sorted(cancelled.items())) or "none"
+        rx    = ", ".join(f"{n} {escape(t.lower())}" for t, n in sorted(rebated.items()))
         pend_note = f" (of which {pend} at Pending)" if pend else ""
         return (f'<p style="margin:0 0 4px;font-size:14px;color:#101820;"><strong>{escape(label)} — '
                 f'{_num(deals)} deals{pend_note}</strong></p>'
@@ -369,7 +378,10 @@ def _render_html(today, py, pm, prev, curr, prev_cancel, curr_cancel,
                 f'New clients: {len(s["nb_perm"])} ({nb_p})</p>'
                 f'<p style="margin:0 0 2px;font-size:13px;color:#3c4448;">Contract: {_num(s["contract_deals"])} · '
                 f'New clients: {len(s["nb_contract"])} ({nb_c})</p>'
-                f'<p style="margin:0 0 14px;font-size:13px;color:#3c4448;">Cancelled placements: {cx}</p>')
+                f'<p style="margin:0 0 2px;font-size:13px;color:#3c4448;">Cancelled placements: {cx}</p>'
+                + (f'<p style="margin:0 0 14px;font-size:13px;color:#3c4448;">Rebated: {rx} '
+                   f'<span style="color:#5a6b6e;">(still counted as deals — fee reduced)</span></p>'
+                   if rx else '<div style="height:12px"></div>'))
 
     notes = notes_block(f"{_MONTHS[pm - 1]}", prev, prev_cancel) \
           + notes_block(f"{_MONTHS[today.month - 1]} to date ({today.day}{_ordinal(today.day)})",

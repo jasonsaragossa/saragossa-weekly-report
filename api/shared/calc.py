@@ -86,6 +86,27 @@ def _nb_qualifies(p: dict, th: dict) -> bool:
     return margin_pct is not None and margin_pct >= th["contract_margin_pct"] and wk_margin >= th["contract_min_margin"]
 
 
+REBATED_STATUS = 975310000
+
+
+def rebate_of(p: dict) -> tuple:
+    """
+    (rebate_amount, rebate_date) for a Cancelled - Rebated placement, else
+    (0.0, None). The fee still credits in the start month; only this amount is
+    clawed back, dated by recruit_rebatedon.
+    """
+    if p.get("statuscode") != REBATED_STATUS:
+        return 0.0, None
+    amt = p.get("recruit_rebateamount") or 0.0
+    raw = p.get("recruit_rebatedon")
+    if not amt or not raw:
+        return 0.0, None
+    try:
+        return float(amt), parse_date(raw)
+    except Exception:
+        return 0.0, None
+
+
 def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: date,
                     to_gbp: dict = None, to_usd: dict = None, thresholds: dict = None,
                     contract_placements: list = None, manual_clients: list = None,
@@ -107,6 +128,7 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
 
     ytd = written = roll12_base = roll12_uplift = 0.0
     nb_clients = {}   # client_id -> client name (unique NB clients won as CRO, rolling 12m)
+    rebates = []      # detail rows for the drill-down
 
     for p in placements:
         factor = split_factor(p, uid)
@@ -117,25 +139,52 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
         ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode")
         d   = parse_date(p["crimson_startdate"])
 
-        val = gp * factor * fx.get(ccy, 1.0)
+        rate = fx.get(ccy, 1.0)
+        val  = gp * factor * rate
+
+        is_nb  = "new business" in (p.get("crimson_specialinstructionsclient") or "").lower()
+        is_cro = p.get("_mercury_clientrelationshipowner_value") == uid
+        nb_earning = is_nb and is_cro and _nb_qualifies(p, thresholds)
+
+        # A rebate claws back the rebated portion (and the uplift on it) in the
+        # month it was rebated — the fee itself still credits in the start month.
+        reb_amt, reb_date = rebate_of(p)
+        reb_val = reb_amt * factor * rate
 
         if ytd_start <= d <= written_end:
             written += val
             if d <= today:
                 ytd += val
+        if reb_val and ytd_start <= reb_date <= written_end:
+            written -= reb_val
+            if reb_date <= today:
+                ytd -= reb_val
 
         if roll12_start <= d <= today:
             roll12_base += val
             # New-business uplift is earned only by the CRO (the person who won
             # the business) — 50% of their own contribution, not split to others.
-            is_nb  = "new business" in (p.get("crimson_specialinstructionsclient") or "").lower()
-            is_cro = p.get("_mercury_clientrelationshipowner_value") == uid
             if is_nb and is_cro:
                 client_id = p.get("_crimson_clientname_value")
                 if client_id:
                     nb_clients[client_id] = (p.get("crimson_clientname") or {}).get("name") or "(unknown client)"
-                if _nb_qualifies(p, thresholds):
+                if nb_earning:
                     roll12_uplift += val * 0.5
+
+        # The clawback lands only if the rebate date is inside the window, so a
+        # rebate stops deducting once it rolls out — same as the fee crediting.
+        if reb_val and roll12_start <= reb_date <= today:
+            roll12_base -= reb_val
+            if nb_earning:
+                roll12_uplift -= reb_val * 0.5
+            rebates.append({
+                "job_title": p.get("crimson_name") or "(placement)",
+                "client": (p.get("crimson_clientname") or {}).get("name") or "",
+                "start_date": d.isoformat(),
+                "rebated_on": reb_date.isoformat(),
+                "amount": round(reb_val, 2),
+                "uplift": round(reb_val * 0.5, 2) if nb_earning else 0.0,
+            })
 
     # Contract/temp NB placements: count the client AND credit the CRO the
     # 50% uplift on their share. Contract GP itself never contributes to a
@@ -147,15 +196,33 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
             d = parse_date(p["crimson_startdate"])
         except Exception:
             continue
-        if roll12_start <= d <= today and "new business" in (p.get("crimson_specialinstructionsclient") or "").lower():
+        if not "new business" in (p.get("crimson_specialinstructionsclient") or "").lower():
+            continue
+        qualifies = _nb_qualifies(p, thresholds)
+        factor = split_factor(p, uid)
+        ccy    = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode")
+        rate   = fx.get(ccy, 1.0)
+        if roll12_start <= d <= today:
             cid = p.get("_crimson_clientname_value")
             if cid:
                 nb_clients[cid] = (p.get("crimson_clientname") or {}).get("name") or "(unknown client)"
-            if _nb_qualifies(p, thresholds):
-                factor = split_factor(p, uid)
-                gp     = p.get("recruit_truegrossprofit") or 0.0
-                ccy    = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode")
-                roll12_uplift += gp * factor * fx.get(ccy, 1.0) * 0.5
+            if qualifies:
+                gp = p.get("recruit_truegrossprofit") or 0.0
+                roll12_uplift += gp * factor * rate * 0.5
+        # On contract the uplift was the only credit, so the rebate claws back
+        # the uplift share of the rebated portion.
+        reb_amt, reb_date = rebate_of(p)
+        if reb_amt and qualifies and roll12_start <= reb_date <= today:
+            claw = reb_amt * factor * rate * 0.5
+            roll12_uplift -= claw
+            rebates.append({
+                "job_title": p.get("crimson_name") or "(contract placement)",
+                "client": (p.get("crimson_clientname") or {}).get("name") or "",
+                "start_date": d.isoformat(),
+                "rebated_on": reb_date.isoformat(),
+                "amount": 0.0,
+                "uplift": round(claw, 2),
+            })
 
     # Admin-added NB clients (manual credit, e.g. a contract that wouldn't auto-count)
     for c in (manual_clients or []):
@@ -180,6 +247,9 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
         # Clients not yet part of any milestone (drives the next alert)
         "nb_new_count":  len(set(nb_clients.keys()) - (recognised_ids or set())),
         "nb_client_map": nb_clients,   # id -> name; used by the alert job to track new clients
+        # Rebates deducted inside the rolling window (drives the row marker)
+        "rebate_total":  round(sum(r["amount"] + r["uplift"] for r in rebates), 2),
+        "rebate_detail": sorted(rebates, key=lambda r: r["rebated_on"], reverse=True),
     }
 
 
@@ -247,6 +317,7 @@ def _consultant_placement_details(
         gp    = p.get("recruit_truegrossprofit") or 0.0
         p_ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode", display_ccy)
         rate  = fx.get(p_ccy, 1.0)
+        reb_amt, reb_date = rebate_of(p)
         details.append({
             "month":      d.month,
             "title":      p.get("crimson_name") or "",
@@ -255,6 +326,8 @@ def _consultant_placement_details(
             "full_fee":   round(gp * rate, 2),
             "currency":   p_ccy,
             "start_date": p["crimson_startdate"][:10],
+            "rebated":    round(reb_amt * rate, 2),
+            "rebated_on": reb_date.isoformat() if reb_amt else None,
         })
     details.sort(key=lambda x: x["start_date"])
     return details
@@ -285,7 +358,12 @@ def compute_monthly_breakdown(
             continue
         gp  = p.get("recruit_truegrossprofit") or 0.0
         ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode")
-        months[d.month] += gp * factor * fx.get(ccy, 1.0)
+        rate = fx.get(ccy, 1.0)
+        months[d.month] += gp * factor * rate
+        # Actuals are start-date based, so the rebate deducts in its own month.
+        reb_amt, reb_date = rebate_of(p)
+        if reb_amt and reb_date.year == year:
+            months[reb_date.month] -= reb_amt * factor * rate
     return {str(k): round(v, 2) for k, v in months.items()}
 
 
@@ -346,6 +424,9 @@ def compute_written_months(
         if factor > 0:
             gp  = p.get("recruit_truegrossprofit") or 0.0
             ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode")
+            # Written is a created-date view, so a rebate nets off the
+            # placement's own month — the figure shows the fee actually kept.
+            gp -= rebate_of(p)[0]
             months[m_str] = round(months[m_str] + gp * factor * fx.get(ccy, 1.0), 2)
     return {"months": months, "counts": counts}
 
@@ -384,14 +465,16 @@ def _written_placement_details(
         gp    = p.get("recruit_truegrossprofit") or 0.0
         p_ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode", display_ccy)
         rate  = fx.get(p_ccy, 1.0)
+        reb   = rebate_of(p)[0]   # netted off here too, so drilldown ties to the total
         details.append({
             "month":      d.month,
             "title":      p.get("crimson_name") or "",
             "client":     (p.get("crimson_clientname") or {}).get("name") or "",
-            "own_fee":    round(gp * factor * rate, 2),
-            "full_fee":   round(gp * rate, 2),
+            "own_fee":    round((gp - reb) * factor * rate, 2),
+            "full_fee":   round((gp - reb) * rate, 2),
             "currency":   p_ccy,
             "start_date": (p.get("crimson_startdate") or "")[:10],
+            "rebated":    round(reb * rate, 2),
         })
     details.sort(key=lambda x: x["start_date"])
     return details
@@ -428,6 +511,11 @@ def compute_written_by_created(
             continue
         gp  = p.get("recruit_truegrossprofit") or 0.0
         ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode")
+        # Only net a rebate that had already happened by the cutoff, so the
+        # "as it stood at this point last year" comparison stays honest.
+        reb_amt, reb_date = rebate_of(p)
+        if reb_amt and reb_date <= created_cutoff:
+            gp -= reb_amt
         total += gp * factor * fx.get(ccy, 1.0)
     return round(total, 2)
 
@@ -494,11 +582,16 @@ def _hpb_quarter_billings(uid: str, placements: list, to_usd: dict, today: date,
         if factor == 0:
             continue
         d = parse_date(p["crimson_startdate"])
-        if d.year != year:
-            continue
-        gp  = p.get("recruit_truegrossprofit") or 0.0
         ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode")
-        q[(d.month - 1) // 3 + 1] += gp * factor * to_usd.get(ccy, 1.0)
+        rate = to_usd.get(ccy, 1.0)
+        if d.year == year:
+            gp = p.get("recruit_truegrossprofit") or 0.0
+            q[(d.month - 1) // 3 + 1] += gp * factor * rate
+        # Billings are start-date based, so a rebate deducts in the quarter it
+        # was rebated — which may be a later quarter than the placement.
+        reb_amt, reb_date = rebate_of(p)
+        if reb_amt and reb_date.year == year:
+            q[(reb_date.month - 1) // 3 + 1] -= reb_amt * factor * rate
     return {str(k): round(v, 2) for k, v in q.items()}
 
 
@@ -880,7 +973,7 @@ def build_admin_report(
     other_drilldown        = []
 
     for p in other_this_pl:
-        gp    = p.get("recruit_truegrossprofit") or 0.0
+        gp    = (p.get("recruit_truegrossprofit") or 0.0) - rebate_of(p)[0]
         ccy   = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode", "GBP")
         gbp   = gp * to_gbp.get(ccy, 1.0)
         d     = parse_date(p.get("crimson_startdate", f"{year}-01-01"))
@@ -900,16 +993,19 @@ def build_admin_report(
         })
 
     for p in other_last_pl:
-        gp    = p.get("recruit_truegrossprofit") or 0.0
+        reb_amt, reb_date = rebate_of(p)
+        gp    = (p.get("recruit_truegrossprofit") or 0.0) - reb_amt
         ccy   = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode", "GBP")
-        gbp   = gp * to_gbp.get(ccy, 1.0)
+        rate  = to_gbp.get(ccy, 1.0)
+        gbp   = gp * rate
         d     = parse_date(p.get("crimson_startdate", f"{year - 1}-01-01"))
         m_str = str(d.month)
         other_last_monthly_gbp[m_str] = round(other_last_monthly_gbp[m_str] + gbp, 2)
         other_last_total_gbp += gbp
         created = p.get("createdon")
         if created and parse_date(created) <= last_ytd_cutoff:
-            other_last_ytd_gbp += gbp
+            # At last year's cutoff a later rebate hadn't happened yet
+            other_last_ytd_gbp += gbp + (reb_amt * rate if reb_amt and reb_date > last_ytd_cutoff else 0.0)
 
     other_drilldown.sort(key=lambda p: p["start_date"], reverse=True)
 
@@ -926,11 +1022,11 @@ def build_admin_report(
     retained_total_gbp  = 0.0
     retained_last_gbp   = 0.0
     for p in retained_this:
-        gp  = p.get("recruit_truegrossprofit") or 0.0
+        gp  = (p.get("recruit_truegrossprofit") or 0.0) - rebate_of(p)[0]
         ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode", "GBP")
         retained_total_gbp += gp * to_gbp.get(ccy, 1.0)
     for p in retained_last:
-        gp  = p.get("recruit_truegrossprofit") or 0.0
+        gp  = (p.get("recruit_truegrossprofit") or 0.0) - rebate_of(p)[0]
         ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode", "GBP")
         retained_last_gbp += gp * to_gbp.get(ccy, 1.0)
 

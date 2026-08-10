@@ -135,6 +135,13 @@ function renderReport(data) {
   panelsEl.addEventListener("click", (e) => {
     const tgt = e.target.closest(".nbt-link");
     if (tgt) { showNbTarget(tgt.dataset.who); return; }
+    const reb = e.target.closest(".rebate-link");
+    if (reb) {
+      let rows = [];
+      try { rows = JSON.parse(reb.dataset.rebates || "[]"); } catch (_) {}
+      showRebates(reb.dataset.name, reb.dataset.sym, rows);
+      return;
+    }
     const el = e.target.closest(".nb-clients-link");
     if (!el) return;
     let names = [];
@@ -172,6 +179,44 @@ function showNbClients(name, clients) {
         return `<li>${esc(nm)}${rec ? ' <span class="nb-flag">previous milestone</span>' : ""}</li>`;
       }).join("")}</ul>`
     : `<p class="nb-client-empty">No new-business clients.</p>`;
+  overlay.style.display = "flex";
+}
+
+
+// ── Rebate drill-down ─────────────────────────────────────────────────────────
+
+function showRebates(name, sym, rows) {
+  let overlay = document.getElementById("reb-modal");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "reb-modal";
+    overlay.className = "modal-overlay";
+    overlay.style.display = "none";
+    overlay.innerHTML = `<div class="modal-box">
+      <div class="modal-header">
+        <span class="modal-title" id="reb-title"></span>
+        <button class="modal-close" id="reb-close" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body" id="reb-body"></div>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.style.display = "none"; });
+    overlay.querySelector("#reb-close").addEventListener("click", () => { overlay.style.display = "none"; });
+  }
+  const d = (s) => new Date(s + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  overlay.querySelector("#reb-title").textContent = `${name} — rebates in the rolling 12 months`;
+  overlay.querySelector("#reb-body").innerHTML = rows.length
+    ? `<div class="table-wrap"><table>
+        <thead><tr><th>Placement</th><th>Client</th><th class="num">Started</th><th class="num">Rebated on</th><th class="num">Fee back</th><th class="num">NB uplift back</th></tr></thead>
+        <tbody>${rows.map(r => `<tr>
+          <td>${esc(r.job_title)}</td><td>${esc(r.client)}</td>
+          <td class="num">${d(r.start_date)}</td><td class="num">${d(r.rebated_on)}</td>
+          <td class="num">${r.amount ? "−" + fmt(r.amount, sym) : "—"}</td>
+          <td class="num">${r.uplift ? "−" + fmt(r.uplift, sym) : "—"}</td>
+        </tr>`).join("")}</tbody></table></div>
+       <p class="nbt-note">The placement still counts — only the rebated portion of the fee (and the
+       new-business uplift on that portion) is deducted, in the month it was rebated.</p>`
+    : `<p class="nb-client-empty">No rebates in the window.</p>`;
   overlay.style.display = "flex";
 }
 
@@ -314,10 +359,18 @@ function permRow(m) {
     <td class="num">${fmt(m.ytd, m.sym)}</td>
     <td class="num">${fmt(m.written, m.sym)}</td>
     <td class="num">${fmt(m.year_pred, m.sym)}</td>
-    <td class="num">${fmt(m.roll12, m.sym)}</td>
+    <td class="num">${fmt(m.roll12, m.sym)}${rebateHtml(m)}</td>
     <td class="num">${fmt(m.roll12_uplift, m.sym)}${nbClientsHtml(m)}</td>
     <td class="num">${fmt(m.roll12_total, m.sym)}</td>
   </tr>`;
+}
+
+// A rebate has already been netted off the figures — this shows what came off.
+function rebateHtml(m) {
+  if (!m.rebate_total) return "";
+  return `<span class="rebate-note rebate-link" data-name="${esc(m.name)}" data-sym="${esc(m.sym)}"
+      data-rebates="${esc(JSON.stringify(m.rebate_detail || []))}"
+      >−${fmt(m.rebate_total, m.sym)} rebate</span>`;
 }
 
 function nbClientsHtml(m) {
