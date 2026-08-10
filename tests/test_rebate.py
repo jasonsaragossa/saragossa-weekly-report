@@ -1,7 +1,12 @@
 """Verify the rebate maths against the worked example in rebates.md."""
-import sys
+import os, sys
 from datetime import date
-sys.path.insert(0, r"C:\Claude\saragossa-weekly-report\api")
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "api"))
+# shared.dataverse reads its config at import time; stub it for a pure-maths test
+os.environ.setdefault("DATAVERSE_URL", "https://example.invalid")
+for _k in ("DATAVERSE_TENANT_ID", "DATAVERSE_CLIENT_ID", "DATAVERSE_CLIENT_SECRET"):
+    os.environ.setdefault(_k, "test")
 
 from shared.calc import compute_metrics, compute_written_months, rebate_of
 
@@ -51,8 +56,8 @@ assert m2["nb_clients"] == 1, "client count must be untouched by the rebate"
 assert len(m2["rebate_detail"]) == 1
 print(f"Jul+Aug:        roll12 {m2['roll12']:>10,.2f}  uplift {m2['roll12_uplift']:>10,.2f}  "
       f"total {m2['roll12_total']:>10,.2f}  (MD says 7,546.88)")
-print(f"                net kept = 1.5 x kept fee {5031.25 * 1.5:,.2f} \OK")
-print(f"                NB clients still counted: {m2['nb_clients']} \OK")
+print(f"                net kept = 1.5 x kept fee {5031.25 * 1.5:,.2f} OK")
+print(f"                NB clients still counted: {m2['nb_clients']} OK")
 
 # ── YTD nets both sides in the same year ──
 assert round(m2["ytd"], 2) == 5031.25, m2["ytd"]
@@ -61,6 +66,6 @@ assert round(m2["ytd"], 2) == 5031.25, m2["ytd"]
 w = compute_written_months(UID, [P], "GBP", 2026)
 assert round(w["months"]["7"], 2) == 5031.25, w["months"]["7"]
 assert w["counts"]["7"] == 1.0, "count must survive the rebate"
-print(f"Written Jul:    {w['months']['7']:>10,.2f}  count {w['counts']['7']} \OK")
+print(f"Written Jul:    {w['months']['7']:>10,.2f}  count {w['counts']['7']} OK")
 
 print("\nAll rebate assertions passed.")
