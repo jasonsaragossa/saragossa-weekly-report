@@ -368,7 +368,12 @@ def compute_monthly_breakdown(
 
 
 _PERM_TYPE_CODE      = 143570000
-_CONTRACT_TYPE_CODES = {143570001, 143570002}   # Contract, Temporary
+_TEMP_TYPE_CODE      = 143570002
+_CONTRACT_TYPE_CODES = {143570001, _TEMP_TYPE_CODE}   # Contract, Temporary
+
+# Temporary records are Deploy/Consult managed-service workers rather than sales
+# deals, so they never count toward "deals added" or contract written figures.
+_DEAL_CONTRACT_TYPE_CODES = {143570001}
 
 
 def _is_extension(p: dict) -> bool:
@@ -401,7 +406,7 @@ def compute_written_months(
     for p in (placements or []):
         ptype = p.get("crimson_type")
         if contract_mode:
-            if ptype not in _CONTRACT_TYPE_CODES or _is_extension(p):
+            if ptype not in _DEAL_CONTRACT_TYPE_CODES or _is_extension(p):
                 continue
         elif ptype != _PERM_TYPE_CODE:
             continue
@@ -445,7 +450,7 @@ def _written_placement_details(
     for p in (placements or []):
         ptype = p.get("crimson_type")
         if contract_mode:
-            if ptype not in _CONTRACT_TYPE_CODES or _is_extension(p):
+            if ptype not in _DEAL_CONTRACT_TYPE_CODES or _is_extension(p):
                 continue
         elif ptype != _PERM_TYPE_CODE:
             continue

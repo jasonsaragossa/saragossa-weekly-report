@@ -19,7 +19,7 @@ from datetime import date
 
 from shared.calc import (
     _build_fx_tables, TO_GBP, TO_USD, split_factor, parse_date,
-    _is_extension, _CONTRACT_TYPE_CODES, _PERM_TYPE_CODE, rebate_of,
+    _is_extension, _DEAL_CONTRACT_TYPE_CODES, _PERM_TYPE_CODE, rebate_of,
 )
 from shared.dataverse import (
     RETAINER_CANDIDATE_CONTACT_ID,
@@ -96,7 +96,7 @@ def _month_stats(created, started_perm, user_terr, to_gbp, y, m):
                 stats["retainer_count"] += 1
                 continue
             kind = "perm"
-        elif ptype in _CONTRACT_TYPE_CODES:
+        elif ptype in _DEAL_CONTRACT_TYPE_CODES:
             if _is_extension(p):
                 continue
             kind = "contract"
