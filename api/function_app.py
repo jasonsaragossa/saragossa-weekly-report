@@ -363,12 +363,13 @@ def board_report_post(req: func.HttpRequest) -> func.HttpResponse:
                 json.dumps({"ok": False, "error": "ALERT_SENDER not configured"}),
                 mimetype="application/json", status_code=500,
             )
-        subject, text, html = compose_board_email(_bar)
+        subject, text, html, images = compose_board_email(_bar)
         # Always copy in the standing board recipients alongside the requester
         extras = [e.strip() for e in
                   os.environ.get("BOARD_REPORT_EXTRA_RECIPIENTS", "").split(",") if e.strip()]
         recipients = list(dict.fromkeys([email] + extras))
-        graph_send_mail(sender, recipients, subject, text, body_html=html)
+        graph_send_mail(sender, recipients, subject, text, body_html=html,
+                        inline_images=images)
         return func.HttpResponse(
             json.dumps({"ok": True, "sent_to": ", ".join(recipients)}),
             mimetype="application/json", status_code=200,

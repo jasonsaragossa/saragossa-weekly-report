@@ -47,7 +47,7 @@ def run_due_schedules() -> dict:
         return {"sent": 0, "skipped": len(stale), "checked_at": now.isoformat(timespec="seconds")}
 
     # Build once even when several schedules come due in the same tick
-    subject, text, html = compose_board_email(build_admin_report)
+    subject, text, html, images = compose_board_email(build_admin_report)
     sent = 0
     for s in due:
         recipients = s.get("recipients") or default_recipients
@@ -55,7 +55,8 @@ def run_due_schedules() -> dict:
             logging.warning("Board schedule %s has no recipients and no default", s["id"])
             mark_board_schedule_sent(s["id"], note="skipped - no recipients")
             continue
-        graph_send_mail(sender, recipients, subject, text, body_html=html)
+        graph_send_mail(sender, recipients, subject, text, body_html=html,
+                        inline_images=images)
         mark_board_schedule_sent(s["id"])
         sent += 1
         logging.info("Sent board schedule %s to %s", s["id"], ", ".join(recipients))

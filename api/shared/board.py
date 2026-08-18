@@ -214,7 +214,9 @@ def _sol_label(code):
 
 def compose_board_email(build_admin_report_fn) -> tuple:
     """
-    Gathers everything and returns (subject, text_fallback, html).
+    Gathers everything and returns (subject, text_fallback, html, inline_images)
+    — inline_images carries the logo for graph_send_mail, or None if the asset
+    couldn't be fetched (the HTML then points at the hosted URL instead).
     build_admin_report_fn: shared.calc.build_admin_report (passed in to avoid
     a circular import).
     """
@@ -308,10 +310,12 @@ def compose_board_email(build_admin_report_fn) -> tuple:
     from datetime import datetime
     stamp = datetime.utcnow().strftime("%d %b %H:%M")
     subject = f"Board figures · {_MONTHS[pm - 1]} {py} + {_MONTHS[today.month - 1]} to date · {stamp}"
+    logo = fetch_logo()
     html = _render_html(today, py, pm, prev_stats, curr_stats,
-                        prev_cancel, curr_cancel, regional, forecast, roi)
+                        prev_cancel, curr_cancel, regional, forecast, roi,
+                        logo_inline=logo is not None)
     text = f"Board figures for {_MONTHS[pm - 1]} {py} — open in an HTML mail client."
-    return subject, text, html
+    return subject, text, html, ({LOGO_CID: logo} if logo else None)
 
 
 # ── Rendering ─────────────────────────────────────────────────────────────────
@@ -326,8 +330,37 @@ def _num(n):
     return f"{n:g}"
 
 
+# Shared Saragossa email asset (white horizontal logo with marque).
+LOGO_URL = ("https://saragossapublicassets.blob.core.windows.net/email-assets/"
+            "Logo%20Horizontal%20White%20With%20Marque.png")
+LOGO_CID = "saragossa-logo"
+
+
+def fetch_logo() -> bytes | None:
+    """
+    Pull the shared logo so it can be attached inline. Mail clients block
+    remote images by default, so hot-linking would leave the board looking at
+    a broken image; embedding renders every time. None = fall back to the URL.
+    """
+    import requests
+    try:
+        resp = requests.get(LOGO_URL, timeout=20)
+        resp.raise_for_status()
+        return resp.content
+    except Exception:
+        logging.warning("Could not fetch the email logo — falling back to the remote URL",
+                        exc_info=True)
+        return None
+
+
+def _logo_html(inline: bool = True) -> str:
+    src = f"cid:{LOGO_CID}" if inline else LOGO_URL
+    return (f'<img src="{src}" alt="Saragossa" height="30" '
+            f'style="display:block;border:0;outline:none;text-decoration:none;height:30px;width:auto;">')
+
+
 def _render_html(today, py, pm, prev, curr, prev_cancel, curr_cancel,
-                 regional, forecast, roi):
+                 regional, forecast, roi, logo_inline=True):
     from html import escape
     prev_label = f"{_MONTHS[pm - 1]} {py}"
     curr_label = f"{_MONTHS[today.month - 1]} {today.year}"
@@ -442,7 +475,7 @@ def _render_html(today, py, pm, prev, curr, prev_cancel, curr_cancel,
     <table role="presentation" width="640" cellpadding="0" cellspacing="0"
            style="background:#ffffff;border-radius:4px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;max-width:640px;width:100%;">
       <tr><td style="background:#101820;padding:22px 32px;">
-        <span style="color:#ffffff;font-size:15px;letter-spacing:5px;font-weight:600;">SARAGOSSA</span>
+        {_logo_html(logo_inline)}
       </td></tr>
       <tr><td style="padding:26px 32px 0;">
         <div style="font-size:22px;font-weight:600;color:#101820;">Board figures — {prev_label}</div>
