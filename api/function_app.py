@@ -8,7 +8,7 @@ Routes:
   DELETE /api/settings/{id} → remove an override (admin only)
 """
 import json, logging, os
-from datetime import date
+from datetime import date, datetime, timezone
 
 import azure.functions as func
 
@@ -375,6 +375,81 @@ def board_report_post(req: func.HttpRequest) -> func.HttpResponse:
         )
     except Exception:
         logging.exception("board-report error")
+        return _server_error()
+
+
+# ── /api/board-schedule — plan future board sends (admin only) ────────────────
+# GET    → upcoming + recently sent schedules
+# POST   {send_at: ISO-8601 UTC, recipients?: [..]} → add
+# DELETE ?id=…  → cancel a pending schedule
+
+@app.route(route="board-schedule", methods=["GET", "POST", "DELETE"])
+def board_schedule(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_admin(req)
+    if err:
+        return err
+    from shared.dataverse import (add_board_schedule, delete_board_schedule,
+                                  get_board_schedules, is_guid)
+    try:
+        if req.method == "GET":
+            return func.HttpResponse(
+                json.dumps({"ok": True, "schedules": [
+                    {k: v for k, v in s.items() if k != "send_at_dt"}
+                    for s in get_board_schedules()
+                ]}),
+                mimetype="application/json", status_code=200,
+            )
+
+        if req.method == "POST":
+            body = req.get_json() or {}
+            raw = (body.get("send_at") or "").strip()
+            try:
+                when = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            except ValueError:
+                return func.HttpResponse(
+                    json.dumps({"ok": False, "error": "Invalid send_at — expected ISO 8601"}),
+                    mimetype="application/json", status_code=400,
+                )
+            if when.tzinfo is None:
+                when = when.replace(tzinfo=timezone.utc)
+            when = when.astimezone(timezone.utc)
+            if when <= datetime.now(timezone.utc):
+                return func.HttpResponse(
+                    json.dumps({"ok": False, "error": "That time is in the past"}),
+                    mimetype="application/json", status_code=400,
+                )
+            recipients = [str(r).strip() for r in (body.get("recipients") or []) if str(r).strip()]
+            for r in recipients:
+                if not r.lower().endswith("@saragossa.io"):
+                    return func.HttpResponse(
+                        json.dumps({"ok": False, "error": f"Not a Saragossa address: {r}"}),
+                        mimetype="application/json", status_code=400,
+                    )
+            add_board_schedule(when.strftime("%Y-%m-%dT%H:%M:%SZ"), recipients, email)
+            return func.HttpResponse(
+                json.dumps({"ok": True, "schedules": [
+                    {k: v for k, v in s.items() if k != "send_at_dt"}
+                    for s in get_board_schedules()
+                ]}),
+                mimetype="application/json", status_code=200,
+            )
+
+        rowid = req.params.get("id") or ""
+        if not is_guid(rowid):
+            return func.HttpResponse(
+                json.dumps({"ok": False, "error": "Invalid id"}),
+                mimetype="application/json", status_code=400,
+            )
+        delete_board_schedule(rowid)
+        return func.HttpResponse(
+            json.dumps({"ok": True, "schedules": [
+                {k: v for k, v in s.items() if k != "send_at_dt"}
+                for s in get_board_schedules()
+            ]}),
+            mimetype="application/json", status_code=200,
+        )
+    except Exception:
+        logging.exception("board-schedule error")
         return _server_error()
 
 

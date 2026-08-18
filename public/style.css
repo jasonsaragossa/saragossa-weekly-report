@@ -1121,3 +1121,26 @@ tr.nbt-pl-out td { color: var(--mid); }
 }
 .rebate-link { cursor: pointer; }
 .rebate-link:hover { text-decoration: underline; }
+
+/* Board send scheduling */
+.sched-add { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 4px 2px 14px; }
+.sched-add label { font-size: 11px; color: var(--mid); display: inline-flex; align-items: center; gap: 6px; }
+.sched-add input {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--white);
+  font-size: 11px;
+  padding: 4px 7px;
+  color-scheme: dark;
+}
+.sched-add input[type="text"] { min-width: 260px; }
+.sched-note { flex-basis: 100%; font-size: 10px; color: var(--mid); margin: 0; }
+.sched-cancel {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--mid); font-size: 10px; padding: 2px 8px; cursor: pointer;
+}
+.sched-cancel:hover { color: #d98b8b; border-color: #d98b8b; }
+.sched-sent { color: #35a56b; }
+.sched-due { color: var(--accent); }
+.sched-default { color: var(--mid); font-style: italic; }

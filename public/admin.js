@@ -430,6 +430,14 @@ function buildSummarySection() {
     }
   });
   h.appendChild(boardBtn);
+
+  const schedBtn = document.createElement("button");
+  schedBtn.className = "save-btn";
+  schedBtn.style.marginLeft = "8px";
+  schedBtn.textContent = "Schedule…";
+  schedBtn.title = "Plan future board sends";
+  schedBtn.addEventListener("click", showBoardSchedule);
+  h.appendChild(schedBtn);
   section.appendChild(h);
 
   const wrap = document.createElement("div");
@@ -1365,6 +1373,120 @@ function buildMonthlyTable(tdata, showLastYear = false, showWritten = false) {
 
 
 // ── Placement drilldown modal ─────────────────────────────────────────────────
+
+// ── Board send scheduling ─────────────────────────────────────────────────────
+// Times are picked in local (UK) time and stored as UTC. The GitHub Actions
+// cron checks every 15 minutes, so a send may land a few minutes after the hour.
+
+async function showBoardSchedule() {
+  let modal = document.getElementById("sched-modal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "sched-modal";
+    modal.className = "modal-overlay";
+    modal.innerHTML = `
+      <div class="modal-box">
+        <div class="modal-header">
+          <span class="modal-title">Scheduled board sends</span>
+          <button class="modal-close" id="sched-close" aria-label="Close">✕</button>
+        </div>
+        <div class="modal-body" id="sched-body"></div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener("click", e => { if (e.target === modal) modal.style.display = "none"; });
+    modal.querySelector("#sched-close").addEventListener("click", () => { modal.style.display = "none"; });
+  }
+  modal.style.display = "flex";
+  renderBoardSchedule();
+}
+
+async function renderBoardSchedule(schedules) {
+  const body = document.getElementById("sched-body");
+  if (!schedules) {
+    body.innerHTML = `<p class="modal-empty">Loading…</p>`;
+    try {
+      const resp = await fetch("/api/board-schedule");
+      const data = await resp.json();
+      if (!data.ok) throw new Error(data.error || "unknown error");
+      schedules = data.schedules || [];
+    } catch (e) {
+      body.innerHTML = `<p class="modal-empty">Could not load: ${esc(e.message)}</p>`;
+      return;
+    }
+  }
+
+  const fmtLocal = (iso) => new Date(iso).toLocaleString("en-GB", {
+    weekday: "short", day: "numeric", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+  const now = Date.now();
+  const rows = schedules.map(s => {
+    const when = new Date(s.send_at);
+    const sent = s.sent_on;
+    const status = sent
+      ? `<span class="sched-sent">sent ${fmtLocal(sent)}</span>`
+      : (when.getTime() < now ? `<span class="sched-due">due — sending shortly</span>` : "pending");
+    const who = (s.recipients && s.recipients.length)
+      ? esc(s.recipients.join(", ")) : "<span class=\"sched-default\">default list</span>";
+    return `<tr>
+      <td>${fmtLocal(s.send_at)}</td>
+      <td>${who}</td>
+      <td>${status}</td>
+      <td class="num">${sent ? "" : `<button class="sched-cancel" data-id="${esc(s.id)}">Cancel</button>`}</td>
+    </tr>`;
+  }).join("");
+
+  body.innerHTML = `
+    <div class="sched-add">
+      <label>Send at <input type="datetime-local" id="sched-when"></label>
+      <label>Recipients <input type="text" id="sched-who" placeholder="default list (you, Becky, Rory)"></label>
+      <button class="save-btn" id="sched-add-btn">Add</button>
+      <p class="sched-note" id="sched-msg">Local time. Checked every 15 minutes, so a send can land a few minutes late.</p>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>When</th><th>Recipients</th><th>Status</th><th></th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="4" class="modal-empty">Nothing scheduled.</td></tr>`}</tbody>
+    </table></div>`;
+
+  body.querySelector("#sched-add-btn").addEventListener("click", async () => {
+    const raw = body.querySelector("#sched-when").value;
+    const msg = body.querySelector("#sched-msg");
+    if (!raw) { msg.textContent = "Pick a date and time first."; return; }
+    const recipients = body.querySelector("#sched-who").value
+      .split(",").map(s => s.trim()).filter(Boolean);
+    msg.textContent = "Saving…";
+    try {
+      const resp = await fetch("/api/board-schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // datetime-local has no timezone; new Date() reads it as local, toISOString gives UTC
+        body: JSON.stringify({ send_at: new Date(raw).toISOString(), recipients }),
+      });
+      const data = await resp.json();
+      if (!data.ok) throw new Error(data.error || "unknown error");
+      renderBoardSchedule(data.schedules);
+    } catch (e) {
+      msg.textContent = "Could not save: " + e.message;
+    }
+  });
+
+  body.querySelectorAll(".sched-cancel").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      try {
+        const resp = await fetch(`/api/board-schedule?id=${encodeURIComponent(btn.dataset.id)}`,
+                                 { method: "DELETE" });
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error || "unknown error");
+        renderBoardSchedule(data.schedules);
+      } catch (e) {
+        alert("Could not cancel: " + e.message);
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
 
 function showPlacementModal(consultantName, month, year, placements, sym, label = "") {
   // Create modal DOM once and reuse

@@ -1171,3 +1171,64 @@ def graph_send_mail(sender: str, recipients: list, subject: str, body_text: str,
     )
     if not resp.ok:
         raise RuntimeError(f"Graph sendMail {resp.status_code}: {resp.text[:500]}")
+
+
+# ── Board report schedule (crbb7_boardschedule) ───────────────────────────────
+# One row per planned send. The GitHub Actions cron fires anything due; the
+# Analytics page creates and cancels them. Times are stored in UTC.
+
+def _parse_dt(raw: str):
+    """Dataverse UTC datetime string → aware datetime, or None."""
+    from datetime import datetime, timezone
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(timezone.utc)
+    except ValueError:
+        return None
+
+
+def get_board_schedules(include_sent: bool = True) -> list[dict]:
+    rows = odata_get_all(
+        "crbb7_boardschedules",
+        params={"$select": ("crbb7_boardscheduleid,crbb7_send_at,crbb7_sent_on,"
+                            "crbb7_recipients,crbb7_created_by_email,crbb7_name")},
+    )
+    out = []
+    for r in rows:
+        if not include_sent and r.get("crbb7_sent_on"):
+            continue
+        recips = [e.strip() for e in (r.get("crbb7_recipients") or "").split(",") if e.strip()]
+        out.append({
+            "id":         r.get("crbb7_boardscheduleid"),
+            "send_at":    r.get("crbb7_send_at"),
+            "send_at_dt": _parse_dt(r.get("crbb7_send_at")),
+            "sent_on":    r.get("crbb7_sent_on"),
+            "recipients": recips,
+            "created_by": r.get("crbb7_created_by_email") or "",
+            "label":      r.get("crbb7_name") or "",
+        })
+    out.sort(key=lambda s: s.get("send_at") or "")
+    return out
+
+
+def add_board_schedule(send_at_utc: str, recipients: list = None, created_by: str = "") -> dict:
+    """send_at_utc: ISO 8601 UTC (e.g. 2026-08-20T16:00:00Z)."""
+    return odata_post("crbb7_boardschedules", {
+        "crbb7_send_at":         send_at_utc,
+        "crbb7_recipients":      ", ".join(recipients or []),
+        "crbb7_created_by_email": created_by,
+        "crbb7_name":            f"Board report {send_at_utc[:16].replace('T', ' ')}Z",
+    })
+
+
+def delete_board_schedule(rowid: str) -> None:
+    odata_delete(f"crbb7_boardschedules({rowid})")
+
+
+def mark_board_schedule_sent(rowid: str, note: str = "") -> None:
+    from datetime import datetime, timezone
+    body = {"crbb7_sent_on": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+    if note:
+        body["crbb7_recipients"] = note[:900]
+    odata_patch(f"crbb7_boardschedules({rowid})", body)
