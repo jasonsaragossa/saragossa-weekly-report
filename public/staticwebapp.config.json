@@ -20,6 +20,11 @@
       "allowedRoles": ["authenticated"]
     },
     {
+      "comment": "Called by the Logic App scheduler — no user identity, guarded by x-api-key in the function itself",
+      "route": "/api/board-schedule-run",
+      "allowedRoles": ["anonymous"]
+    },
+    {
       "route": "/api/*",
       "allowedRoles": ["authenticated"]
     },

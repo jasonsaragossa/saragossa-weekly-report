@@ -453,6 +453,31 @@ def board_schedule(req: func.HttpRequest) -> func.HttpResponse:
         return _server_error()
 
 
+# ── /api/board-schedule-run (POST) — fire due schedules ───────────────────────
+# Called every minute by the Logic App scheduler. No user identity, so it is
+# guarded by a shared key; GitHub's cron still runs as a backup and the
+# "sent" stamp makes a double-fire impossible.
+
+@app.route(route="board-schedule-run", methods=["POST"])
+def board_schedule_run(req: func.HttpRequest) -> func.HttpResponse:
+    import hmac
+    expected = os.environ.get("SCHEDULE_RUNNER_KEY") or ""
+    supplied = req.headers.get("x-api-key") or ""
+    if not expected or not hmac.compare_digest(expected, supplied):
+        logging.warning("board-schedule-run: bad or missing key")
+        return func.HttpResponse("Forbidden", status_code=403)
+    try:
+        from shared.board_schedule import run_due_schedules
+        result = run_due_schedules()
+        return func.HttpResponse(
+            json.dumps({"ok": True, **result}),
+            mimetype="application/json", status_code=200,
+        )
+    except Exception:
+        logging.exception("board-schedule-run error")
+        return _server_error()
+
+
 # ── /api/nb-target (GET) — new-business £1m target drill-in ───────────────────
 # Visible to the tracked person themselves and to admins.
 
