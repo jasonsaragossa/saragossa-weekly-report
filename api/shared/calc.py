@@ -74,8 +74,19 @@ NB_UPLIFT_DEFAULTS = {
 }
 
 
+def is_retainer(p: dict) -> bool:
+    """Retained business — identified by the shared RETAINER CANDIDATE contact."""
+    from shared.dataverse import RETAINER_CANDIDATE_CONTACT_ID
+    return p.get("_recruit_candidatecontact_value") == RETAINER_CANDIDATE_CONTACT_ID
+
+
 def _nb_qualifies(p: dict, th: dict) -> bool:
     """Does this placement clear the new-business uplift thresholds?"""
+    # Retainers are exempt (Jason, Aug 2026): a retainer fee is a staged
+    # commencement payment, so its fee % sits structurally below the perm gate
+    # (median 10%) even though the win itself is worth the uplift.
+    if is_retainer(p):
+        return True
     if p.get("crimson_type") == 143570000:  # Permanent
         fee_pct = p.get("crimson_permanentfeepercent")
         gp      = p.get("recruit_truegrossprofit") or 0.0

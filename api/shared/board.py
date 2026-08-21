@@ -91,10 +91,9 @@ def _month_stats(created, started_perm, user_terr, to_gbp, y, m):
         if d.year != y or d.month != m:
             continue
         ptype = p.get("crimson_type")
+        retainer = False
         if ptype == _PERM_TYPE_CODE:
-            if _is_retainer(p):
-                stats["retainer_count"] += 1
-                continue
+            retainer = _is_retainer(p)
             kind = "perm"
         elif ptype in _DEAL_CONTRACT_TYPE_CODES:
             if _is_extension(p):
@@ -103,11 +102,17 @@ def _month_stats(created, started_perm, user_terr, to_gbp, y, m):
         else:
             continue
 
+        # New-business clients include retainers — a retainer is a won client
+        # even though it sits on its own row rather than in the deal counts.
         if "new business" in (p.get("crimson_specialinstructionsclient") or "").lower():
             cid    = p.get("_crimson_clientname_value")
             client = (p.get("crimson_clientname") or {}).get("name")
             if cid and client:
                 stats[f"nb_{kind}"][cid] = client
+
+        if retainer:
+            stats["retainer_count"] += 1
+            continue
 
         # Placement counts: 0.5 to the Consultant slot, 0.5 to the AO slot.
         # The Notes deal counts accumulate the SAME credits as the P&L table,
