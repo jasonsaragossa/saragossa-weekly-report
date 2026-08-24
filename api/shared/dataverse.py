@@ -681,6 +681,62 @@ def upsert_contract_entries(userid: str, entries: list) -> None:
             odata_post("crbb7_contractentries", body)
 
 
+# ── Solution monthly entries (crbb7_solutionentry) ────────────────────────────
+# Deploy & Component revenue booked against a perm consultant, entered by hand
+# the same way as the contract ledger. Column names differ slightly from the
+# contract table (crbb7_user_id / crbb7_entry_year) — they were auto-generated.
+
+def get_solution_entries() -> dict:
+    """Manually entered solution revenue: {uid: {"YYYY-M": amount}}."""
+    try:
+        rows = odata_get_all(
+            "crbb7_solutionentries",
+            params={"$select": "crbb7_user_id,crbb7_entry_year,crbb7_month,crbb7_amount"},
+        )
+    except Exception:
+        logging.warning("Could not read crbb7_solutionentry — no manual solution data")
+        return {}
+    out = {}
+    for r in rows:
+        uid, y, m = r.get("crbb7_user_id"), r.get("crbb7_entry_year"), r.get("crbb7_month")
+        if not uid or not y or not m:
+            continue
+        out.setdefault(uid, {})[f"{int(y)}-{int(m)}"] = float(r.get("crbb7_amount") or 0)
+    return out
+
+
+def upsert_solution_entries(userid: str, entries: list) -> None:
+    """entries: [{year, month, amount}] — amount None/blank deletes that month's row."""
+    existing = odata_get_all(
+        "crbb7_solutionentries",
+        params={
+            "$select": "crbb7_solutionentryid,crbb7_entry_year,crbb7_month",
+            "$filter": f"crbb7_user_id eq '{odata_str(userid)}'",
+        },
+    )
+    by_key = {(r.get("crbb7_entry_year"), r.get("crbb7_month")): r["crbb7_solutionentryid"]
+              for r in existing}
+    for e in entries:
+        year, month = int(e["year"]), int(e["month"])
+        amount = e.get("amount")
+        rid = by_key.get((year, month))
+        if amount is None:
+            if rid:
+                odata_delete(f"crbb7_solutionentries({rid})")
+            continue
+        body = {
+            "crbb7_user_id":    userid,
+            "crbb7_entry_year": year,
+            "crbb7_month":      month,
+            "crbb7_amount":     float(amount),
+            "crbb7_name":       f"{userid} {year}-{month:02d}"[:99],
+        }
+        if rid:
+            odata_patch(f"crbb7_solutionentries({rid})", body)
+        else:
+            odata_post("crbb7_solutionentries", body)
+
+
 # ── NB-uplift qualification thresholds (crbb7_nbconfig, single row) ────────────
 
 _NB_THRESHOLD_DEFAULTS = {

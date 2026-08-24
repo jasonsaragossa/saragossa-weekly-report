@@ -287,6 +287,42 @@ def contract_manual_metrics(user_entries: dict, today: date) -> dict:
     }
 
 
+def solution_manual_metrics(user_entries: dict, today: date) -> dict:
+    """
+    Deploy & Component revenue from the manual monthly ledger
+    ({"YYYY-M": amount}). Entered a month behind like the contract ledger, so
+    both windows end at the PREVIOUS month.
+    """
+    entries = user_entries or {}
+
+    def month_key(offset):
+        y, m = today.year, today.month - offset
+        while m <= 0:
+            y, m = y - 1, m + 12
+        return f"{y}-{m}"
+
+    ytd = sum(v for k, v in entries.items()
+              if k.startswith(f"{today.year}-") and int(k.split("-")[1]) < today.month)
+    l12 = sum(entries.get(month_key(o), 0) for o in range(1, 13))
+    return {"solution_ytd": round(ytd, 2), "solution_roll12": round(l12, 2)}
+
+
+def solution_year_total(user_entries: dict, year: int) -> float:
+    """Everything booked in a calendar year — the Analytics solution column."""
+    return round(sum(v for k, v in (user_entries or {}).items()
+                     if k.startswith(f"{year}-")), 2)
+
+
+def solution_quarters(user_entries: dict, year: int) -> dict:
+    """{"1": amount, …} by quarter — added to HPB quarterly billings."""
+    q = {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0}
+    for k, v in (user_entries or {}).items():
+        y, m = k.split("-")
+        if int(y) == year:
+            q[(int(m) - 1) // 3 + 1] += v
+    return {str(k): round(v, 2) for k, v in q.items()}
+
+
 def compute_wnf(uid: str, live_contracts: list, display_ccy: str, to_gbp: dict = None, to_usd: dict = None) -> float:
     """Returns the user's share of WNF across all live contract placements."""
     fx = (to_gbp or TO_GBP) if display_ccy == "GBP" else (to_usd or TO_USD)
@@ -611,8 +647,17 @@ def _hpb_quarter_billings(uid: str, placements: list, to_usd: dict, today: date,
     return {str(k): round(v, 2) for k, v in q.items()}
 
 
+def _hpb_billings_with_solution(uid, placements, to_usd, today, year, solution_entries):
+    """Quarterly billings including any Deploy & Component revenue for that quarter.
+    US ledger entries are already in USD (entries use the territory currency)."""
+    q = _hpb_quarter_billings(uid, placements, to_usd, today, year)
+    sol = solution_quarters((solution_entries or {}).get(uid), year)
+    return {k: round(q.get(k, 0.0) + sol.get(k, 0.0), 2) for k in ("1", "2", "3", "4")}
+
+
 def build_hpb(consultants: list, placements: list, override_map: dict,
-              team_map: dict, to_usd: dict, today: date, bob_titles: dict = None) -> dict:
+              team_map: dict, to_usd: dict, today: date, bob_titles: dict = None,
+              solution_entries: dict = None) -> dict:
     """
     US perm High Performance Bonus: per-quarter billings vs job-title target, plus
     a team total for team leads (their own billings capped at HPB_TEAM_LEAD_CAP).
@@ -672,7 +717,8 @@ def build_hpb(consultants: list, placements: list, override_map: dict,
             "start_date":   bob.get("start") or ov.get("crbb7_datejoined") or None,
             "q_grades":     q_grades,
             "q_targets":    q_targets,
-            "quarters":     _hpb_quarter_billings(uid, placements, to_usd, today, year),
+            "quarters":     _hpb_billings_with_solution(
+                uid, placements, to_usd, today, year, solution_entries),
         })
 
     by_team = defaultdict(list)
@@ -724,6 +770,7 @@ def build_admin_report(
     bob_titles: dict = None,
     created_this: list = None,
     created_last: list = None,
+    solution_entries: dict = None,
 ) -> dict:
     """
     Builds the admin analytics report: monthly breakdown per consultant,
@@ -963,6 +1010,11 @@ def build_admin_report(
             "territory_written_last_total":       round(sum(t_w_last_months.values()), 2),
             "territory_written_last_count_total": round(sum(t_w_last_counts.values()), 1),
             "budget":                   budget_map.get(territory, {"months": {}, "total": 0.0}),
+            # Deploy & Component revenue — reported in its own column, NOT added
+            # into written totals or the budget comparison (Jason, Aug 2026).
+            "territory_solution_total": round(sum(
+                solution_year_total((solution_entries or {}).get(m["uid"]), year)
+                for m in members), 2),
         })
         report[territory] = result
 
@@ -1104,7 +1156,8 @@ def build_admin_report(
             "count_last": retained_count_last,
             "last_gbp":   round(retained_last_gbp, 2),
         },
-        "hpb": build_hpb(consultants, placements_this, override_map, team_map or {}, to_usd, today, bob_titles),
+        "hpb": build_hpb(consultants, placements_this, override_map, team_map or {}, to_usd,
+                         today, bob_titles, solution_entries),
     }
 
 
@@ -1121,6 +1174,7 @@ def build_report(
     manual_nb_clients: dict = None,
     nb_alert_state: dict = None,   # uid -> set of client ids already in a milestone
     contract_entries: dict = None, # uid -> {"YYYY-M": amount} manual contract ledger
+    solution_entries: dict = None, # uid -> {"YYYY-M": amount} Deploy & Component ledger
 ) -> dict:
     """
     Assembles the full report structure.
@@ -1174,6 +1228,20 @@ def build_report(
                                   contract_placements, (manual_nb_clients or {}).get(uid, []),
                                   (nb_alert_state or {}).get(uid))
         wnf     = compute_wnf(uid, live_contracts, ccy, to_gbp, to_usd)
+
+        # Deploy & Component revenue folds into the perm consultant's YTD and
+        # rolling 12M, which the UI shows as totals with a Perm/Solution split.
+        sol = solution_manual_metrics((solution_entries or {}).get(uid), today)
+        if sol["solution_ytd"] or sol["solution_roll12"]:
+            metrics = {
+                **metrics,
+                "perm_ytd":     metrics["ytd"],
+                "perm_roll12":  metrics["roll12"],
+                "ytd":          round(metrics["ytd"] + sol["solution_ytd"], 2),
+                "roll12":       round(metrics["roll12"] + sol["solution_roll12"], 2),
+                "roll12_total": round(metrics["roll12_total"] + sol["solution_roll12"], 2),
+                **sol,
+            }
 
         # Contract figures: computed from the monthly ledger when entries exist,
         # otherwise fall back to the legacy one-shot Settings overrides.

@@ -21,6 +21,7 @@ from shared.dataverse import (
     upsert_override, delete_override, is_guid, TERRITORY_IDS,
     get_nb_thresholds, upsert_nb_thresholds,
     get_contract_entries, upsert_contract_entries,
+    get_solution_entries, upsert_solution_entries,
     get_manual_nb_clients, add_manual_nb_client, remove_manual_nb_client, search_accounts,
     get_nb_clients_for_cro, get_nb_alert_state, upsert_nb_alert_state, delete_nb_alert_state,
 )
@@ -75,7 +76,8 @@ def report_data(req: func.HttpRequest) -> func.HttpResponse:
         report = build_report(consultants, placements, overrides, today, team_map,
                               live_contracts, fx_rates, nb_thresholds, contract_pl, manual_nb,
                               nb_alert_state=alert_state,
-                              contract_entries=get_contract_entries())
+                              contract_entries=get_contract_entries(),
+                              solution_entries=get_solution_entries())
 
         return func.HttpResponse(
             json.dumps({"ok": True, "report": report, "as_of": today.isoformat()}),
@@ -343,6 +345,46 @@ def contract_entries_post(req: func.HttpRequest) -> func.HttpResponse:
         )
     except Exception:
         logging.exception("contract-entries POST error")
+        return _server_error()
+
+
+# ── /api/solution-entries (POST) — Deploy & Component monthly ledger ──────────
+
+@app.route(route="solution-entries", methods=["POST"])
+def solution_entries_post(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_admin(req)
+    if err:
+        return err
+    try:
+        body = req.get_json() or {}
+        uid  = body.get("userid")
+        rows = body.get("entries") or []
+        if not uid or not is_guid(uid):
+            return func.HttpResponse(
+                json.dumps({"ok": False, "error": "valid userid required"}),
+                mimetype="application/json", status_code=400,
+            )
+        clean = []
+        for e in rows:
+            try:
+                year, month = int(e["year"]), int(e["month"])
+                if not (1 <= month <= 12) or not (2000 <= year <= 2100):
+                    raise ValueError
+                amount = e.get("amount")
+                clean.append({"year": year, "month": month,
+                              "amount": float(amount) if amount is not None else None})
+            except (KeyError, TypeError, ValueError):
+                return func.HttpResponse(
+                    json.dumps({"ok": False, "error": "entries need valid year/month/amount"}),
+                    mimetype="application/json", status_code=400,
+                )
+        upsert_solution_entries(uid, clean)
+        return func.HttpResponse(
+            json.dumps({"ok": True, "solution_entries": get_solution_entries()}),
+            mimetype="application/json", status_code=200,
+        )
+    except Exception:
+        logging.exception("solution-entries POST error")
         return _server_error()
 
 
@@ -640,10 +682,12 @@ def analytics_report(req: func.HttpRequest) -> func.HttpResponse:
             team_map=team_map, budgets=budgets, fx_rates=fx_rates,
             bob_titles=bob_titles,
             created_this=created_this, created_last=created_last,
+            solution_entries=get_solution_entries(),
         )
         # For the Contract Entry ledger grid only — the analytics figures
         # themselves are perm-only (the ledger feeds just the weekly report).
         report["contract_entries"] = get_contract_entries()
+        report["solution_entries"] = get_solution_entries()
 
         return func.HttpResponse(
             json.dumps({"ok": True, **report}),

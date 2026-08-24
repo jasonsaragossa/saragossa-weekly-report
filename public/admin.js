@@ -89,6 +89,7 @@ function buildAnalyticsTabs() {
       } },
     { id: "atab-budgets",   label: "Budgets",            build: () => buildBudgetSection() },
     { id: "atab-contract",  label: "Contract Entry",     build: () => buildContractEntrySection() },
+    { id: "atab-solution",  label: "Deploy & Component", build: () => buildSolutionEntrySection() },
     { id: "atab-breakdown", label: "Monthly Breakdown",  build: () => buildBreakdownTabs() },
   ];
   if (reportData.hpb) {
@@ -265,6 +266,8 @@ function hpbSubheading(text) {
 // ── Contract Entry (manual monthly ledger for contract territories) ───────────
 
 const CONTRACT_ENTRY_TERRITORIES = ["London Contract", "Chicago Contract"];
+// Deploy & Component revenue is booked against perm consultants
+const SOLUTION_ENTRY_TERRITORIES = ["Bristol", "London", "Chicago", "New York"];
 
 function contractEntryMonths() {
   // Contract data is always a month behind: rolling 12 months ending with
@@ -279,20 +282,45 @@ function contractEntryMonths() {
 }
 
 function buildContractEntrySection() {
+  return buildLedgerSection({
+    territories: CONTRACT_ENTRY_TERRITORIES,
+    dataKey:     "contract_entries",
+    endpoint:    "/api/contract-entries",
+    showRolling3: true,
+    description: "Enter each contract consultant's monthly figure (territory currency). " +
+      "The weekly report computes Total Margin YTD, Contract Last 12M and Rolling 3M from this ledger. " +
+      "Analytics figures stay perm-only — the ledger feeds the weekly report contract columns alone.",
+    footnote: "Saved figures reach the weekly report's contract columns on its next load.",
+  });
+}
+
+function buildSolutionEntrySection() {
+  return buildLedgerSection({
+    territories: SOLUTION_ENTRY_TERRITORIES,
+    dataKey:     "solution_entries",
+    endpoint:    "/api/solution-entries",
+    showRolling3: false,
+    description: "Enter each perm consultant's monthly Deploy & Component revenue (territory currency). " +
+      "It adds to their YTD and Rolling 12M on the weekly report — shown there as a total with a " +
+      "Perm / Solution split — and to US quarterly HPB billings. On Analytics it appears as its own " +
+      "Solution Revenue column and is deliberately kept out of perm written totals and budgets.",
+    footnote: "Like the contract ledger, entry runs a month behind: the last column is last month.",
+  });
+}
+
+function buildLedgerSection(opts) {
   const section = document.createElement("div");
   section.className = "admin-section";
-  const entries    = reportData.contract_entries || {};
+  const entries    = reportData[opts.dataKey] || {};
   const monthsCols = contractEntryMonths();
 
   const desc = document.createElement("p");
   desc.className = "settings-desc";
   desc.style.marginBottom = "14px";
-  desc.textContent = "Enter each contract consultant's monthly figure (territory currency). " +
-    "The weekly report computes Total Margin YTD, Contract Last 12M and Rolling 3M from this ledger. " +
-    "Analytics figures stay perm-only — the ledger feeds the weekly report contract columns alone.";
+  desc.textContent = opts.description;
   section.appendChild(desc);
 
-  for (const territory of CONTRACT_ENTRY_TERRITORIES) {
+  for (const territory of opts.territories) {
     const tdata = reportData.territories[territory];
     if (!tdata) continue;
     const members = (tdata.type === "teams" ? tdata.groups.flatMap(g => g.members) : (tdata.members || []))
@@ -311,7 +339,8 @@ function buildContractEntrySection() {
     table.className = "monthly-table contract-entry-table";
     const headCells = monthsCols.map(c => `<th class="entry-month-col">${c.label}</th>`).join("");
     table.innerHTML = `<thead><tr><th>Consultant</th>${headCells}
-      <th class="num">YTD</th><th class="num">Last 12M</th><th class="num">Rolling 3M</th><th></th></tr></thead>`;
+      <th class="num">YTD</th><th class="num">Last 12M</th>${
+        opts.showRolling3 ? '<th class="num">Rolling 3M</th>' : ""}<th></th></tr></thead>`;
     const tbody = document.createElement("tbody");
 
     for (const m of members) {
@@ -327,7 +356,7 @@ function buildContractEntrySection() {
         ${inputs}
         <td class="num entry-ytd"></td>
         <td class="num entry-l12"></td>
-        <td class="num entry-r3"></td>
+        ${opts.showRolling3 ? '<td class="num entry-r3"></td>' : ""}
         <td><button class="save-btn entry-save" data-uid="${esc(m.uid)}">Save</button></td>`;
 
       const updateSummary = () => {
@@ -341,7 +370,8 @@ function buildContractEntrySection() {
         });
         tr.querySelector(".entry-ytd").textContent = fmt(ytd, sym) || `${sym}0`;
         tr.querySelector(".entry-l12").textContent = fmt(l12, sym) || `${sym}0`;
-        tr.querySelector(".entry-r3").textContent  = fmt(r3, sym)  || `${sym}0`;
+        const r3cell = tr.querySelector(".entry-r3");
+        if (r3cell) r3cell.textContent = fmt(r3, sym) || `${sym}0`;
       };
       updateSummary();
       tr.querySelectorAll(".entry-month-input").forEach(inp => inp.addEventListener("input", updateSummary));
@@ -355,14 +385,14 @@ function buildContractEntrySection() {
         }));
         btn.textContent = "Saving…"; btn.disabled = true;
         try {
-          const resp = await fetch("/api/contract-entries", {
+          const resp = await fetch(opts.endpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ userid: btn.dataset.uid, entries: payload }),
           });
           const data = await resp.json();
           if (data.ok) {
-            reportData.contract_entries = data.contract_entries || reportData.contract_entries;
+            reportData[opts.dataKey] = data[opts.dataKey] || reportData[opts.dataKey];
             btn.textContent = "Saved ✓";
             setTimeout(() => { btn.textContent = "Save"; btn.disabled = false; }, 2000);
           } else {
@@ -384,7 +414,7 @@ function buildContractEntrySection() {
   const note = document.createElement("p");
   note.className = "settings-desc";
   note.style.marginTop = "10px";
-  note.textContent = "Saved figures reach the weekly report's contract columns on its next load.";
+  note.textContent = opts.footnote;
   section.appendChild(note);
   return section;
 }
@@ -450,6 +480,7 @@ function buildSummarySection() {
     <th>Territory <button class="gbp-toggle" id="summary-gbp-toggle" title="Convert Chicago / New York to GBP">${summaryGbp ? "Show local $" : "USD→£"}</button></th>
     <th class="num">Full Year Written</th>
     <th class="num">YoY %</th>
+    <th class="num" title="Deploy &amp; Component revenue — reported separately, not added to written or budgets">Solution Revenue</th>
     <th class="num">Full Year Written Last YTD</th>
     <th class="num">Budget YTD</th>
     <th class="num">vs Budget</th>
@@ -495,6 +526,7 @@ function buildSummarySection() {
     const ytdYoyPct    = lastYearYtd > 0 ? (fullYear - lastYearYtd) / lastYearYtd * 100 : null;
     const fullYoyPct   = lastYear > 0 ? (fullYear - lastYear) / lastYear * 100 : null;
 
+    const solutionRev = tdata.territory_solution_total || 0;
     const vsCls      = vsBudget    !== null ? (vsBudget    >= 0 ? " pos" : " neg") : "";
     const ytdYoyCls  = ytdYoyPct   !== null ? (ytdYoyPct   >= 0 ? " pos" : " neg") : "";
     const fullYoyCls = fullYoyPct  !== null ? (fullYoyPct  >= 0 ? " pos" : " neg") : "";
@@ -504,6 +536,7 @@ function buildSummarySection() {
       <td><strong>${esc(territory)}</strong>${toGbp ? ` <span class="gbp-tag">in £</span>` : ""}</td>
       <td class="num">${fmt(fullYear * conv, sym)}</td>
       <td class="num${ytdYoyCls}">${ytdYoyPct !== null ? fmtPct(ytdYoyPct) : "—"}</td>
+      <td class="num">${solutionRev > 0 ? fmt(solutionRev * conv, sym) : "—"}</td>
       <td class="num dim">${lastYearYtd > 0 ? fmt(lastYearYtd * conv, sym) : "—"}</td>
       <td class="num">${ytdBudget > 0 ? fmt(ytdBudget * conv, sym) : "—"}</td>
       <td class="num${vsCls}">${vsBudget !== null ? fmtDelta(vsBudget * conv, sym) : "—"}</td>
@@ -533,6 +566,7 @@ function buildSummarySection() {
     <td><strong><span class="other-toggle-arrow">▶</span> Other (GBP)</strong></td>
     <td class="num"><strong>${fmt(oFullYear, "£") || "£0"}</strong></td>
     <td class="num${oYtdYoyCls}"><strong>${oYtdYoyPct !== null ? fmtPct(oYtdYoyPct) : "—"}</strong></td>
+    <td class="num">—</td>
     <td class="num dim"><strong>${oLastYearYtd > 0 ? fmt(oLastYearYtd, "£") : "—"}</strong></td>
     <td class="num">—</td>
     <td class="num">—</td>
@@ -560,6 +594,15 @@ function buildSummarySection() {
   const gYtdYoyPct  = gLastYearYtd > 0 ? (gFullYear - gLastYearYtd) / gLastYearYtd * 100 : null;
   const gFullYoyPct = gLastYear > 0  ? (gFullYear - gLastYear) / gLastYear * 100 : null;
 
+  // Solution revenue totalled in GBP (US territories converted)
+  let gSolution = 0;
+  for (const t of TERRITORY_ORDER) {
+    const td = territories[t];
+    if (!td) continue;
+    const isUsd = td.sym === "$";
+    gSolution += (td.territory_solution_total || 0) * (isUsd ? usdToGbp : 1);
+  }
+
   const gVsCls      = gVsBudget   !== null ? (gVsBudget   >= 0 ? " pos" : " neg") : "";
   const gYtdYoyCls  = gYtdYoyPct  !== null ? (gYtdYoyPct  >= 0 ? " pos" : " neg") : "";
   const gFullYoyCls = gFullYoyPct !== null ? (gFullYoyPct >= 0 ? " pos" : " neg") : "";
@@ -570,6 +613,7 @@ function buildSummarySection() {
     <td><strong>Overall (GBP)</strong></td>
     <td class="num"><strong>${fmt(gFullYear, "£")}</strong></td>
     <td class="num${gYtdYoyCls}"><strong>${gYtdYoyPct !== null ? fmtPct(gYtdYoyPct) : "—"}</strong></td>
+    <td class="num"><strong>${gSolution > 0 ? fmt(gSolution, "£") : "—"}</strong></td>
     <td class="num dim"><strong>${gLastYearYtd > 0 ? fmt(gLastYearYtd, "£") : "—"}</strong></td>
     <td class="num"><strong>${gYtdBudget > 0 ? fmt(gYtdBudget, "£") : "—"}</strong></td>
     <td class="num${gVsCls}"><strong>${gVsBudget !== null ? fmtDelta(gVsBudget, "£") : "—"}</strong></td>

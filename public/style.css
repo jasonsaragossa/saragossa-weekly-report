@@ -1144,3 +1144,8 @@ tr.nbt-pl-out td { color: var(--mid); }
 .sched-sent { color: #35a56b; }
 .sched-due { color: var(--accent); }
 .sched-default { color: var(--mid); font-style: italic; }
+
+/* Perm / Solution split cells on the weekly report */
+.split-link { cursor: pointer; border-bottom: 1px dotted var(--accent); }
+.split-link:hover { color: var(--accent); }
+tr.split-total td { border-top: 1px solid var(--border); }

@@ -135,6 +135,12 @@ function renderReport(data) {
   panelsEl.addEventListener("click", (e) => {
     const tgt = e.target.closest(".nbt-link");
     if (tgt) { showNbTarget(tgt.dataset.who); return; }
+    const sp = e.target.closest(".split-link");
+    if (sp) {
+      showSplit(sp.dataset.name, sp.dataset.label, sp.dataset.sym,
+                parseFloat(sp.dataset.perm), parseFloat(sp.dataset.sol));
+      return;
+    }
     const reb = e.target.closest(".rebate-link");
     if (reb) {
       let rows = [];
@@ -179,6 +185,43 @@ function showNbClients(name, clients) {
         return `<li>${esc(nm)}${rec ? ' <span class="nb-flag">previous milestone</span>' : ""}</li>`;
       }).join("")}</ul>`
     : `<p class="nb-client-empty">No new-business clients.</p>`;
+  overlay.style.display = "flex";
+}
+
+
+// ── Perm / Solution split drill-down ──────────────────────────────────────────
+
+function showSplit(name, label, sym, perm, solution) {
+  let overlay = document.getElementById("split-modal");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "split-modal";
+    overlay.className = "modal-overlay";
+    overlay.style.display = "none";
+    overlay.innerHTML = `<div class="modal-box">
+      <div class="modal-header">
+        <span class="modal-title" id="split-title"></span>
+        <button class="modal-close" id="split-close" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body" id="split-body"></div>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.style.display = "none"; });
+    overlay.querySelector("#split-close").addEventListener("click", () => { overlay.style.display = "none"; });
+  }
+  overlay.querySelector("#split-title").textContent = `${name} — ${label}`;
+  overlay.querySelector("#split-body").innerHTML = `
+    <div class="table-wrap"><table>
+      <tbody>
+        <tr><td>Perm Revenue</td><td class="num">${fmt(perm, sym)}</td></tr>
+        <tr><td>Solution Revenue</td><td class="num">${fmt(solution, sym)}</td></tr>
+        <tr class="split-total"><td><strong>Total</strong></td>
+            <td class="num"><strong>${fmt(perm + solution, sym)}</strong></td></tr>
+      </tbody>
+    </table></div>
+    <p class="nbt-note">Solution Revenue is Deploy &amp; Component work entered against this consultant.
+    It counts toward their ${esc(label)} here and toward US quarterly HPB billings, but is reported
+    separately on Analytics and excluded from perm written totals and budgets.</p>`;
   overlay.style.display = "flex";
 }
 
@@ -352,14 +395,24 @@ function nameCell(name) {
   return `<span class="nbt-link" data-who="${esc(who)}" title="New business target">${esc(name)}</span>`;
 }
 
+// YTD and Rolling 12M include Deploy & Component revenue when there is any —
+// shown as a total, clickable for the Perm / Solution split.
+function splitCell(m, total, permKey, solKey, label) {
+  const sol = m[solKey] || 0;
+  if (!sol) return fmt(total, m.sym);
+  return `<span class="split-link" data-name="${esc(m.name)}" data-label="${esc(label)}"
+      data-sym="${esc(m.sym)}" data-perm="${m[permKey] || 0}" data-sol="${sol}"
+      >${fmt(total, m.sym)}</span>`;
+}
+
 function permRow(m) {
   return `<tr>
     <td>${nameCell(m.name)}</td>
     <td class="role-cell">${esc(m.role)}</td>
-    <td class="num">${fmt(m.ytd, m.sym)}</td>
+    <td class="num">${splitCell(m, m.ytd, "perm_ytd", "solution_ytd", "YTD")}</td>
     <td class="num">${fmt(m.written, m.sym)}</td>
     <td class="num">${fmt(m.year_pred, m.sym)}</td>
-    <td class="num">${fmt(m.roll12, m.sym)}${rebateHtml(m)}</td>
+    <td class="num">${splitCell(m, m.roll12, "perm_roll12", "solution_roll12", "Rolling 12M")}${rebateHtml(m)}</td>
     <td class="num">${fmt(m.roll12_uplift, m.sym)}${nbClientsHtml(m)}</td>
     <td class="num">${fmt(m.roll12_total, m.sym)}</td>
   </tr>`;
