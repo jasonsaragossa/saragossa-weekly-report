@@ -48,12 +48,17 @@ def run_due_schedules() -> dict:
 
     # Build once even when several schedules come due in the same tick
     subject, text, html, images = compose_board_email(build_admin_report)
-    sent = 0
+    sent = failed = 0
     for s in due:
         recipients = s.get("recipients") or default_recipients
         if not recipients:
-            logging.warning("Board schedule %s has no recipients and no default", s["id"])
-            mark_board_schedule_sent(s["id"], note="skipped - no recipients")
+            # A missing default list is a config fault, not a finished send.
+            # Leave the schedule pending so it goes out once the config is
+            # fixed (inside the grace window) instead of vanishing silently.
+            logging.error("Board schedule %s due %s has no recipients and "
+                          "BOARD_REPORT_RECIPIENTS is unset — leaving it pending",
+                          s["id"], s["send_at"])
+            failed += 1
             continue
         graph_send_mail(sender, recipients, subject, text, body_html=html,
                         inline_images=images)
@@ -61,5 +66,5 @@ def run_due_schedules() -> dict:
         sent += 1
         logging.info("Sent board schedule %s to %s", s["id"], ", ".join(recipients))
 
-    return {"sent": sent, "skipped": len(stale), "subject": subject,
+    return {"sent": sent, "skipped": len(stale), "failed": failed, "subject": subject,
             "checked_at": now.isoformat(timespec="seconds")}

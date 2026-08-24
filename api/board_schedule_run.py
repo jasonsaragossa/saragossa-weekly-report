@@ -26,8 +26,10 @@ def main() -> None:
     result = run_due_schedules()
     if result.get("error"):
         sys.exit(result["error"])
-    print(f"Board schedules — sent {result['sent']}, skipped {result['skipped']} "
-          f"(checked {result.get('checked_at')})")
+    print(f"Board schedules — sent {result['sent']}, skipped {result['skipped']}, "
+          f"failed {result.get('failed', 0)} (checked {result.get('checked_at')})")
+    if result.get("failed"):
+        sys.exit("A due schedule could not be sent — see the log above")
 
 
 if __name__ == "__main__":
