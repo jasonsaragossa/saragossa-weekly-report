@@ -1289,3 +1289,87 @@ def mark_board_schedule_sent(rowid: str, note: str = "") -> None:
     if note:
         body["crbb7_recipients"] = note[:900]
     odata_patch(f"crbb7_boardschedules({rowid})", body)
+
+
+# ── MBR (crbb7_mbr / crbb7_mbrtarget) ─────────────────────────────────────────
+# Beta. The judgement fields and the action list are stored as one JSON payload
+# per person per month — fine for a prototype, but revisit if MBR content ever
+# becomes evidence in promotion or comp decisions (it would need per-field
+# history and an audit trail).
+
+def get_mbr(uid: str, year: int, month: int) -> dict:
+    rows = odata_get_all("crbb7_mbrs", params={
+        "$select": "crbb7_mbrid,crbb7_user_id,crbb7_entry_year,crbb7_month,crbb7_payload,crbb7_status",
+        "$filter": (f"crbb7_user_id eq '{odata_str(uid)}' and crbb7_entry_year eq {int(year)}"
+                    f" and crbb7_month eq {int(month)}"),
+    })
+    if not rows:
+        return {}
+    import json as _json
+    r = rows[0]
+    try:
+        payload = _json.loads(r.get("crbb7_payload") or "{}")
+    except ValueError:
+        logging.warning("MBR %s %s-%s has unreadable payload", uid, year, month)
+        payload = {}
+    return {"id": r["crbb7_mbrid"], "status": r.get("crbb7_status") or "draft", **payload}
+
+
+def upsert_mbr(uid: str, year: int, month: int, payload: dict, status: str = "draft") -> None:
+    import json as _json
+    existing = odata_get_all("crbb7_mbrs", params={
+        "$select": "crbb7_mbrid",
+        "$filter": (f"crbb7_user_id eq '{odata_str(uid)}' and crbb7_entry_year eq {int(year)}"
+                    f" and crbb7_month eq {int(month)}"),
+    })
+    body = {
+        "crbb7_user_id":   uid,
+        "crbb7_entry_year": int(year),
+        "crbb7_month":     int(month),
+        "crbb7_payload":   _json.dumps(payload),
+        "crbb7_status":    status,
+        "crbb7_name":      f"MBR {uid} {year}-{month:02d}"[:840],
+    }
+    if existing:
+        odata_patch(f"crbb7_mbrs({existing[0]['crbb7_mbrid']})", body)
+    else:
+        odata_post("crbb7_mbrs", body)
+
+
+def get_mbr_targets(uid: str = None) -> dict:
+    """{uid: {target_key: value}} — all people, or just one."""
+    params = {"$select": "crbb7_user_id,crbb7_target_key,crbb7_value"}
+    if uid:
+        params["$filter"] = f"crbb7_user_id eq '{odata_str(uid)}'"
+    try:
+        rows = odata_get_all("crbb7_mbrtargets", params=params)
+    except Exception:
+        logging.warning("Could not read crbb7_mbrtarget")
+        return {}
+    out = {}
+    for r in rows:
+        u, k = r.get("crbb7_user_id"), r.get("crbb7_target_key")
+        if u and k:
+            out.setdefault(u, {})[k] = float(r.get("crbb7_value") or 0)
+    return out
+
+
+def upsert_mbr_targets(uid: str, targets: dict) -> None:
+    """targets: {target_key: value}; a None value removes that target."""
+    existing = odata_get_all("crbb7_mbrtargets", params={
+        "$select": "crbb7_mbrtargetid,crbb7_target_key",
+        "$filter": f"crbb7_user_id eq '{odata_str(uid)}'",
+    })
+    by_key = {r.get("crbb7_target_key"): r["crbb7_mbrtargetid"] for r in existing}
+    for key, value in targets.items():
+        rid = by_key.get(key)
+        if value is None:
+            if rid:
+                odata_delete(f"crbb7_mbrtargets({rid})")
+            continue
+        body = {"crbb7_user_id": uid, "crbb7_target_key": key,
+                "crbb7_value": float(value), "crbb7_name": f"{uid} {key}"[:840]}
+        if rid:
+            odata_patch(f"crbb7_mbrtargets({rid})", body)
+        else:
+            odata_post("crbb7_mbrtargets", body)

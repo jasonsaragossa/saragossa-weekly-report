@@ -1149,3 +1149,76 @@ tr.nbt-pl-out td { color: var(--mid); }
 .split-link { cursor: pointer; border-bottom: 1px dotted var(--accent); }
 .split-link:hover { color: var(--accent); }
 tr.split-total td { border-top: 1px solid var(--border); }
+
+/* ── Main menu (Weekly Report / 121s / MBRs / Analytics / Settings) ────────── */
+.main-menu { display: inline-flex; align-items: center; gap: 4px; }
+.menu-link {
+  color: var(--mid);
+  font-size: 11px;
+  text-decoration: none;
+  padding: 5px 10px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.menu-link:hover { color: var(--white); border-color: var(--border); }
+.menu-link.active { color: var(--white); border-color: var(--border); background: var(--surface2); }
+.menu-link.disabled { color: #4a4a4a; cursor: not-allowed; }
+.menu-link.disabled:hover { color: #4a4a4a; border-color: transparent; }
+.beta-tag {
+  font-size: 8px; text-transform: uppercase; letter-spacing: .1em;
+  color: var(--accent); border: 1px solid var(--accent); border-radius: 3px;
+  padding: 0 3px; margin-left: 4px; vertical-align: middle;
+}
+
+/* ── MBR page ─────────────────────────────────────────────────────────────── */
+.mbr-page { padding: 22px 26px 60px; }
+.mbr-toolbar { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-bottom: 22px; }
+.mbr-title { font-size: 1.25rem; color: var(--white); margin: 0; }
+.mbr-ctl { font-size: 11px; color: var(--mid); display: inline-flex; align-items: center; gap: 6px; }
+.mbr-ctl select, .mbr-ctl input {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
+  color: var(--white); font-size: 11px; padding: 4px 7px; color-scheme: dark;
+}
+.mbr-section { margin-bottom: 30px; }
+.mbr-section h2 {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: var(--accent);
+  border-bottom: 1px solid var(--border); padding-bottom: 7px; margin: 0 0 12px;
+}
+.mbr-src { float: right; text-transform: none; letter-spacing: 0; color: var(--mid); font-size: 10px; }
+tr.mbr-family td {
+  background: #0a0a0a; color: var(--mid); font-size: 9px; text-transform: uppercase;
+  letter-spacing: .12em; padding: 10px 12px 6px;
+}
+tr.mbr-flagged td { background: rgba(200,168,75,.06); }
+.mbr-metric-name { border-bottom: 1px dotted var(--border); cursor: help; }
+.mbr-flag {
+  font-size: 8px; text-transform: uppercase; letter-spacing: .08em; color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 3px; padding: 0 4px; margin-left: 8px;
+}
+.mbr-target-pct { font-size: 10px; color: var(--mid); margin-left: 6px; }
+tr.mbr-prompt-row td { background: rgba(255,255,255,.02); padding: 8px 14px 12px; }
+.mbr-prompt-q { color: var(--white); font-size: 12px; }
+.mbr-prompt-why { color: var(--mid); font-size: 10px; margin-left: 8px; }
+.mbr-prompt-answer, .mbr-field textarea {
+  display: block; width: 100%; margin-top: 6px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
+  color: var(--white); font-family: var(--font); font-size: 12px; padding: 7px 9px; resize: vertical;
+}
+.mbr-field { display: block; font-size: 11px; color: var(--mid); margin-bottom: 14px; }
+.mbr-candidates { display: flex; gap: 30px; flex-wrap: wrap; margin-bottom: 16px; }
+.mbr-candidates ul { margin: 6px 0 0; padding-left: 18px; }
+.mbr-candidates li { font-size: 12px; color: var(--white); margin-bottom: 4px; }
+.mbr-cand-head { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--mid); }
+.mbr-note { font-size: 10px; color: var(--mid); margin: 0 0 16px; }
+.mbr-empty { color: var(--mid); font-size: 11px; }
+.action-text { width: 100%; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 4px; color: var(--white); font-size: 12px; padding: 5px 8px; }
+.action-status { background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
+  color: var(--white); font-size: 11px; padding: 4px 6px; color-scheme: dark; width: 100%; }
+.action-remove, .carry-status { background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--mid); font-size: 11px; padding: 3px 7px; cursor: pointer; }
+.carry-status { width: 100%; background: var(--surface); color: var(--white); color-scheme: dark; }
+.action-remove:hover { color: #d98b8b; border-color: #d98b8b; }
+.mbr-savebar { display: flex; align-items: center; gap: 14px; }
+.mbr-saved-note { font-size: 11px; color: #35a56b; }

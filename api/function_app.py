@@ -496,6 +496,147 @@ def board_schedule(req: func.HttpRequest) -> func.HttpResponse:
         return _server_error()
 
 
+# ── MBR (beta) ────────────────────────────────────────────────────────────────
+# GET  /api/mbr-people                     → who this user may open
+# GET  /api/mbr?uid=&year=&month=          → metrics, prompts, saved form, carry-forward
+# POST /api/mbr                            → save the judgement fields and actions
+# GET/POST /api/mbr-targets                → per-person monthly targets (admin)
+
+def _mbr_visible_people(email: str):
+    """(people, is_admin) — own row, plus the team if a lead, plus all for admins."""
+    from shared.dataverse import (get_all_territory_consultants, get_team_membership_map,
+                                  get_overrides, is_admin)
+    people = [c for c in get_all_territory_consultants() if not c.get("isdisabled")]
+    admin = is_admin(email)
+    if admin:
+        return people, True
+    me = next((c for c in people
+               if (c.get("internalemailaddress") or "").lower() == (email or "").lower()), None)
+    if not me:
+        return [], False
+    teams = get_team_membership_map()
+    overrides = {o["crbb7_userid"]: o for o in get_overrides()}
+    my_team = teams.get(me["systemuserid"])
+    is_lead = bool((overrides.get(me["systemuserid"]) or {}).get("crbb7_isteamlead"))
+    visible = [me]
+    if is_lead and my_team:
+        visible += [c for c in people
+                    if teams.get(c["systemuserid"]) == my_team
+                    and c["systemuserid"] != me["systemuserid"]]
+    return visible, False
+
+
+@app.route(route="mbr-people", methods=["GET"])
+def mbr_people(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_auth(req)
+    if err:
+        return err
+    try:
+        people, admin = _mbr_visible_people(email)
+        return func.HttpResponse(json.dumps({
+            "ok": True, "is_admin": admin,
+            "people": [{"uid": p["systemuserid"], "name": p.get("fullname", ""),
+                        "email": p.get("internalemailaddress", "")} for p in
+                       sorted(people, key=lambda x: x.get("fullname") or "")],
+        }), mimetype="application/json", status_code=200)
+    except Exception:
+        logging.exception("mbr-people error")
+        return _server_error()
+
+
+@app.route(route="mbr", methods=["GET", "POST"])
+def mbr(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_auth(req)
+    if err:
+        return err
+    from shared.dataverse import get_mbr, upsert_mbr, get_mbr_targets, is_guid
+    try:
+        body = req.get_json() if req.method == "POST" else {}
+    except ValueError:
+        body = {}
+    uid = (req.params.get("uid") or (body or {}).get("uid") or "").strip()
+    if not is_guid(uid):
+        return func.HttpResponse(json.dumps({"ok": False, "error": "valid uid required"}),
+                                 mimetype="application/json", status_code=400)
+    try:
+        people, _admin = _mbr_visible_people(email)
+        person = next((p for p in people if p["systemuserid"] == uid), None)
+        if not person:
+            return func.HttpResponse(json.dumps({"ok": False, "error": "forbidden"}),
+                                     mimetype="application/json", status_code=403)
+
+        today = date.today()
+        py, pm = (today.year - 1, 12) if today.month == 1 else (today.year, today.month - 1)
+        year  = int(req.params.get("year")  or (body or {}).get("year")  or py)
+        month = int(req.params.get("month") or (body or {}).get("month") or pm)
+        if not (1 <= month <= 12 and 2000 <= year <= 2100):
+            return func.HttpResponse(json.dumps({"ok": False, "error": "bad period"}),
+                                     mimetype="application/json", status_code=400)
+
+        if req.method == "POST":
+            payload = {k: (body or {}).get(k) for k in
+                       ("positives", "improve", "aspirations", "support", "actions", "commentary")}
+            upsert_mbr(uid, year, month, payload, (body or {}).get("status") or "draft")
+            return func.HttpResponse(json.dumps({"ok": True}),
+                                     mimetype="application/json", status_code=200)
+
+        from shared.mbr import build_mbr_metrics, previous_month
+        from shared.mbr_prompts import generate_prompts, pick_flagged
+        from shared.mbr_registry import DEFAULT_TARGETS
+
+        data    = build_mbr_metrics(uid, year, month)
+        targets = {**DEFAULT_TARGETS, **(get_mbr_targets(uid).get(uid) or {})}
+        saved   = get_mbr(uid, year, month)
+        ly, lm  = previous_month(year, month)
+        last    = get_mbr(uid, ly, lm)
+
+        flagged = pick_flagged(data["metrics"], targets)
+        prompts = generate_prompts(person.get("fullname", ""), data["month"], flagged)
+
+        for m in data["metrics"]:
+            m["target"] = targets.get(m["target_key"]) if m["target_key"] else None
+
+        return func.HttpResponse(json.dumps({
+            "ok": True, "person": {"uid": uid, "name": person.get("fullname", "")},
+            **data, "targets": targets, "saved": saved,
+            "carried_actions": (last or {}).get("actions") or [],
+            "flagged": [f["key"] for f in flagged], **prompts,
+        }), mimetype="application/json", status_code=200)
+    except Exception:
+        logging.exception("mbr error")
+        return _server_error()
+
+
+@app.route(route="mbr-targets", methods=["GET", "POST"])
+def mbr_targets(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_admin(req)
+    if err:
+        return err
+    from shared.dataverse import get_mbr_targets, upsert_mbr_targets, is_guid
+    from shared.mbr_registry import DEFAULT_TARGETS, TARGET_KEYS
+    try:
+        if req.method == "GET":
+            return func.HttpResponse(json.dumps({
+                "ok": True, "targets": get_mbr_targets(), "defaults": DEFAULT_TARGETS,
+            }), mimetype="application/json", status_code=200)
+        body = req.get_json() or {}
+        uid = (body.get("userid") or "").strip()
+        if not is_guid(uid):
+            return func.HttpResponse(json.dumps({"ok": False, "error": "valid userid required"}),
+                                     mimetype="application/json", status_code=400)
+        clean = {}
+        for key, value in (body.get("targets") or {}).items():
+            if key not in TARGET_KEYS:
+                continue
+            clean[key] = None if value in (None, "") else float(value)
+        upsert_mbr_targets(uid, clean)
+        return func.HttpResponse(json.dumps({"ok": True, "targets": get_mbr_targets()}),
+                                 mimetype="application/json", status_code=200)
+    except Exception:
+        logging.exception("mbr-targets error")
+        return _server_error()
+
+
 # ── /api/board-schedule-run (POST) — fire due schedules ───────────────────────
 # Called every minute by the Logic App scheduler. No user identity, so it is
 # guarded by a shared key; GitHub's cron still runs as a backup and the
