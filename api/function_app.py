@@ -591,7 +591,25 @@ def mbr(req: func.HttpRequest) -> func.HttpResponse:
         last    = get_mbr(uid, ly, lm)
 
         flagged = pick_flagged(data["metrics"], targets)
-        prompts = generate_prompts(person.get("fullname", ""), data["month"], flagged)
+        # Reuse the prompts already generated for this month unless the flagged
+        # set has changed — otherwise every page load would bill another call,
+        # and the questions would shift under the consultant mid-meeting.
+        cached = (saved or {}).get("prompt_cache") or {}
+        keys = [f["key"] for f in flagged]
+        if cached.get("keys") == keys and cached.get("prompts"):
+            prompts = {"prompts": cached["prompts"], "summary": cached.get("summary"),
+                       "source": cached.get("source", "cached")}
+        else:
+            prompts = generate_prompts(person.get("fullname", ""), data["month"], flagged)
+            if prompts.get("prompts"):
+                try:
+                    upsert_mbr(uid, year, month,
+                               {**{k: v for k, v in (saved or {}).items()
+                                   if k not in ("id", "status")},
+                                "prompt_cache": {"keys": keys, **prompts}},
+                               (saved or {}).get("status") or "draft")
+                except Exception:
+                    logging.warning("Could not cache MBR prompts", exc_info=True)
 
         for m in data["metrics"]:
             m["target"] = targets.get(m["target_key"]) if m["target_key"] else None

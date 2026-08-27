@@ -12,7 +12,11 @@ import json
 import logging
 import os
 
-MODEL = os.environ.get("MBR_PROMPT_MODEL", "claude-sonnet-4-5")
+# Opus 5 by default. Cost is trivial at this volume (~65 MBRs/month) and these
+# questions are read by consultants, so quality is worth more than the saving.
+# Override with MBR_PROMPT_MODEL / MBR_PROMPT_EFFORT if that changes.
+MODEL  = os.environ.get("MBR_PROMPT_MODEL", "claude-opus-5")
+EFFORT = os.environ.get("MBR_PROMPT_EFFORT", "medium")
 MAX_FLAGS = 6
 # Ignore noise: a metric must move by at least this much to be flagged
 MIN_MOVE_PCT = 15.0
@@ -104,17 +108,18 @@ def generate_prompts(person_name: str, month_label: str, flagged: list) -> dict:
     )
 
     try:
-        import requests
-        resp = requests.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={"x-api-key": api_key, "anthropic-version": "2023-06-01",
-                     "content-type": "application/json"},
-            json={"model": MODEL, "max_tokens": 1200, "system": system,
-                  "messages": [{"role": "user", "content": user}]},
-            timeout=40,
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key, timeout=40.0)
+        response = client.messages.create(
+            model=MODEL,
+            max_tokens=4000,
+            output_config={"effort": EFFORT},
+            system=system,
+            messages=[{"role": "user", "content": user}],
         )
-        resp.raise_for_status()
-        text = "".join(b.get("text", "") for b in resp.json().get("content", []))
+        if response.stop_reason == "refusal":
+            raise RuntimeError("prompt generation refused")
+        text = "".join(b.text for b in response.content if b.type == "text")
         start, end = text.find("{"), text.rfind("}")
         data = json.loads(text[start:end + 1])
         by_key = {p["key"]: p.get("question", "") for p in data.get("prompts", [])}
