@@ -165,6 +165,35 @@ def compute_month(uid: str, year: int, month: int, to_gbp: dict = None) -> dict:
     }
 
 
+def compute_ytd_headline(uid: str, year: int, month: int, to_gbp: dict = None) -> dict:
+    """
+    Year-to-date revenue, deals and distinct new-business clients — the three
+    figures everyone carries at the top of the MBR regardless of team config.
+    One placement query for the whole year rather than twelve monthly ones.
+    """
+    fx = to_gbp or TO_GBP
+    start = date(year, 1, 1)
+    _, end = month_bounds(year, month)          # through the end of the MBR month
+
+    gp = deals = 0.0
+    clients = set()
+    for p in _placements(uid, start, end):
+        if p.get("_recruit_candidatecontact_value") == RETAINER_CONTACT:
+            continue
+        amount = (p.get("recruit_truegrossprofit") or 0.0) - rebate_of(p)[0]
+        ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode")
+        gp += amount * split_factor(p, uid) * fx.get(ccy, 1.0)
+        if p.get("_crimson_consultant_value") == uid:
+            deals += 0.5
+        if p.get("_mercury_assignmentowner_value") == uid:
+            deals += 0.5
+        if (p.get("_mercury_clientrelationshipowner_value") == uid
+                and "new business" in (p.get("crimson_specialinstructionsclient") or "").lower()
+                and p.get("_crimson_clientname_value")):
+            clients.add(p["_crimson_clientname_value"])
+    return {"revenue": round(gp, 2), "deals": round(deals, 1), "new_clients": len(clients)}
+
+
 def build_mbr_metrics(uid: str, year: int, month: int) -> dict:
     """
     Metrics for the month, the month before, and quarter-to-date, shaped for the
@@ -178,13 +207,15 @@ def build_mbr_metrics(uid: str, year: int, month: int) -> dict:
     py, pm = previous_month(year, month)
     q_months = quarter_months(year, month)
 
-    with ThreadPoolExecutor(max_workers=6) as pool:
+    with ThreadPoolExecutor(max_workers=8) as pool:
         f_now  = pool.submit(compute_month, uid, year, month, to_gbp)
         f_prev = pool.submit(compute_month, uid, py, pm, to_gbp)
+        f_ytd  = pool.submit(compute_ytd_headline, uid, year, month, to_gbp)
         # QTD = the quarter's months excluding the current one (already in f_now)
         f_q = [pool.submit(compute_month, uid, y, m, to_gbp)
                for (y, m) in q_months if (y, m) != (year, month)]
         now, prev = f_now.result(), f_prev.result()
+        headline = f_ytd.result()
         earlier = [f.result() for f in f_q]
 
     qtd = {}
@@ -209,4 +240,4 @@ def build_mbr_metrics(uid: str, year: int, month: int) -> dict:
             "value": val, "previous": was, "qtd": qtd.get(key), "change_pct": change,
         })
     return {"metrics": rows, "month": f"{year}-{month:02d}",
-            "previous_month": f"{py}-{pm:02d}"}
+            "previous_month": f"{py}-{pm:02d}", "ytd": headline}

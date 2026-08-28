@@ -138,7 +138,35 @@ function render(d) {
     </div>
     <p class="mbr-note">Candidates only — pick the three that are actually true and say why.</p>` : "";
 
-  document.getElementById("mbr-content").innerHTML = `
+  // Headline: year to date, shown to everyone regardless of team metric config
+  const ytd = d.ytd || {};
+  const yearTarget = (d.targets || {}).revenue_year || 0;
+  const pctOfTarget = yearTarget ? Math.round((ytd.revenue || 0) / yearTarget * 100) : null;
+  const money = (v) => "£" + Math.round(v || 0).toLocaleString("en-GB");
+  const headline = `
+    <section class="mbr-headline">
+      <div class="mbr-card">
+        <span class="mbr-card-label">Perm Revenue — ${new Date().getFullYear() === Number(d.month.slice(0, 4)) ? "this year" : d.month.slice(0, 4)} to date</span>
+        <span class="mbr-card-value">${money(ytd.revenue)}</span>
+        ${yearTarget ? `<span class="mbr-card-sub">of ${money(yearTarget)} target
+            <span class="${pctOfTarget >= 100 ? "pos" : pctOfTarget >= 80 ? "" : "neg"}">${pctOfTarget}%</span></span>
+          <span class="mbr-bar"><span class="mbr-bar-fill${pctOfTarget >= 100 ? " hit" : ""}"
+            style="width:${Math.min(100, pctOfTarget)}%"></span></span>`
+          : `<span class="mbr-card-sub dim">no annual target set</span>`}
+      </div>
+      <div class="mbr-card">
+        <span class="mbr-card-label">Deals</span>
+        <span class="mbr-card-value">${(ytd.deals || 0).toLocaleString("en-GB")}</span>
+        <span class="mbr-card-sub dim">year to date</span>
+      </div>
+      <div class="mbr-card">
+        <span class="mbr-card-label">New Business Clients Won</span>
+        <span class="mbr-card-value">${(ytd.new_clients || 0).toLocaleString("en-GB")}</span>
+        <span class="mbr-card-sub dim">distinct clients, year to date</span>
+      </div>
+    </section>`;
+
+  document.getElementById("mbr-content").innerHTML = headline + `
     <section class="mbr-section">
       <h2>Last month's actions</h2>
       <div class="table-wrap"><table>

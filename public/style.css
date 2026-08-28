@@ -1222,3 +1222,43 @@ tr.mbr-prompt-row td { background: rgba(255,255,255,.02); padding: 8px 14px 12px
 .action-remove:hover { color: #d98b8b; border-color: #d98b8b; }
 .mbr-savebar { display: flex; align-items: center; gap: 14px; }
 .mbr-saved-note { font-size: 11px; color: #35a56b; }
+
+/* MBR access grants (settings) */
+.scope-title { font-size: 10px; color: var(--mid); }
+.scope-add { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; }
+.scope-add select {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
+  color: var(--white); font-size: 11px; padding: 5px 8px; color-scheme: dark; min-width: 240px;
+}
+.scope-terrs { display: flex; flex-wrap: wrap; gap: 10px; }
+.scope-terrs label { font-size: 11px; color: var(--mid); display: inline-flex; align-items: center; gap: 4px; }
+.scope-terrs input { accent-color: var(--accent); }
+.scope-remove {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--mid); font-size: 10px; padding: 3px 8px; cursor: pointer;
+}
+.scope-remove:hover { color: #d98b8b; border-color: #d98b8b; }
+.scope-msg { font-size: 11px; color: var(--mid); }
+
+/* MBR headline cards */
+.mbr-headline { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 28px; }
+.mbr-card {
+  flex: 1 1 220px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.mbr-card-label {
+  font-size: 9px; text-transform: uppercase; letter-spacing: .12em; color: var(--mid);
+}
+.mbr-card-value {
+  font-size: 1.7rem; font-weight: 700; color: var(--white); font-variant-numeric: tabular-nums;
+}
+.mbr-card-sub { font-size: 11px; color: var(--mid); }
+.mbr-bar { display: block; height: 5px; background: rgba(255,255,255,.08); border-radius: 3px; margin-top: 7px; overflow: hidden; }
+.mbr-bar-fill { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.mbr-bar-fill.hit { background: #35a56b; }

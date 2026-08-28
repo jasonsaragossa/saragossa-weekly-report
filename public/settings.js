@@ -67,6 +67,9 @@ function renderSettings() {
   // Analytics access management (top of page)
   container.appendChild(buildAccessSection());
 
+  // Who can open whose MBR (separate from analytics access)
+  container.appendChild(buildMbrScopeSection());
+
   // NB-uplift qualification thresholds
   container.appendChild(buildNbThresholdsSection());
 
@@ -120,6 +123,97 @@ function renderSettings() {
 
 
 // ── NB-uplift qualification thresholds ─────────────────────────────────────────
+
+// ── MBR access (crbb7_mbrscope) ───────────────────────────────────────────────
+// Deliberately separate from analytics access: reading someone's performance
+// conversation is a different permission from reading revenue figures.
+
+function buildMbrScopeSection() {
+  const section = document.createElement("div");
+  section.className = "settings-section";
+  section.innerHTML = `
+    <h2 class="settings-section-title">MBR access <span class="beta-tag">beta</span></h2>
+    <p class="settings-desc">Who can open other people's MBRs. Everyone sees their own, and
+      team leads see their team automatically — these grants are for directors, on top of that.
+      Territory names come from Mercury; "All territories" is full access.
+      Analytics access does <strong>not</strong> grant MBR access.</p>
+    <div id="mbr-scope-body"><p class="settings-desc">Loading…</p></div>`;
+  loadMbrScopes(section.querySelector("#mbr-scope-body"));
+  return section;
+}
+
+async function loadMbrScopes(box) {
+  let data;
+  try {
+    const resp = await fetch("/api/mbr-scopes");
+    if (resp.status === 403) {
+      box.innerHTML = `<p class="settings-desc">You don't have permission to change MBR access.</p>`;
+      return;
+    }
+    data = await resp.json();
+    if (!data.ok) throw new Error(data.error || "unknown error");
+  } catch (e) {
+    box.innerHTML = `<p class="settings-desc">Could not load: ${esc(e.message)}</p>`;
+    return;
+  }
+
+  const withScope = data.users.filter(u => (data.scopes[u.uid] || []).length);
+  const rows = withScope.map(u => {
+    const terrs = data.scopes[u.uid] || [];
+    const label = terrs.includes("*") ? "All territories" : terrs.join(", ");
+    return `<tr>
+      <td>${esc(u.name)}<div class="scope-title">${esc(u.title)}</div></td>
+      <td>${esc(label)}</td>
+      <td class="num"><button class="scope-remove" data-uid="${esc(u.uid)}">Remove</button></td>
+    </tr>`;
+  }).join("");
+
+  box.innerHTML = `
+    <div class="table-wrap"><table>
+      <thead><tr><th>Person</th><th>Can open MBRs for</th><th></th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="3" class="settings-desc">No grants yet.</td></tr>`}</tbody>
+    </table></div>
+    <div class="scope-add">
+      <select id="scope-user">
+        <option value="">Add a person…</option>
+        ${data.users.map(u => `<option value="${esc(u.uid)}">${esc(u.name)}${u.title ? " — " + esc(u.title) : ""}</option>`).join("")}
+      </select>
+      <span class="scope-terrs">
+        <label><input type="checkbox" value="*" class="scope-t"> All territories</label>
+        ${data.territories.map(t => `<label><input type="checkbox" value="${esc(t)}" class="scope-t"> ${esc(t)}</label>`).join("")}
+      </span>
+      <button class="save-btn" id="scope-save">Grant</button>
+      <span class="scope-msg" id="scope-msg"></span>
+    </div>`;
+
+  box.querySelector("#scope-save").addEventListener("click", async () => {
+    const uid = box.querySelector("#scope-user").value;
+    const terrs = [...box.querySelectorAll(".scope-t:checked")].map(c => c.value);
+    const msg = box.querySelector("#scope-msg");
+    if (!uid || !terrs.length) { msg.textContent = "Pick a person and at least one territory."; return; }
+    msg.textContent = "Saving…";
+    await saveMbrScope(uid, terrs, box, msg);
+  });
+  box.querySelectorAll(".scope-remove").forEach(btn => {
+    btn.addEventListener("click", () => saveMbrScope(btn.dataset.uid, [], box, null));
+  });
+}
+
+async function saveMbrScope(uid, territories, box, msg) {
+  try {
+    const resp = await fetch("/api/mbr-scopes", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userid: uid, territories }),
+    });
+    const data = await resp.json();
+    if (!data.ok) throw new Error(data.error || "unknown error");
+    loadMbrScopes(box);
+  } catch (e) {
+    if (msg) msg.textContent = "Could not save: " + e.message;
+    else alert("Could not save: " + e.message);
+  }
+}
+
 
 function buildNbThresholdsSection() {
   const section = document.createElement("div");

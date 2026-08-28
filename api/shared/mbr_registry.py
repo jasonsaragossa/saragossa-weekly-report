@@ -223,6 +223,7 @@ FAMILIES = list(dict.fromkeys(m["family"] for m in REGISTRY))
 
 # Loop template defaults — seed values for per-person targets (monthly).
 DEFAULT_TARGETS = {
+    "revenue_year":    0,      # annual perm revenue target — drives the MBR headline
     "revenue":         0,      # set per person; no company-wide default
     "deals":           0,
     "cvs_sent":        0,

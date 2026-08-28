@@ -1373,3 +1373,45 @@ def upsert_mbr_targets(uid: str, targets: dict) -> None:
             odata_patch(f"crbb7_mbrtargets({rid})", body)
         else:
             odata_post("crbb7_mbrtargets", body)
+
+
+# ── MBR scope (crbb7_mbrscope) ────────────────────────────────────────────────
+# Who may open whose MBR, deliberately separate from analytics admin: reading
+# someone's performance conversation is a different permission from reading
+# revenue figures. A row grants its user the listed territories; "*" grants all.
+# Team leads get their own team automatically and need no row here.
+
+def get_mbr_scopes() -> dict:
+    """{uid: [territory, ...]} — '*' means every territory."""
+    try:
+        rows = odata_get_all("crbb7_mbrscopes",
+                             params={"$select": "crbb7_user_id,crbb7_territories"})
+    except Exception:
+        logging.warning("Could not read crbb7_mbrscope")
+        return {}
+    out = {}
+    for r in rows:
+        uid = r.get("crbb7_user_id")
+        if not uid:
+            continue
+        out[uid] = [t.strip() for t in (r.get("crbb7_territories") or "").split(",") if t.strip()]
+    return out
+
+
+def upsert_mbr_scope(uid: str, territories: list) -> None:
+    """An empty list removes the row entirely."""
+    existing = odata_get_all("crbb7_mbrscopes", params={
+        "$select": "crbb7_mbrscopeid",
+        "$filter": f"crbb7_user_id eq '{odata_str(uid)}'",
+    })
+    rid = existing[0]["crbb7_mbrscopeid"] if existing else None
+    if not territories:
+        if rid:
+            odata_delete(f"crbb7_mbrscopes({rid})")
+        return
+    body = {"crbb7_user_id": uid, "crbb7_territories": ", ".join(territories),
+            "crbb7_name": f"MBR scope {uid}"[:840]}
+    if rid:
+        odata_patch(f"crbb7_mbrscopes({rid})", body)
+    else:
+        odata_post("crbb7_mbrscopes", body)

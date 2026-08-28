@@ -503,27 +503,40 @@ def board_schedule(req: func.HttpRequest) -> func.HttpResponse:
 # GET/POST /api/mbr-targets                → per-person monthly targets (admin)
 
 def _mbr_visible_people(email: str):
-    """(people, is_admin) — own row, plus the team if a lead, plus all for admins."""
+    """
+    (people, can_manage) — MBR visibility, deliberately NOT the analytics admin
+    check: reading someone's performance conversation is a different permission
+    from reading revenue. Rules, additive:
+      - your own MBR
+      - your team, if you are flagged a team lead
+      - the territories granted to you in crbb7_mbrscope ("*" = all)
+    """
     from shared.dataverse import (get_all_territory_consultants, get_team_membership_map,
-                                  get_overrides, is_admin)
+                                  get_overrides, get_mbr_scopes, get_territory_name)
     people = [c for c in get_all_territory_consultants() if not c.get("isdisabled")]
-    admin = is_admin(email)
-    if admin:
-        return people, True
     me = next((c for c in people
                if (c.get("internalemailaddress") or "").lower() == (email or "").lower()), None)
+    scopes = get_mbr_scopes()
+    my_scope = scopes.get(me["systemuserid"]) if me else None
+
+    if my_scope and "*" in my_scope:
+        return people, True
     if not me:
         return [], False
-    teams = get_team_membership_map()
+
+    visible = {me["systemuserid"]: me}
     overrides = {o["crbb7_userid"]: o for o in get_overrides()}
-    my_team = teams.get(me["systemuserid"])
-    is_lead = bool((overrides.get(me["systemuserid"]) or {}).get("crbb7_isteamlead"))
-    visible = [me]
-    if is_lead and my_team:
-        visible += [c for c in people
-                    if teams.get(c["systemuserid"]) == my_team
-                    and c["systemuserid"] != me["systemuserid"]]
-    return visible, False
+    if (overrides.get(me["systemuserid"]) or {}).get("crbb7_isteamlead"):
+        teams = get_team_membership_map()
+        my_team = teams.get(me["systemuserid"])
+        if my_team:
+            for c in people:
+                if teams.get(c["systemuserid"]) == my_team:
+                    visible[c["systemuserid"]] = c
+    for c in people:
+        if my_scope and get_territory_name(c.get("_territoryid_value")) in my_scope:
+            visible[c["systemuserid"]] = c
+    return list(visible.values()), False
 
 
 @app.route(route="mbr-people", methods=["GET"])
@@ -630,11 +643,53 @@ def mbr(req: func.HttpRequest) -> func.HttpResponse:
         return _server_error()
 
 
-@app.route(route="mbr-targets", methods=["GET", "POST"])
-def mbr_targets(req: func.HttpRequest) -> func.HttpResponse:
-    email, err = require_admin(req)
+@app.route(route="mbr-scopes", methods=["GET", "POST"])
+def mbr_scopes(req: func.HttpRequest) -> func.HttpResponse:
+    """Who can open whose MBR. Only someone with full MBR access may change it."""
+    email, err = require_auth(req)
     if err:
         return err
+    from shared.dataverse import (get_mbr_scopes, upsert_mbr_scope, is_guid,
+                                  get_all_territory_consultants, TERRITORY_IDS)
+    try:
+        _people, can_manage = _mbr_visible_people(email)
+        if not can_manage:
+            return func.HttpResponse(json.dumps({"ok": False, "error": "forbidden"}),
+                                     mimetype="application/json", status_code=403)
+        if req.method == "GET":
+            users = [u for u in get_all_territory_consultants() if not u.get("isdisabled")]
+            return func.HttpResponse(json.dumps({
+                "ok": True, "scopes": get_mbr_scopes(),
+                "territories": list(TERRITORY_IDS.keys()),
+                "users": [{"uid": u["systemuserid"], "name": u.get("fullname", ""),
+                           "title": u.get("title") or ""} for u in
+                          sorted(users, key=lambda x: x.get("fullname") or "")],
+            }), mimetype="application/json", status_code=200)
+
+        body = req.get_json() or {}
+        uid = (body.get("userid") or "").strip()
+        if not is_guid(uid):
+            return func.HttpResponse(json.dumps({"ok": False, "error": "valid userid required"}),
+                                     mimetype="application/json", status_code=400)
+        allowed = set(TERRITORY_IDS.keys()) | {"*"}
+        terrs = [t for t in (body.get("territories") or []) if t in allowed]
+        upsert_mbr_scope(uid, terrs)
+        return func.HttpResponse(json.dumps({"ok": True, "scopes": get_mbr_scopes()}),
+                                 mimetype="application/json", status_code=200)
+    except Exception:
+        logging.exception("mbr-scopes error")
+        return _server_error()
+
+
+@app.route(route="mbr-targets", methods=["GET", "POST"])
+def mbr_targets(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_auth(req)
+    if err:
+        return err
+    _people, can_manage = _mbr_visible_people(email)
+    if not can_manage:
+        return func.HttpResponse(json.dumps({"ok": False, "error": "forbidden"}),
+                                 mimetype="application/json", status_code=403)
     from shared.dataverse import get_mbr_targets, upsert_mbr_targets, is_guid
     from shared.mbr_registry import DEFAULT_TARGETS, TARGET_KEYS
     try:
