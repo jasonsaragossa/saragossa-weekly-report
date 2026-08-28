@@ -130,8 +130,10 @@ def generate_prompts(person_name: str, month_label: str, flagged: list) -> dict:
             "summary": data.get("summary"),
             "source": "claude",
         }
-    except Exception:
+    except Exception as exc:
         logging.warning("MBR prompt generation failed — using templates", exc_info=True)
         return {"prompts": [{"key": m["key"], "question": _fallback_question(m),
                              "flag_reason": m["flag_reason"]} for m in flagged],
-                "summary": None, "source": "template"}
+                "summary": None, "source": "template",
+                # Surfaced to admins only, so a silent fallback is diagnosable
+                "error": f"{type(exc).__name__}: {exc}"[:300]}

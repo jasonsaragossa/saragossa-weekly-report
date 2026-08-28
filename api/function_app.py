@@ -559,7 +559,7 @@ def mbr(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(json.dumps({"ok": False, "error": "valid uid required"}),
                                  mimetype="application/json", status_code=400)
     try:
-        people, _admin = _mbr_visible_people(email)
+        people, is_admin_user = _mbr_visible_people(email)
         person = next((p for p in people if p["systemuserid"] == uid), None)
         if not person:
             return func.HttpResponse(json.dumps({"ok": False, "error": "forbidden"}),
@@ -621,7 +621,9 @@ def mbr(req: func.HttpRequest) -> func.HttpResponse:
             "ok": True, "person": {"uid": uid, "name": person.get("fullname", "")},
             **data, "targets": targets, "saved": saved,
             "carried_actions": (last or {}).get("actions") or [],
-            "flagged": [f["key"] for f in flagged], **prompts,
+            "flagged": [f["key"] for f in flagged],
+            **{k: v for k, v in prompts.items()
+               if k != "error" or is_admin_user},
         }), mimetype="application/json", status_code=200)
     except Exception:
         logging.exception("mbr error")
