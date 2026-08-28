@@ -512,19 +512,20 @@ def _mbr_visible_people(email: str):
       - the territories granted to you in crbb7_mbrscope ("*" = all)
     """
     from shared.dataverse import (get_all_territory_consultants, get_team_membership_map,
-                                  get_overrides, get_mbr_scopes, get_territory_name, is_admin)
+                                  get_overrides, get_mbr_scopes, get_territory_name)
     people = [c for c in get_all_territory_consultants() if not c.get("isdisabled")]
     me = next((c for c in people
                if (c.get("internalemailaddress") or "").lower() == (email or "").lower()), None)
     scopes = get_mbr_scopes()
 
-    # Directors/admins keep full access. Also the safety net: if the grant table
-    # is unreadable or unconfigured, fall back to it rather than locking the
-    # module — the alternative is nobody being able to grant access either.
-    if is_admin(email):
-        return people, True
-    if not scopes:
-        logging.warning("MBR scopes unavailable or empty — non-admins see only their own MBR")
+    # Grants are the authority. Deliberately NOT the analytics admin check:
+    # finance and analytics access must not carry into performance conversations.
+    if scopes is None:
+        # Table unreadable — fall back to Director title so the module can never
+        # lock everyone out (including out of the screen that fixes the grants).
+        logging.warning("MBR scope table unreadable — falling back to Director titles")
+        if "director" in ((me or {}).get("title") or "").lower():
+            return people, True
         scopes = {}
 
     my_scope = scopes.get(me["systemuserid"]) if me else None
