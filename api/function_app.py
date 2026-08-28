@@ -596,12 +596,15 @@ def mbr(req: func.HttpRequest) -> func.HttpResponse:
         # and the questions would shift under the consultant mid-meeting.
         cached = (saved or {}).get("prompt_cache") or {}
         keys = [f["key"] for f in flagged]
-        if cached.get("keys") == keys and cached.get("prompts"):
+        # Only a real generation is worth reusing — never pin template fallbacks,
+        # or adding the API key later would have no effect.
+        if (cached.get("keys") == keys and cached.get("prompts")
+                and cached.get("source") == "claude"):
             prompts = {"prompts": cached["prompts"], "summary": cached.get("summary"),
-                       "source": cached.get("source", "cached")}
+                       "source": "claude"}
         else:
             prompts = generate_prompts(person.get("fullname", ""), data["month"], flagged)
-            if prompts.get("prompts"):
+            if prompts.get("source") == "claude":
                 try:
                     upsert_mbr(uid, year, month,
                                {**{k: v for k, v in (saved or {}).items()
