@@ -513,9 +513,16 @@ def _mbr_visible_people(email: str):
     """
     from shared.dataverse import (get_all_territory_consultants, get_team_membership_map,
                                   get_overrides, get_mbr_scopes, get_territory_name)
+    from shared.dataverse import odata_get_all, odata_str
     people = [c for c in get_all_territory_consultants() if not c.get("isdisabled")]
-    me = next((c for c in people
-               if (c.get("internalemailaddress") or "").lower() == (email or "").lower()), None)
+    # Resolve the caller from ALL Mercury users, not just the six consultant
+    # territories — directors sit outside them (Jason's user is in "Testing"),
+    # so looking them up in `people` would silently deny their own grant.
+    me = next((u for u in odata_get_all("systemusers", params={
+        "$select": "systemuserid,fullname,title,internalemailaddress",
+        "$filter": (f"internalemailaddress eq '{odata_str(email)}'"
+                    f" and isdisabled eq false"),
+    })), None)
     scopes = get_mbr_scopes()
 
     # Grants are the authority. Deliberately NOT the analytics admin check:
