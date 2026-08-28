@@ -1382,13 +1382,18 @@ def upsert_mbr_targets(uid: str, targets: dict) -> None:
 # Team leads get their own team automatically and need no row here.
 
 def get_mbr_scopes() -> dict:
-    """{uid: [territory, ...]} — '*' means every territory."""
+    """
+    {uid: [territory, ...]} — '*' means every territory.
+    Returns None (not {}) if the table can't be read, so callers can tell
+    "nobody is granted" apart from "the grant table is unavailable" and avoid
+    locking everyone out of the module.
+    """
     try:
         rows = odata_get_all("crbb7_mbrscopes",
                              params={"$select": "crbb7_user_id,crbb7_territories"})
     except Exception:
-        logging.warning("Could not read crbb7_mbrscope")
-        return {}
+        logging.warning("Could not read crbb7_mbrscope", exc_info=True)
+        return None
     out = {}
     for r in rows:
         uid = r.get("crbb7_user_id")
