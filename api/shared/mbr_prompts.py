@@ -109,7 +109,13 @@ def generate_prompts(person_name: str, month_label: str, flagged: list) -> dict:
 
     try:
         import anthropic
-        client = anthropic.Anthropic(api_key=api_key, timeout=40.0)
+        # An identity-linked API key must name the workspace it acts in;
+        # a classic key ignores the header.
+        workspace = os.environ.get("ANTHROPIC_WORKSPACE_ID")
+        client = anthropic.Anthropic(
+            api_key=api_key, timeout=40.0,
+            default_headers={"anthropic-workspace-id": workspace} if workspace else None,
+        )
         response = client.messages.create(
             model=MODEL,
             max_tokens=4000,
