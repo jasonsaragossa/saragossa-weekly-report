@@ -235,3 +235,15 @@ DEFAULT_TARGETS = {
 }
 
 TARGET_KEYS = list(DEFAULT_TARGETS.keys())
+
+# Reporting currency by territory — the same convention the weekly report and
+# analytics use, so a US consultant's MBR reads in dollars throughout.
+TERRITORY_CCY = {
+    "Bristol":          "GBP",
+    "London":           "GBP",
+    "London Contract":  "GBP",
+    "Chicago":          "USD",
+    "New York":         "USD",
+    "Chicago Contract": "USD",
+    "Cameron Scott":    "GBP",
+}

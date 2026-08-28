@@ -61,9 +61,12 @@ async function load() {
 }
 
 
+// Money renders in the consultant's own desk currency (US desks in USD)
+let sym = "£";
+
 function fmtVal(m) {
   if (m.value === null || m.value === undefined) return "—";
-  if (m.format === "money")   return "£" + Math.round(m.value).toLocaleString("en-GB");
+  if (m.format === "money")   return sym + Math.round(m.value).toLocaleString("en-GB");
   if (m.format === "percent") return m.value + "%";
   if (m.format === "ratio")   return m.value.toFixed(2);
   return m.value.toLocaleString("en-GB");
@@ -71,7 +74,7 @@ function fmtVal(m) {
 
 function fmtPlain(m, v) {
   if (v === null || v === undefined) return "—";
-  if (m.format === "money")   return "£" + Math.round(v).toLocaleString("en-GB");
+  if (m.format === "money")   return sym + Math.round(v).toLocaleString("en-GB");
   if (m.format === "percent") return v + "%";
   if (m.format === "ratio")   return Number(v).toFixed(2);
   return Number(v).toLocaleString("en-GB");
@@ -79,6 +82,7 @@ function fmtPlain(m, v) {
 
 
 function render(d) {
+  sym = d.sym || "£";
   const flagged = new Set(d.flagged || []);
   const promptBy = {};
   (d.prompts || []).forEach(p => { promptBy[p.key] = p; });
@@ -142,7 +146,7 @@ function render(d) {
   const ytd = d.ytd || {};
   const yearTarget = (d.targets || {}).revenue_year || 0;
   const pctOfTarget = yearTarget ? Math.round((ytd.revenue || 0) / yearTarget * 100) : null;
-  const money = (v) => "£" + Math.round(v || 0).toLocaleString("en-GB");
+  const money = (v) => sym + Math.round(v || 0).toLocaleString("en-GB");
   const headline = `
     <section class="mbr-headline">
       <div class="mbr-card">
@@ -153,6 +157,16 @@ function render(d) {
           <span class="mbr-bar"><span class="mbr-bar-fill${pctOfTarget >= 100 ? " hit" : ""}"
             style="width:${Math.min(100, pctOfTarget)}%"></span></span>`
           : `<span class="mbr-card-sub dim">no annual target set</span>`}
+      </div>
+      <div class="mbr-card">
+        <span class="mbr-card-label">Perm Revenue Written — starting this year</span>
+        <span class="mbr-card-value">${money(ytd.written_starting)}</span>
+        <span class="mbr-card-sub dim">all placements with a ${d.month.slice(0, 4)} start date, including future starts</span>
+      </div>
+      <div class="mbr-card">
+        <span class="mbr-card-label">Perm Placements Created This Year</span>
+        <span class="mbr-card-value">${money(ytd.created_value)}</span>
+        <span class="mbr-card-sub dim">${(ytd.created_count || 0).toLocaleString("en-GB")} placements written in ${d.month.slice(0, 4)}</span>
       </div>
       <div class="mbr-card">
         <span class="mbr-card-label">Deals</span>

@@ -9,12 +9,13 @@ import logging
 from datetime import date
 from concurrent.futures import ThreadPoolExecutor
 
-from shared.calc import TO_GBP, _build_fx_tables, split_factor, parse_date, rebate_of
+from shared.calc import (TO_GBP, TO_USD, _build_fx_tables, split_factor, parse_date,
+                         rebate_of)
 from shared.dataverse import (odata_get_all, odata_str, active_or_rebated_filter,
-                              get_fx_rates)
+                              get_fx_rates, get_territory_name)
 from shared.mbr_registry import (BD_CALL_PURPOSES, BD_NO_PITCH_PURPOSE, BD_PITCH_PURPOSE,
                                  CANDIDATE_CALL_PURPOSES, CLIENT_MEETING_PURPOSES,
-                                 LEAD_PURPOSES, REGISTRY, SPEC_CV_PURPOSES)
+                                 LEAD_PURPOSES, REGISTRY, SPEC_CV_PURPOSES, TERRITORY_CCY)
 
 PERM_TYPE = 143570000
 RETAINER_CONTACT = "7aa8cfa4-d1f2-f011-8406-7c1e52796145"
@@ -50,6 +51,26 @@ def _placements(uid: str, start: date, end: date) -> list:
         "$filter": (f"crimson_type eq {PERM_TYPE}"
                     f" and crimson_startdate ge {start.isoformat()}"
                     f" and crimson_startdate lt {end.isoformat()}"
+                    f" and {active_or_rebated_filter()}"
+                    f" and (_crimson_consultant_value eq '{odata_str(uid)}'"
+                    f" or _mercury_assignmentowner_value eq '{odata_str(uid)}'"
+                    f" or _mercury_clientrelationshipowner_value eq '{odata_str(uid)}'"
+                    f" or _mercury_contractorrelationship_userid_value eq '{odata_str(uid)}')"),
+        "$expand": "recruit_truegrossprofitcurrency($select=isocurrencycode)",
+    })
+
+
+def _placements_created(uid: str, start: date, end: date) -> list:
+    """Perm placements this person owns that were CREATED in the window."""
+    return odata_get_all("crimson_placements", params={
+        "$select": ("crimson_placementid,crimson_type,createdon,recruit_truegrossprofit,"
+                    "recruit_rebateamount,recruit_rebatedon,statuscode,"
+                    "_recruit_candidatecontact_value,_mercury_clientrelationshipowner_value,"
+                    "_crimson_consultant_value,_mercury_assignmentowner_value,"
+                    "_mercury_contractorrelationship_userid_value"),
+        "$filter": (f"crimson_type eq {PERM_TYPE}"
+                    f" and createdon ge {start.isoformat()}T00:00:00Z"
+                    f" and createdon lt {end.isoformat()}T00:00:00Z"
                     f" and {active_or_rebated_filter()}"
                     f" and (_crimson_consultant_value eq '{odata_str(uid)}'"
                     f" or _mercury_assignmentowner_value eq '{odata_str(uid)}'"
@@ -172,37 +193,71 @@ def compute_ytd_headline(uid: str, year: int, month: int, to_gbp: dict = None) -
     One placement query for the whole year rather than twelve monthly ones.
     """
     fx = to_gbp or TO_GBP
-    start = date(year, 1, 1)
-    _, end = month_bounds(year, month)          # through the end of the MBR month
+    jan = date(year, 1, 1)
+    next_jan = date(year + 1, 1, 1)
+    _, to_date_end = month_bounds(year, month)   # through the end of the MBR month
 
-    gp = deals = 0.0
-    clients = set()
-    for p in _placements(uid, start, end):
-        if p.get("_recruit_candidatecontact_value") == RETAINER_CONTACT:
-            continue
+    def value(p):
         amount = (p.get("recruit_truegrossprofit") or 0.0) - rebate_of(p)[0]
         ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode")
-        gp += amount * split_factor(p, uid) * fx.get(ccy, 1.0)
-        if p.get("_crimson_consultant_value") == uid:
-            deals += 0.5
-        if p.get("_mercury_assignmentowner_value") == uid:
-            deals += 0.5
-        if (p.get("_mercury_clientrelationshipowner_value") == uid
-                and "new business" in (p.get("crimson_specialinstructionsclient") or "").lower()
-                and p.get("_crimson_clientname_value")):
-            clients.add(p["_crimson_clientname_value"])
-    return {"revenue": round(gp, 2), "deals": round(deals, 1), "new_clients": len(clients)}
+        return amount * split_factor(p, uid) * fx.get(ccy, 1.0)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        f_start   = pool.submit(_placements, uid, jan, next_jan)          # starting this year
+        f_created = pool.submit(_placements_created, uid, jan, next_jan)  # written this year
+        starting, created = f_start.result(), f_created.result()
+
+    gp = deals = written_starting = 0.0
+    clients = set()
+    for p in starting:
+        if p.get("_recruit_candidatecontact_value") == RETAINER_CONTACT:
+            continue
+        written_starting += value(p)
+        # "To date" stops at the end of the month being reviewed
+        if parse_date(p["crimson_startdate"]) < to_date_end:
+            gp += value(p)
+            if p.get("_crimson_consultant_value") == uid:
+                deals += 0.5
+            if p.get("_mercury_assignmentowner_value") == uid:
+                deals += 0.5
+            if (p.get("_mercury_clientrelationshipowner_value") == uid
+                    and "new business" in (p.get("crimson_specialinstructionsclient") or "").lower()
+                    and p.get("_crimson_clientname_value")):
+                clients.add(p["_crimson_clientname_value"])
+
+    created_value = sum(value(p) for p in created
+                        if p.get("_recruit_candidatecontact_value") != RETAINER_CONTACT)
+
+    return {"revenue": round(gp, 2), "deals": round(deals, 1), "new_clients": len(clients),
+            "written_starting": round(written_starting, 2),
+            "created_value": round(created_value, 2),
+            "created_count": len([p for p in created
+                                  if p.get("_recruit_candidatecontact_value") != RETAINER_CONTACT])}
+
+
+def consultant_currency(uid: str) -> str:
+    """USD for the US desks, GBP otherwise — the weekly report's convention."""
+    rows = odata_get_all("systemusers", params={
+        "$select": "_territoryid_value",
+        "$filter": f"systemuserid eq '{odata_str(uid)}'",
+    })
+    if not rows:
+        return "GBP"
+    return TERRITORY_CCY.get(get_territory_name(rows[0].get("_territoryid_value")), "GBP")
 
 
 def build_mbr_metrics(uid: str, year: int, month: int) -> dict:
     """
     Metrics for the month, the month before, and quarter-to-date, shaped for the
     form: [{key, name, family, value, previous, change_pct, target, direction, …}]
+    Money is reported in the consultant's own desk currency.
     """
+    ccy = consultant_currency(uid)
     try:
-        to_gbp, _ = _build_fx_tables(get_fx_rates())
+        gbp_table, usd_table = _build_fx_tables(get_fx_rates())
     except Exception:
-        to_gbp = TO_GBP
+        gbp_table, usd_table = TO_GBP, TO_USD
+    to_gbp = gbp_table if ccy == "GBP" else usd_table
 
     py, pm = previous_month(year, month)
     q_months = quarter_months(year, month)
@@ -240,4 +295,5 @@ def build_mbr_metrics(uid: str, year: int, month: int) -> dict:
             "value": val, "previous": was, "qtd": qtd.get(key), "change_pct": change,
         })
     return {"metrics": rows, "month": f"{year}-{month:02d}",
-            "previous_month": f"{py}-{pm:02d}", "ytd": headline}
+            "previous_month": f"{py}-{pm:02d}", "ytd": headline,
+            "currency": ccy, "sym": "£" if ccy == "GBP" else "$"}
