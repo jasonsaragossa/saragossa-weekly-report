@@ -81,12 +81,21 @@ def _is_running_on(p: dict, when: date) -> bool:
     return start <= when <= end
 
 
+def _owner_filter(desk: set) -> str:
+    """OData OR across the desk's owners — filter server-side, not in Python:
+    a year of org-wide phone calls is tens of thousands of rows."""
+    return " or ".join(f"_ownerid_value eq '{odata_str(u)}'" for u in desk)
+
+
 def _activities(entity: str, datefield: str, desk: set, start: date, end: date) -> list:
-    rows = odata_get_all(entity, params={
+    if not desk:
+        return []
+    return odata_get_all(entity, params={
         "$select": f"activityid,_mercury_purpose_value,_ownerid_value,{datefield}",
-        "$filter": (f"{datefield} ge {start.isoformat()} and {datefield} lt {end.isoformat()}"),
+        "$filter": (f"({_owner_filter(desk)})"
+                    f" and {datefield} ge {start.isoformat()}"
+                    f" and {datefield} lt {end.isoformat()}"),
     })
-    return [r for r in rows if r.get("_ownerid_value") in desk]
 
 
 def build_performance_stats(today: date = None) -> dict:
@@ -248,9 +257,11 @@ def _shortlists_for_desk(desk: set, start: date, end: date) -> list:
 
 
 def _vacancies(desk: set, start: date, end: date) -> list:
-    rows = odata_get_all("crimson_vacancies", params={
+    if not desk:
+        return []
+    return odata_get_all("crimson_vacancies", params={
         "$select": "crimson_vacancyid,createdon,_ownerid_value",
-        "$filter": (f"createdon ge {start.isoformat()}T00:00:00Z"
+        "$filter": (f"({_owner_filter(desk)})"
+                    f" and createdon ge {start.isoformat()}T00:00:00Z"
                     f" and createdon lt {end.isoformat()}T00:00:00Z"),
     })
-    return [r for r in rows if r.get("_ownerid_value") in desk]
