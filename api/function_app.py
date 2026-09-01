@@ -496,6 +496,36 @@ def board_schedule(req: func.HttpRequest) -> func.HttpResponse:
         return _server_error()
 
 
+# ── Performance Stats (pilot) ─────────────────────────────────────────────────
+# Contract desk dashboard, piloted with Jim Jeffers and Andrew Turton.
+# Access is an explicit allowlist while it is a pilot — widen it here, or move
+# it to a table if it outgrows a handful of people.
+
+PERF_STATS_ALLOWED = {
+    "jim@saragossa.io",        # Jim Jeffers — Contract Sales Director
+    "andrewt@saragossa.io",    # Andrew Turton — Regional Director, Chicago
+    "jason@saragossa.io",      # owner/support
+}
+
+
+@app.route(route="performance-stats", methods=["GET"])
+def performance_stats(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_auth(req)
+    if err:
+        return err
+    if (email or "").lower() not in PERF_STATS_ALLOWED:
+        return func.HttpResponse(
+            json.dumps({"ok": False, "error": "This dashboard is limited to the pilot group."}),
+            mimetype="application/json", status_code=403)
+    try:
+        from shared.perfstats import build_performance_stats
+        return func.HttpResponse(json.dumps({"ok": True, **build_performance_stats()}),
+                                 mimetype="application/json", status_code=200)
+    except Exception:
+        logging.exception("performance-stats error")
+        return _server_error()
+
+
 # ── MBR (beta) ────────────────────────────────────────────────────────────────
 # GET  /api/mbr-people                     → who this user may open
 # GET  /api/mbr?uid=&year=&month=          → metrics, prompts, saved form, carry-forward

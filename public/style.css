@@ -1262,3 +1262,29 @@ tr.mbr-prompt-row td { background: rgba(255,255,255,.02); padding: 8px 14px 12px
 .mbr-bar { display: block; height: 5px; background: rgba(255,255,255,.08); border-radius: 3px; margin-top: 7px; overflow: hidden; }
 .mbr-bar-fill { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
 .mbr-bar-fill.hit { background: #35a56b; }
+
+/* ── Performance Stats (pilot) ─────────────────────────────────────────────── */
+.perf-page { padding: 22px 26px 60px; }
+.perf-head { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
+.perf-sub { font-size: 11px; color: var(--mid); }
+.perf-delta { font-size: 11px; }
+.perf-delta.pos { color: #35a56b; }
+.perf-delta.neg { color: #d98b8b; }
+.perf-trends { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 22px; }
+.perf-chart-title {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--mid);
+  display: block; margin-bottom: 8px;
+}
+.perf-chart {
+  display: flex; align-items: flex-end; gap: 4px; height: 90px;
+  border-bottom: 1px solid var(--border); padding-bottom: 2px;
+}
+.perf-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: flex-end; height: 100%; }
+.perf-bar { width: 100%; background: var(--accent); border-radius: 2px 2px 0 0; opacity: .85; }
+.perf-bar-col:hover .perf-bar { opacity: 1; }
+.perf-bar-label { font-size: 8px; color: var(--mid); margin-top: 3px; }
+.perf-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; }
+.perf-col-title {
+  font-size: 11px; color: var(--white); margin: 0 0 8px; font-weight: 600;
+}
