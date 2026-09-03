@@ -120,11 +120,36 @@ def _placements_created(uid: str, start: date, end: date) -> list:
     })
 
 
+# Shortlist statuses that are no longer live with the client
+DEAD_SHORTLIST_STATUS = {143570004, 2}      # Rejected, Inactive
+
+
+def _live_cvs_by_job(uid: str, vacancy_ids: list) -> dict:
+    """
+    {vacancy_id: count} — CVs this person submitted that are still active.
+    Deliberately not the vacancy's mercury_totalsubmitted rollup: that counts
+    every consultant's submissions and keeps rejected ones, which overstated
+    a job by 34 vs 21 in testing (Jason's call, Sept 2026).
+    """
+    out = {v: 0 for v in vacancy_ids}
+    for i in range(0, len(vacancy_ids), 20):
+        chunk = vacancy_ids[i:i + 20]
+        or_f = " or ".join(f"_crimson_vacancyid_value eq '{v}'" for v in chunk)
+        for s in odata_get_all("crimson_vacancycandidates", params={
+            "$select": "_crimson_vacancyid_value,statuscode,new_statussubmitteddate",
+            "$filter": f"({or_f}) and _owninguser_value eq '{odata_str(uid)}'",
+        }):
+            if (s.get("new_statussubmitteddate")
+                    and s.get("statuscode") not in DEAD_SHORTLIST_STATUS):
+                out[s["_crimson_vacancyid_value"]] = out.get(s["_crimson_vacancyid_value"], 0) + 1
+    return out
+
+
 def _live_jobs(uid: str) -> list:
     """Any active vacancy where this person is the delivery owner (Jason, Sept 2026)."""
     rows = odata_get_all("crimson_vacancies", params={
         "$select": ("crimson_vacancyid,crimson_jobtitle,crimson_name,statuscode,"
-                    "mercury_priority,createdon,mercury_totalsubmitted"),
+                    "mercury_priority,createdon"),
         "$filter": (f"_crimson_deliveryownerid_value eq '{odata_str(uid)}'"
                     f" and statecode eq 0"),
         "$expand": "crimson_clientid($select=name)",
@@ -132,11 +157,12 @@ def _live_jobs(uid: str) -> list:
     live = [v for v in rows if v.get("statuscode") not in CLOSED_VACANCY_STATUS]
     live.sort(key=lambda v: (PRIORITY_ORDER.get(v.get("mercury_priority"), 4),
                              v.get("createdon") or ""))
+    cvs = _live_cvs_by_job(uid, [v["crimson_vacancyid"] for v in live])
     return [{
         "client":   (v.get("crimson_clientid") or {}).get("name") or "(client)",
         "job":      v.get("crimson_jobtitle") or v.get("crimson_name") or "",
         "priority": PRIORITY_LABEL.get(v.get("mercury_priority"), "—"),
-        "cvs_out":  v.get("mercury_totalsubmitted") or 0,
+        "cvs_out":  cvs.get(v["crimson_vacancyid"], 0),
         "id":       v["crimson_vacancyid"],
     } for v in live]
 
