@@ -228,12 +228,26 @@ function render(d) {
       <span class="mbr-saved-note" id="mbr-saved-note"></span>
     </div>`;
 
+  wireAutoGrow(document.getElementById("mbr-content"));
   if (!actions.length) addActionRow();
   document.getElementById("add-action").addEventListener("click", (e) => { e.preventDefault(); addActionRow(); });
   document.getElementById("mbr-save").addEventListener("click", save);
   document.getElementById("mbr-content").addEventListener("click", (e) => {
     const rm = e.target.closest(".action-remove");
     if (rm) rm.closest("tr").remove();
+  });
+}
+
+// Answer boxes grow with the text rather than scrolling inside one line
+function autoGrow(el) {
+  el.style.height = "auto";
+  el.style.height = (el.scrollHeight + 2) + "px";
+}
+
+function wireAutoGrow(root) {
+  root.querySelectorAll("textarea").forEach(t => {
+    autoGrow(t);
+    t.addEventListener("input", () => autoGrow(t));
   });
 }
 

@@ -211,6 +211,20 @@ function render(d) {
     document.getElementById("oto-week").value = b.dataset.week;
     load();
   }));
+  wireAutoGrow(document.getElementById("oto-content"));
+}
+
+// Commentary boxes grow with the text — a 1:1 comment is rarely one line
+function autoGrow(el) {
+  el.style.height = "auto";
+  el.style.height = (el.scrollHeight + 2) + "px";
+}
+
+function wireAutoGrow(root) {
+  root.querySelectorAll("textarea").forEach(t => {
+    autoGrow(t);
+    t.addEventListener("input", () => autoGrow(t));
+  });
 }
 
 function collect(name) {

@@ -1313,3 +1313,11 @@ tr.mbr-prompt-row td { background: rgba(255,255,255,.02); padding: 8px 14px 12px
 select.oto-in { color-scheme: dark; }
 .oto-fixed { color: var(--white); font-size: 12px; }
 .oto-meta { display: block; font-size: 9px; color: var(--mid); margin-top: 2px; }
+
+/* Auto-growing comment boxes — no inner scrollbar, sensible minimum */
+.oto-in, .mbr-prompt-answer, .mbr-field textarea {
+  overflow-y: hidden;
+  min-height: 34px;
+  line-height: 1.45;
+}
+.mbr-field textarea { min-height: 52px; }
