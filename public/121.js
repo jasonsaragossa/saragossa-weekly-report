@@ -70,10 +70,14 @@ function render(d) {
   const saved = d.saved || {};
   const lw = d.last_week, mo = d.month;
 
+  const cell = (key, label, period, value) => value
+    ? `<span class="oto-drill" data-key="${esc(key)}" data-period="${period}"
+         data-label="${esc(label)}">${value}</span>`
+    : "0";
   const inputRows = d.input_rows.map(r => `<tr>
       <td>${esc(r.label)}</td>
-      <td class="num"><strong>${lw[r.key]}</strong></td>
-      <td class="num dim">${mo[r.key]}</td>
+      <td class="num"><strong>${cell(r.key, r.label, "last_week", lw[r.key])}</strong></td>
+      <td class="num dim">${cell(r.key, r.label, "month", mo[r.key])}</td>
     </tr>`).join("");
 
   const jobRows = d.live_jobs.map((j, i) => `<tr>
@@ -86,14 +90,18 @@ function render(d) {
       </select></td>
     </tr>`).join("");
 
+  const who = (m) => `${esc(m.contact) || "<span class='dim'>—</span>"}` +
+    `<span class="oto-meta">${esc(m.client) || "no company on record"}` +
+    `${m.subject ? " · " + esc(m.subject) : ""} · ${m.when}</span>`;
+
   const metRows = d.meetings_last_week.map((m, i) => `<tr>
-      <td>${esc(m.client)}<span class="oto-meta">${m.when}</span></td>
+      <td>${who(m)}</td>
       <td><textarea rows="1" class="oto-in" data-name="meetings_last_outcome" data-key="outcome"
         data-idx="${i}">${S((saved.meetings_last_outcome || [])[i]?.outcome)}</textarea></td>
     </tr>`).join("");
 
   const thisRows = d.meetings_this_week.map((m, i) => `<tr>
-      <td>${esc(m.client)}<span class="oto-meta">${m.when}</span></td>
+      <td>${who(m)}</td>
       <td><textarea rows="1" class="oto-in" data-name="meetings_this_plan" data-key="plan"
         data-idx="${i}">${S((saved.meetings_this_plan || [])[i]?.plan)}</textarea></td>
     </tr>`).join("");
@@ -119,6 +127,7 @@ function render(d) {
   const done = new Set(q.completed || []);
   const strip = `
     <section class="oto-quarter">
+      <button class="oto-nav" data-week="${esc(q.prev || "")}" title="Earlier weeks">‹</button>
       <span class="oto-q-label">${esc(q.label || "")}</span>
       <div class="oto-weeks">
         ${(q.weeks || []).map(w => {
@@ -128,6 +137,7 @@ function render(d) {
             title="${done.has(w) ? "1:1 saved" : "not yet completed"}">${dt.getDate()}/${dt.getMonth() + 1}</button>`;
         }).join("")}
       </div>
+      <button class="oto-nav" data-week="${esc(q.next || "")}" title="Later weeks">›</button>
       <span class="oto-q-count">${(q.weeks || []).filter(w => done.has(w)).length} of ${(q.weeks || []).length} completed</span>
     </section>`;
 
@@ -173,9 +183,9 @@ function render(d) {
     <section class="mbr-section">
       <h2>Meetings</h2>
       <h3 class="perf-col-title">Took place last week</h3>
-      ${rowsTable([{label:"Client"},{label:"Outcome / plan"}], metRows, "No client meetings logged last week.")}
+      ${rowsTable([{label:"Who / company"},{label:"Outcome / plan"}], metRows, "No client meetings logged last week.")}
       <h3 class="perf-col-title" style="margin-top:14px">Taking place this week</h3>
-      ${rowsTable([{label:"Client"},{label:"Plan of action"}], thisRows, "Nothing in the diary yet.")}
+      ${rowsTable([{label:"Who / company"},{label:"Plan of action"}], thisRows, "Nothing in the diary yet.")}
     </section>
 
     <section class="mbr-section">
@@ -207,11 +217,51 @@ function render(d) {
     </div>`;
 
   document.getElementById("oto-save").addEventListener("click", save);
-  document.querySelectorAll(".oto-week").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll(".oto-week, .oto-nav").forEach(b => b.addEventListener("click", () => {
+    if (!b.dataset.week) return;
     document.getElementById("oto-week").value = b.dataset.week;
     load();
   }));
   wireAutoGrow(document.getElementById("oto-content"));
+  document.querySelectorAll(".oto-drill").forEach(el => el.addEventListener("click", () =>
+    showDetail(el.dataset.label, el.dataset.period,
+               ((data.detail || {})[el.dataset.period] || {})[el.dataset.key] || [])));
+}
+
+// Every key input drills down to the records behind the count
+function showDetail(label, period, rows) {
+  let overlay = document.getElementById("oto-modal");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "oto-modal";
+    overlay.className = "modal-overlay";
+    overlay.style.display = "none";
+    overlay.innerHTML = `<div class="modal-box">
+      <div class="modal-header">
+        <span class="modal-title" id="oto-modal-title"></span>
+        <button class="modal-close" id="oto-modal-close" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body" id="oto-modal-body"></div>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener("click", e => { if (e.target === overlay) overlay.style.display = "none"; });
+    overlay.querySelector("#oto-modal-close").addEventListener("click",
+      () => { overlay.style.display = "none"; });
+  }
+  const when = period === "last_week" ? "last week" : "month to date";
+  overlay.querySelector("#oto-modal-title").textContent = `${label} — ${when} (${rows.length})`;
+  overlay.querySelector("#oto-modal-body").innerHTML = rows.length ? `
+    <div class="table-wrap"><table>
+      <thead><tr><th>Contact</th><th>Client</th><th>Subject</th><th class="num">Date</th></tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td>${esc(r.contact) || "<span class='dim'>—</span>"}</td>
+        <td>${esc(r.client) || "<span class='dim'>—</span>"}</td>
+        <td>${esc(r.subject) || "<span class='dim'>—</span>"}</td>
+        <td class="num dim">${r.when ? new Date(r.when + "T00:00:00").toLocaleDateString("en-GB",
+          { day: "numeric", month: "short" }) : "—"}</td>
+      </tr>`).join("")}</tbody>
+    </table></div>` : `<p class="mbr-empty">Nothing recorded.</p>`;
+  overlay.style.display = "flex";
 }
 
 // Commentary boxes grow with the text — a 1:1 comment is rarely one line

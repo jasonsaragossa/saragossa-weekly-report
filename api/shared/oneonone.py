@@ -64,27 +64,25 @@ def week_start(d: date) -> date:
     return d - timedelta(days=d.weekday())
 
 
-QUARTER_LABELS = {1: "Jan–Mar", 2: "Apr–Jun", 3: "Jul–Sep", 4: "Oct–Dec"}
+ROLLING_WEEKS = 13          # a rolling quarter, not a calendar one
 
 
-def quarter_of(d: date) -> int:
-    return (d.month - 1) // 3 + 1
-
-
-def quarter_weeks(d: date) -> dict:
+def quarter_weeks(d: date, count: int = ROLLING_WEEKS) -> dict:
     """
-    Every week in the calendar quarter containing `d`, so a quarter's worth of
-    1:1s sits on one page (Jason, Sept 2026).
+    The rolling 13 weeks ending at `d` — so crossing into a new calendar quarter
+    doesn't hide the weeks either side of it (Jason, Sept 2026). Nothing is ever
+    deleted: older weeks stay in Dataverse and are reachable by paging back.
     """
-    q = quarter_of(d)
-    start = date(d.year, 3 * (q - 1) + 1, 1)
-    end = date(d.year + (1 if q == 4 else 0), 1 if q == 4 else 3 * q + 1, 1)
-    weeks, wk = [], week_start(start)
-    while wk < end:
-        weeks.append(wk.isoformat())
-        wk += timedelta(days=7)
-    return {"year": d.year, "quarter": q, "label": f"{QUARTER_LABELS[q]} {d.year}",
-            "weeks": weeks}
+    end = week_start(d)
+    weeks = [(end - timedelta(days=7 * i)).isoformat() for i in range(count - 1, -1, -1)]
+    first = date.fromisoformat(weeks[0])
+    fmt = "%b %Y" if first.year != end.year else "%b"
+    return {
+        "label": f"{first.strftime(fmt)} – {end.strftime('%b %Y')}",
+        "weeks": weeks,
+        "prev": (end - timedelta(days=7 * count)).isoformat(),
+        "next": (end + timedelta(days=7 * count)).isoformat(),
+    }
 
 
 def _activities(entity: str, datefield: str, uid: str, start: date, end: date) -> list:
@@ -93,7 +91,8 @@ def _activities(entity: str, datefield: str, uid: str, start: date, end: date) -
         "$filter": (f"_ownerid_value eq '{odata_str(uid)}'"
                     f" and {datefield} ge {start.isoformat()}"
                     f" and {datefield} lt {end.isoformat()}"),
-        "$expand": "regardingobjectid_account($select=name)",
+        "$expand": ("regardingobjectid_account($select=name),"
+                    "regardingobjectid_contact($select=fullname,_parentcustomerid_value)"),
     })
 
 
@@ -101,23 +100,82 @@ def _shortlists(uid: str, start: date, end: date) -> list:
     s, e = start.isoformat(), end.isoformat()
     return odata_get_all("crimson_vacancycandidates", params={
         "$select": ("crimson_vacancycandidateid,new_statussubmitteddate,"
-                    "mercury_firstinterviewdate"),
+                    "mercury_firstinterviewdate,crimson_name"),
         "$filter": (f"_owninguser_value eq '{odata_str(uid)}' and ("
                     f"(new_statussubmitteddate ge {s} and new_statussubmitteddate lt {e}) or "
                     f"(mercury_firstinterviewdate ge {s} and mercury_firstinterviewdate lt {e}))"),
+        "$expand": ("recruit_candidatecontact($select=fullname),"
+                    "crimson_clientid($select=name),"
+                    "crimson_vacancyid($select=crimson_jobtitle)"),
     })
 
 
 def _placements_created(uid: str, start: date, end: date) -> list:
     """Deals done in the week = placements CREATED, which is what the consultant did."""
     return odata_get_all("crimson_placements", params={
-        "$select": "crimson_placementid,createdon",
+        "$select": "crimson_placementid,createdon,crimson_name",
         "$filter": (f"createdon ge {start.isoformat()}T00:00:00Z"
                     f" and createdon lt {end.isoformat()}T00:00:00Z"
                     f" and {active_or_rebated_filter()}"
                     f" and (_crimson_consultant_value eq '{odata_str(uid)}'"
                     f" or _mercury_assignmentowner_value eq '{odata_str(uid)}')"),
+        "$expand": ("recruit_candidatecontact($select=fullname),"
+                    "crimson_clientname($select=name)"),
     })
+
+
+# ── Drill-down rows ───────────────────────────────────────────────────────────
+# Every key input is clickable, so each count carries the records behind it:
+# contact, client and (for meetings) the subject.
+
+def _company_names(activities: list) -> dict:
+    """
+    {account_id: name} for the companies on the contacts we met or called.
+    Meetings are usually "regarding" the contact, not the account, so the
+    company has to come off the contact's own record (Jason, Sept 2026).
+    """
+    ids = {(a.get("regardingobjectid_contact") or {}).get("_parentcustomerid_value")
+           for a in activities}
+    ids.discard(None)
+    out = {}
+    ids = list(ids)
+    for i in range(0, len(ids), 20):
+        or_f = " or ".join(f"accountid eq '{a}'" for a in ids[i:i + 20])
+        for acc in odata_get_all("accounts", params={
+                "$select": "accountid,name", "$filter": f"({or_f})"}):
+            out[acc["accountid"]] = acc.get("name") or ""
+    return out
+
+
+def _activity_row(a: dict, datefield: str, companies: dict = None) -> dict:
+    contact_rec = a.get("regardingobjectid_contact") or {}
+    contact = contact_rec.get("fullname") or ""
+    client = ((a.get("regardingobjectid_account") or {}).get("name")
+              or (companies or {}).get(contact_rec.get("_parentcustomerid_value")) or "")
+    return {"contact": contact, "client": client,
+            "subject": a.get("subject") or "", "when": (a.get(datefield) or "")[:10]}
+
+
+def _shortlist_row(s: dict, datefield: str) -> dict:
+    return {
+        "contact": (s.get("recruit_candidatecontact") or {}).get("fullname") or "",
+        "client":  (s.get("crimson_clientid") or {}).get("name") or "",
+        "subject": (s.get("crimson_vacancyid") or {}).get("crimson_jobtitle") or "",
+        "when":    (s.get(datefield) or "")[:10],
+    }
+
+
+def _placement_row(p: dict) -> dict:
+    return {
+        "contact": (p.get("recruit_candidatecontact") or {}).get("fullname") or "",
+        "client":  (p.get("crimson_clientname") or {}).get("name") or "",
+        "subject": p.get("crimson_name") or "",
+        "when":    (p.get("createdon") or "")[:10],
+    }
+
+
+def _sorted(rows: list) -> list:
+    return sorted(rows, key=lambda r: r.get("when") or "", reverse=True)
 
 
 # Shortlist statuses that are no longer live with the client
@@ -171,18 +229,11 @@ def _count(rows, purposes):
     return sum(1 for r in rows if r.get("_mercury_purpose_value") in purposes)
 
 
-def _meeting_rows(appts, purposes):
-    out = []
-    for a in appts:
-        if a.get("_mercury_purpose_value") not in purposes:
-            continue
-        out.append({
-            "client": (a.get("regardingobjectid_account") or {}).get("name")
-                      or (a.get("subject") or "(meeting)"),
-            "when": (a.get("scheduledstart") or "")[:10],
-            "subject": a.get("subject") or "",
-        })
-    return sorted(out, key=lambda x: x["when"])
+def _meeting_rows(appts, purposes, companies=None):
+    """Who is being met, at which company, and what the meeting is called."""
+    rows = [_activity_row(a, "scheduledstart", companies) for a in appts
+            if a.get("_mercury_purpose_value") in purposes]
+    return sorted(rows, key=lambda x: x["when"])
 
 
 def build_one_to_one(uid: str, week: date = None) -> dict:
@@ -207,27 +258,44 @@ def build_one_to_one(uid: str, week: date = None) -> dict:
         }
         r = {k: v.result() for k, v in f.items()}
 
-    def inputs(sl, calls, appts, pls):
+    companies = _company_names(r["ca_month"] + r["ap_month"] + r["ap_this"])
+
+    def detail(sl, calls, appts, pls):
+        """The records behind each count, so every key input drills down."""
+        def acts(purposes):
+            return _sorted([_activity_row(c, "createdon", companies) for c in calls
+                            if c.get("_mercury_purpose_value") in purposes]
+                           + [_activity_row(a, "scheduledstart", companies) for a in appts
+                              if a.get("_mercury_purpose_value") in purposes])
         return {
-            "cvs":                sum(1 for s in sl if s.get("new_statussubmitteddate")),
-            "interviews":         sum(1 for s in sl if s.get("mercury_firstinterviewdate")),
-            "client_meetings_new":      _count(appts, NEW_CLIENT_MEETING),
-            "client_meetings_existing": _count(appts, EXISTING_CLIENT_MEETING),
-            "deals":              len(pls),
-            "pitches":            _count(calls, PITCH),
-            "bd_emails":          _count(calls, BD_EMAIL) + _count(appts, BD_EMAIL),
-            "candidate_meets":    _count(appts, CANDIDATE_MEETING) + _count(calls, CANDIDATE_MEETING),
-            "candidate_calls":    _count(calls, set(CANDIDATE_CALL_PURPOSES)),
-            "leads":              _count(calls, LEADS),
+            "cvs": _sorted([_shortlist_row(s, "new_statussubmitteddate") for s in sl
+                            if s.get("new_statussubmitteddate")]),
+            "interviews": _sorted([_shortlist_row(s, "mercury_firstinterviewdate") for s in sl
+                                   if s.get("mercury_firstinterviewdate")]),
+            "client_meetings_new":      acts(NEW_CLIENT_MEETING),
+            "client_meetings_existing": acts(EXISTING_CLIENT_MEETING),
+            "deals":                    _sorted([_placement_row(p) for p in pls]),
+            "pitches":                  acts(PITCH),
+            "bd_emails":                acts(BD_EMAIL),
+            "candidate_meets":          acts(CANDIDATE_MEETING),
+            "candidate_calls":          acts(set(CANDIDATE_CALL_PURPOSES)),
+            "leads":                    acts(LEADS),
         }
+
+    def inputs(det):
+        return {k: len(v) for k, v in det.items()}
+
+    det_last  = detail(r["sl_last"],  r["ca_last"],  r["ap_last"],  r["pl_last"])
+    det_month = detail(r["sl_month"], r["ca_month"], r["ap_month"], r["pl_month"])
 
     return {
         "week_start": week.isoformat(),
-        "last_week":  inputs(r["sl_last"], r["ca_last"], r["ap_last"], r["pl_last"]),
-        "month":      inputs(r["sl_month"], r["ca_month"], r["ap_month"], r["pl_month"]),
+        "last_week":  inputs(det_last),
+        "month":      inputs(det_month),
+        "detail":     {"last_week": det_last, "month": det_month},
         "live_jobs":  r["jobs"],
-        "meetings_last_week": _meeting_rows(r["ap_last"], ALL_CLIENT_MEETINGS),
-        "meetings_this_week": _meeting_rows(r["ap_this"], ALL_CLIENT_MEETINGS),
+        "meetings_last_week": _meeting_rows(r["ap_last"], ALL_CLIENT_MEETINGS, companies),
+        "meetings_this_week": _meeting_rows(r["ap_this"], ALL_CLIENT_MEETINGS, companies),
     }
 
 

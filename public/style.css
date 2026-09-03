@@ -1321,3 +1321,10 @@ select.oto-in { color-scheme: dark; }
   line-height: 1.45;
 }
 .mbr-field textarea { min-height: 52px; }
+.oto-nav {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--mid); font-size: 13px; line-height: 1; padding: 3px 8px; cursor: pointer;
+}
+.oto-nav:hover { color: var(--white); border-color: var(--mid); }
+.oto-drill { cursor: pointer; border-bottom: 1px dotted var(--accent); }
+.oto-drill:hover { color: var(--accent); }
