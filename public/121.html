@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MBR — Saragossa</title>
+  <title>Weekly 1:1 — Saragossa</title>
   <link rel="stylesheet" href="/style.css">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 </head>
@@ -14,8 +14,8 @@
   <div class="header-right">
     <nav class="main-menu">
       <a href="/" class="menu-link">Weekly Report</a>
-      <a href="/121" class="menu-link">121s <span class="beta-tag">pilot</span></a>
-      <a href="/mbr" class="menu-link active">MBRs <span class="beta-tag">beta</span></a>
+      <a href="/121" class="menu-link active">121s <span class="beta-tag">pilot</span></a>
+      <a href="/mbr" class="menu-link">MBRs <span class="beta-tag">beta</span></a>
       <a href="/performance" class="menu-link">Performance Stats <span class="beta-tag">pilot</span></a>
       <span class="header-actions" id="admin-link" style="display:none">
         <a href="/admin" class="menu-link">Analytics</a>
@@ -28,19 +28,17 @@
 
 <div class="mbr-page">
   <div class="mbr-toolbar">
-    <h1 class="mbr-title">Monthly Business Review</h1>
-    <label class="mbr-ctl">Consultant <select id="mbr-person"></select></label>
-    <label class="mbr-ctl">Month <input type="month" id="mbr-month"></label>
-    <span class="mbr-status" id="mbr-status"></span>
+    <h1 class="mbr-title">Weekly 1:1</h1>
+    <label class="mbr-ctl">Consultant <select id="oto-person"></select></label>
+    <label class="mbr-ctl">Week beginning <input type="date" id="oto-week"></label>
   </div>
-
-  <div id="mbr-content">
+  <div id="oto-content">
     <div class="loading-state"><div class="spinner"></div><p>Loading…</p></div>
   </div>
 </div>
 
-<div class="footer" id="footer">Saragossa · MBR beta</div>
+<div class="footer">Saragossa · 1:1 pilot</div>
 
-<script src="/mbr.js"></script>
+<script src="/121.js"></script>
 </body>
 </html>

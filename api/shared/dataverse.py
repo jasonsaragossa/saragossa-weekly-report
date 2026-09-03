@@ -1420,3 +1420,73 @@ def upsert_mbr_scope(uid: str, territories: list) -> None:
         odata_patch(f"crbb7_mbrscopes({rid})", body)
     else:
         odata_post("crbb7_mbrscopes", body)
+
+
+# ── Weekly 1:1 (crbb7_oneonone) ───────────────────────────────────────────────
+# One row per person per week; the typed half of the form is a JSON payload.
+
+def get_one_to_one(uid: str, week_start: str) -> dict:
+    try:
+        rows = odata_get_all("crbb7_oneonones", params={
+            "$select": "crbb7_oneononeid,crbb7_payload",
+            "$filter": (f"crbb7_user_id eq '{odata_str(uid)}'"
+                        f" and crbb7_week_start eq '{odata_str(week_start)}'"),
+        })
+    except Exception:
+        logging.warning("Could not read crbb7_oneonone", exc_info=True)
+        return {}
+    if not rows:
+        return {}
+    import json as _json
+    try:
+        return _json.loads(rows[0].get("crbb7_payload") or "{}")
+    except ValueError:
+        return {}
+
+
+def upsert_one_to_one(uid: str, week_start: str, payload: dict) -> None:
+    import json as _json
+    existing = odata_get_all("crbb7_oneonones", params={
+        "$select": "crbb7_oneononeid",
+        "$filter": (f"crbb7_user_id eq '{odata_str(uid)}'"
+                    f" and crbb7_week_start eq '{odata_str(week_start)}'"),
+    })
+    body = {"crbb7_user_id": uid, "crbb7_week_start": week_start,
+            "crbb7_payload": _json.dumps(payload),
+            "crbb7_name": f"1:1 {uid} {week_start}"[:840]}
+    if existing:
+        odata_patch(f"crbb7_oneonones({existing[0]['crbb7_oneononeid']})", body)
+    else:
+        odata_post("crbb7_oneonones", body)
+
+
+def get_latest_mbr_actions(uid: str) -> list:
+    """Actions from this person's most recent MBR, for the 1:1's MBR section."""
+    try:
+        rows = odata_get_all("crbb7_mbrs", params={
+            "$select": "crbb7_entry_year,crbb7_month,crbb7_payload",
+            "$filter": f"crbb7_user_id eq '{odata_str(uid)}'",
+        })
+    except Exception:
+        return []
+    if not rows:
+        return []
+    import json as _json
+    rows.sort(key=lambda r: (r.get("crbb7_entry_year") or 0, r.get("crbb7_month") or 0),
+              reverse=True)
+    try:
+        return (_json.loads(rows[0].get("crbb7_payload") or "{}") or {}).get("actions") or []
+    except ValueError:
+        return []
+
+
+def list_one_to_one_weeks(uid: str) -> set:
+    """Week-start dates this person already has a saved 1:1 for."""
+    try:
+        rows = odata_get_all("crbb7_oneonones", params={
+            "$select": "crbb7_week_start",
+            "$filter": f"crbb7_user_id eq '{odata_str(uid)}'",
+        })
+    except Exception:
+        return set()
+    return {r.get("crbb7_week_start") for r in rows if r.get("crbb7_week_start")}

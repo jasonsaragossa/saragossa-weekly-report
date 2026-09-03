@@ -496,6 +496,97 @@ def board_schedule(req: func.HttpRequest) -> func.HttpResponse:
         return _server_error()
 
 
+# ── Weekly 1:1 (pilot — Team Snoz) ────────────────────────────────────────────
+# Consultants see their own; the team lead sees the team. Limited to one team
+# while it is a pilot, so the roster is a constant rather than a settings screen.
+
+ONE_TO_ONE_TEAM = "Team Snoz"
+ONE_TO_ONE_LEADS = {"harrysnozwell@saragossa.io", "jason@saragossa.io"}
+
+
+def _one_to_one_people(email: str):
+    """(people, is_lead) — the pilot team, or just yourself if you're in it."""
+    from shared.dataverse import odata_get_all, odata_str
+    teams = odata_get_all("teams", params={
+        "$select": "teamid", "$filter": f"name eq '{odata_str(ONE_TO_ONE_TEAM)}'"})
+    if not teams:
+        return [], False
+    members = [m for m in odata_get_all(
+        f"teams({teams[0]['teamid']})/teammembership_association",
+        params={"$select": "systemuserid,fullname,internalemailaddress,isdisabled"})
+        if not m.get("isdisabled")]
+    members.sort(key=lambda m: m.get("fullname") or "")
+    lead = (email or "").lower() in ONE_TO_ONE_LEADS
+    if lead:
+        return members, True
+    me = [m for m in members
+          if (m.get("internalemailaddress") or "").lower() == (email or "").lower()]
+    return me, False
+
+
+@app.route(route="one-to-one", methods=["GET", "POST"])
+def one_to_one(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_auth(req)
+    if err:
+        return err
+    from shared.dataverse import (get_one_to_one, upsert_one_to_one, list_one_to_one_weeks,
+                                  get_latest_mbr_actions, is_guid)
+    from shared.oneonone import build_one_to_one, week_start, quarter_weeks, INPUT_ROWS
+    try:
+        body = req.get_json() if req.method == "POST" else {}
+    except ValueError:
+        body = {}
+    try:
+        people, is_lead = _one_to_one_people(email)
+        if not people:
+            return func.HttpResponse(
+                json.dumps({"ok": False, "error": "The 1:1 pilot is limited to Team Snoz."}),
+                mimetype="application/json", status_code=403)
+
+        uid = (req.params.get("uid") or (body or {}).get("uid")
+               or people[0]["systemuserid"]).strip()
+        person = next((p for p in people if p["systemuserid"] == uid), None)
+        if not is_guid(uid) or not person:
+            return func.HttpResponse(json.dumps({"ok": False, "error": "forbidden"}),
+                                     mimetype="application/json", status_code=403)
+
+        raw_week = (req.params.get("week") or (body or {}).get("week") or "").strip()
+        try:
+            wk = week_start(date.fromisoformat(raw_week)) if raw_week else week_start(date.today())
+        except ValueError:
+            return func.HttpResponse(json.dumps({"ok": False, "error": "bad week"}),
+                                     mimetype="application/json", status_code=400)
+
+        if req.method == "POST":
+            keep = ("actions", "live_job_notes", "resourcing_priority", "next_placement",
+                    "next_job", "bd_existing", "bd_new", "meetings_last_outcome",
+                    "meetings_this_plan", "mbr_progress", "priority_resourcing",
+                    "priority_bd", "support_needed")
+            upsert_one_to_one(uid, wk.isoformat(),
+                              {k: (body or {}).get(k) for k in keep})
+            return func.HttpResponse(json.dumps({"ok": True}),
+                                     mimetype="application/json", status_code=200)
+
+        from datetime import timedelta as _td
+        derived = build_one_to_one(uid, wk)
+        saved = get_one_to_one(uid, wk.isoformat())
+        prev = get_one_to_one(uid, (wk - _td(days=7)).isoformat())
+        return func.HttpResponse(json.dumps({
+            "ok": True, "is_lead": is_lead,
+            "person": {"uid": uid, "name": person.get("fullname", "")},
+            "people": [{"uid": p["systemuserid"], "name": p.get("fullname", "")} for p in people],
+            "input_rows": [{"key": k, "label": l} for k, l in INPUT_ROWS],
+            **derived,
+            "saved": saved,
+            "carried_actions": (prev or {}).get("actions") or [],
+            "mbr_actions": get_latest_mbr_actions(uid),
+            "quarter": {**quarter_weeks(wk), "completed": sorted(list_one_to_one_weeks(uid))},
+        }), mimetype="application/json", status_code=200)
+    except Exception:
+        logging.exception("one-to-one error")
+        return _server_error()
+
+
 # ── Performance Stats (pilot) ─────────────────────────────────────────────────
 # Contract desk dashboard, piloted with Jim Jeffers and Andrew Turton.
 # Access is an explicit allowlist while it is a pilot — widen it here, or move
