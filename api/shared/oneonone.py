@@ -92,7 +92,7 @@ def _activities(entity: str, datefield: str, uid: str, start: date, end: date) -
                     f" and {datefield} ge {start.isoformat()}"
                     f" and {datefield} lt {end.isoformat()}"),
         "$expand": ("regardingobjectid_account($select=name),"
-                    "regardingobjectid_contact($select=fullname,_parentcustomerid_value)"),
+                    "regardingobjectid_contact($select=fullname,jobtitle,_parentcustomerid_value)"),
     })
 
 
@@ -152,8 +152,9 @@ def _activity_row(a: dict, datefield: str, companies: dict = None) -> dict:
     contact = contact_rec.get("fullname") or ""
     client = ((a.get("regardingobjectid_account") or {}).get("name")
               or (companies or {}).get(contact_rec.get("_parentcustomerid_value")) or "")
-    return {"contact": contact, "client": client,
-            "subject": a.get("subject") or "", "when": (a.get(datefield) or "")[:10]}
+    return {"contact": contact, "job_title": contact_rec.get("jobtitle") or "",
+            "client": client, "subject": a.get("subject") or "",
+            "when": (a.get(datefield) or "")[:10]}
 
 
 def _shortlist_row(s: dict, datefield: str) -> dict:

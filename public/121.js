@@ -90,21 +90,31 @@ function render(d) {
       </select></td>
     </tr>`).join("");
 
-  const who = (m) => `${esc(m.contact) || "<span class='dim'>—</span>"}` +
-    `<span class="oto-meta">${esc(m.client) || "no company on record"}` +
-    `${m.subject ? " · " + esc(m.subject) : ""} · ${m.when}</span>`;
+  // Meetings read like the live-jobs row: person, job title, company, subject
+  // and date all at full size rather than tucked into small grey meta text.
+  const dash = "<span class='dim'>—</span>";
+  const day = (w) => w ? new Date(w + "T00:00:00").toLocaleDateString("en-GB",
+    { weekday: "short", day: "numeric", month: "short" }) : dash;
+  const meetingCells = (m) => `
+      <td>${esc(m.contact) || dash}${m.job_title ? `<div class="oto-sub">${esc(m.job_title)}</div>` : ""}</td>
+      <td>${esc(m.client) || "<span class='dim'>no company on record</span>"}</td>
+      <td>${esc(m.subject) || dash}</td>
+      <td class="num">${day(m.when)}</td>`;
 
   const metRows = d.meetings_last_week.map((m, i) => `<tr>
-      <td>${who(m)}</td>
+      ${meetingCells(m)}
       <td><textarea rows="1" class="oto-in" data-name="meetings_last_outcome" data-key="outcome"
         data-idx="${i}">${S((saved.meetings_last_outcome || [])[i]?.outcome)}</textarea></td>
     </tr>`).join("");
 
   const thisRows = d.meetings_this_week.map((m, i) => `<tr>
-      <td>${who(m)}</td>
+      ${meetingCells(m)}
       <td><textarea rows="1" class="oto-in" data-name="meetings_this_plan" data-key="plan"
         data-idx="${i}">${S((saved.meetings_this_plan || [])[i]?.plan)}</textarea></td>
     </tr>`).join("");
+
+  const meetingHead = (last) => [{label:"Who"}, {label:"Company"}, {label:"Subject"},
+    {label:"Date", num:true}, {label: last ? "Outcome / plan" : "Plan of action"}];
 
   const carried = d.carried_actions || [];
   const carriedRows = carried.map((a, i) => `<tr>
@@ -183,9 +193,9 @@ function render(d) {
     <section class="mbr-section">
       <h2>Meetings</h2>
       <h3 class="perf-col-title">Took place last week</h3>
-      ${rowsTable([{label:"Who / company"},{label:"Outcome / plan"}], metRows, "No client meetings logged last week.")}
+      ${rowsTable(meetingHead(true), metRows, "No client meetings logged last week.")}
       <h3 class="perf-col-title" style="margin-top:14px">Taking place this week</h3>
-      ${rowsTable([{label:"Who / company"},{label:"Plan of action"}], thisRows, "Nothing in the diary yet.")}
+      ${rowsTable(meetingHead(false), thisRows, "Nothing in the diary yet.")}
     </section>
 
     <section class="mbr-section">
@@ -252,9 +262,10 @@ function showDetail(label, period, rows) {
   overlay.querySelector("#oto-modal-title").textContent = `${label} — ${when} (${rows.length})`;
   overlay.querySelector("#oto-modal-body").innerHTML = rows.length ? `
     <div class="table-wrap"><table>
-      <thead><tr><th>Contact</th><th>Client</th><th>Subject</th><th class="num">Date</th></tr></thead>
+      <thead><tr><th>Contact</th><th>Company</th><th>Subject</th><th class="num">Date</th></tr></thead>
       <tbody>${rows.map(r => `<tr>
-        <td>${esc(r.contact) || "<span class='dim'>—</span>"}</td>
+        <td>${esc(r.contact) || "<span class='dim'>—</span>"}${
+          r.job_title ? `<div class="oto-sub">${esc(r.job_title)}</div>` : ""}</td>
         <td>${esc(r.client) || "<span class='dim'>—</span>"}</td>
         <td>${esc(r.subject) || "<span class='dim'>—</span>"}</td>
         <td class="num dim">${r.when ? new Date(r.when + "T00:00:00").toLocaleDateString("en-GB",

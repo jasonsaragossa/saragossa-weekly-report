@@ -1328,3 +1328,5 @@ select.oto-in { color-scheme: dark; }
 .oto-nav:hover { color: var(--white); border-color: var(--mid); }
 .oto-drill { cursor: pointer; border-bottom: 1px dotted var(--accent); }
 .oto-drill:hover { color: var(--accent); }
+/* Secondary line (job title) at the same size as the row, just dimmed */
+.oto-sub { font-size: 12px; color: var(--mid); margin-top: 1px; }
