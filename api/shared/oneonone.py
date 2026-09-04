@@ -261,21 +261,34 @@ def build_one_to_one(uid: str, week: date = None) -> dict:
     week = week_start(week or date.today())
     next_week = week + timedelta(days=7)
     last_week = week - timedelta(days=7)
-    month_start = date(week.year, week.month, 1)
+
+    # "Month so far" is the calendar month this 1:1 sits in, to date — anchored
+    # on the day the 1:1 covers (the end of the week) so a week straddling a
+    # month boundary belongs to the month it mostly falls in, and NEVER spilling
+    # into the next month (Jason, Sept 2026).
+    anchor = min(week + timedelta(days=6), date.today())
+    if anchor < week:                      # a future week — anchor on its own month
+        anchor = week
+    month_start = date(anchor.year, anchor.month, 1)
+    month_end = date(anchor.year + (1 if anchor.month == 12 else 0),
+                     1 if anchor.month == 12 else anchor.month + 1, 1)
+    # ...and never past today, so "so far" doesn't claim days that haven't happened
+    month_cut = min(month_end, next_week, date.today() + timedelta(days=1))
+    month_cut = max(month_cut, month_start + timedelta(days=1))
 
     with ThreadPoolExecutor(max_workers=8) as pool:
         f = {
             "sl_last":  pool.submit(_shortlists, uid, last_week, week),
-            "sl_month": pool.submit(_shortlists, uid, month_start, next_week),
+            "sl_month": pool.submit(_shortlists, uid, month_start, month_cut),
             "ca_last":  pool.submit(_activities, "phonecalls", "createdon", uid, last_week, week),
-            "ca_month": pool.submit(_activities, "phonecalls", "createdon", uid, month_start, next_week),
+            "ca_month": pool.submit(_activities, "phonecalls", "createdon", uid, month_start, month_cut),
             "ap_last":  pool.submit(_activities, "appointments", "scheduledstart", uid, last_week, week),
-            "ap_month": pool.submit(_activities, "appointments", "scheduledstart", uid, month_start, next_week),
+            "ap_month": pool.submit(_activities, "appointments", "scheduledstart", uid, month_start, month_cut),
             "ap_this":  pool.submit(_activities, "appointments", "scheduledstart", uid, week, next_week),
             "pl_last":  pool.submit(_placements_created, uid, last_week, week),
-            "pl_month": pool.submit(_placements_created, uid, month_start, next_week),
+            "pl_month": pool.submit(_placements_created, uid, month_start, month_cut),
             "em_last":  pool.submit(_emails, uid, last_week, week),
-            "em_month": pool.submit(_emails, uid, month_start, next_week),
+            "em_month": pool.submit(_emails, uid, month_start, month_cut),
             "jobs":     pool.submit(_live_jobs, uid),
         }
         r = {k: v.result() for k, v in f.items()}
@@ -313,6 +326,8 @@ def build_one_to_one(uid: str, week: date = None) -> dict:
 
     return {
         "week_start": week.isoformat(),
+        "month_label": month_start.strftime("%B"),
+        "month_to": (month_cut - timedelta(days=1)).isoformat(),
         "last_week":  inputs(det_last),
         "month":      inputs(det_month),
         "detail":     {"last_week": det_last, "month": det_month},

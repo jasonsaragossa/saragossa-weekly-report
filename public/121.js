@@ -160,8 +160,11 @@ function render(d) {
 
     <section class="mbr-section">
       <h2>Key inputs</h2>
-      ${rowsTable([{label:"Input"},{label:"Last week",num:true},{label:"Month so far",num:true}], inputRows, "")}
-      <p class="mbr-note">Pulled from Mercury — read only.</p>
+      ${rowsTable([{label:"Input"}, {label:"Last week", num:true},
+                   {label:`${esc(d.month_label || "Month")} so far`, num:true}], inputRows, "")}
+      <p class="mbr-note">Pulled from Mercury — read only. ${esc(d.month_label || "Month")} so far runs
+        1&ndash;${d.month_to ? new Date(d.month_to + "T00:00:00").toLocaleDateString("en-GB",
+          { day: "numeric", month: "short" }) : ""}.</p>
     </section>
 
     <section class="mbr-section">
