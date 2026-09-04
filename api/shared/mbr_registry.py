@@ -57,6 +57,15 @@ SPEC_CV_PURPOSES = {
     "47e272c6-a769-ee11-94f7-000d3ad6abf9": "Spec CV",
     "4cf063c0-de38-f111-88b5-7c1e5209a533": "Spec CV Follow Up Call",
     "573fc500-5f8e-f011-b4cb-7c1e52656983": "Spec CV Follow Up Email",
+    "028b513a-258c-f111-8076-6045bd0feb3a": "Spec CV Response",
+}
+# Outbound sales email. NB these live on the EMAIL entity, which tags purpose
+# with _recruit_purpose_value rather than _mercury_purpose_value — see
+# shared/activities.py. ~1,750 a fortnight company-wide.
+BD_EMAIL_PURPOSES = {
+    "4be272c6-a769-ee11-94f7-000d3ad6abf9": "Intro Sales Message",
+    "4ee272c6-a769-ee11-94f7-000d3ad6abf9": "Follow Up Sales Message",
+    "4de272c6-a769-ee11-94f7-000d3ad6abf9": "Marketing Message",
 }
 
 
@@ -186,6 +195,18 @@ REGISTRY = [
         direction="up", target_key="client_meetings", format="count",
         prompt_context="The strongest predictor of new business. Meetings without subsequent "
                        "jobs registered suggests the meeting is not converting to a brief.",
+    ),
+    dict(
+        key="bd_emails", name="BD Emails", family="Business Development",
+        definition="Outbound sales emails: intro, follow-up and marketing messages.",
+        source="email entity, _recruit_purpose_value in the sales-message family, "
+               "sent in the month. NB emails tag purpose on a different field from "
+               "calls and meetings.",
+        grain="individual", attribution="Email owner",
+        direction="up", target_key=None, format="count",
+        prompt_context="Outbound volume that isn't dialling. High emails with low pitches "
+                       "or meetings means the sequence isn't converting to conversations — "
+                       "usually targeting or the opening line rather than volume.",
     ),
     dict(
         key="spec_cvs", name="Spec CVs", family="Business Development",

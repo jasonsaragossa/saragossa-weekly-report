@@ -15,7 +15,9 @@ from shared.dataverse import (odata_get_all, odata_str, active_or_rebated_filter
                               get_fx_rates, get_territory_name)
 from shared.mbr_registry import (BD_CALL_PURPOSES, BD_NO_PITCH_PURPOSE, BD_PITCH_PURPOSE,
                                  CANDIDATE_CALL_PURPOSES, CLIENT_MEETING_PURPOSES,
-                                 LEAD_PURPOSES, REGISTRY, SPEC_CV_PURPOSES, TERRITORY_CCY)
+                                 LEAD_PURPOSES, REGISTRY, SPEC_CV_PURPOSES, TERRITORY_CCY,
+                                 BD_EMAIL_PURPOSES)
+from shared.activities import fetch as fetch_activities
 
 PERM_TYPE = 143570000
 RETAINER_CONTACT = "7aa8cfa4-d1f2-f011-8406-7c1e52796145"
@@ -80,6 +82,13 @@ def _placements_created(uid: str, start: date, end: date) -> list:
     })
 
 
+def _emails_with_purpose(uid: str, start: date, end: date) -> list:
+    """Sales/spec-CV emails — purpose lives on _recruit_purpose_value here."""
+    return fetch_activities("emails", uid, start, end,
+                            purposes=BD_EMAIL_PURPOSES | SPEC_CV_PURPOSES,
+                            with_contacts=False)
+
+
 def _shortlists(uid: str, start: date, end: date) -> list:
     """Shortlist rows touched in the window — dates are filtered per metric below."""
     s, e = start.isoformat(), end.isoformat()
@@ -127,7 +136,10 @@ def compute_month(uid: str, year: int, month: int, to_gbp: dict = None) -> dict:
         f_sl = pool.submit(_shortlists, uid, start, end)
         f_ca = pool.submit(_activities, "phonecalls", "createdon", uid, start, end)
         f_ap = pool.submit(_activities, "appointments", "scheduledstart", uid, start, end)
+        # Emails tag purpose on a different field — see shared/activities.py
+        f_em = pool.submit(_emails_with_purpose, uid, start, end)
         placements, shortlists, calls, appts = f_pl.result(), f_sl.result(), f_ca.result(), f_ap.result()
+        emails = f_em.result()
 
     # Revenue
     gp = deals = 0.0
@@ -166,7 +178,9 @@ def compute_month(uid: str, year: int, month: int, to_gbp: dict = None) -> dict:
     cand_call = count(calls, CANDIDATE_CALL_PURPOSES)
     meetings  = count(appts, CLIENT_MEETING_PURPOSES) + count(calls, CLIENT_MEETING_PURPOSES)
     leads     = count(calls, LEAD_PURPOSES)
-    spec      = count(calls, SPEC_CV_PURPOSES) + count(appts, SPEC_CV_PURPOSES)
+    spec      = (count(calls, SPEC_CV_PURPOSES) + count(appts, SPEC_CV_PURPOSES)
+                 + sum(1 for e in emails if e.get("purpose") in SPEC_CV_PURPOSES))
+    bd_email  = sum(1 for e in emails if e.get("purpose") in BD_EMAIL_PURPOSES)
 
     return {
         "perm_gp":            round(gp, 2),
@@ -181,6 +195,7 @@ def compute_month(uid: str, year: int, month: int, to_gbp: dict = None) -> dict:
         "bd_pitch_rate":      round(pitched / (pitched + no_pitch) * 100, 1) if (pitched + no_pitch) else None,
         "client_meetings":    meetings,
         "spec_cvs":           spec,
+        "bd_emails":          bd_email,
         "leads_gained":       leads,
         "candidate_calls":    cand_call,
     }
