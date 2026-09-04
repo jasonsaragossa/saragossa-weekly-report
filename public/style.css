@@ -1331,19 +1331,38 @@ select.oto-in { color-scheme: dark; }
 /* Secondary line (job title) at the same size as the row, just dimmed */
 .oto-sub { font-size: 12px; color: var(--mid); margin-top: 1px; }
 
-/* Feedback button — deliberately prominent while these are pilots */
+/* Feedback button — prominent while these are pilots, but not shouty:
+   a soft-edged pill that lifts slightly on hover. */
 .feedback-btn {
-  background: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: 5px;
-  color: #101820;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  padding: 9px 18px;
+  border: 1px solid rgba(93, 143, 154, 0.55);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(93,143,154,.20), rgba(93,143,154,.10));
+  color: #e8f1f3;
   font-family: var(--font);
   font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .04em;
-  padding: 8px 16px;
+  font-weight: 600;
+  letter-spacing: .02em;
   cursor: pointer;
-  margin-left: auto;
+  transition: background .16s ease, border-color .16s ease, transform .16s ease, box-shadow .16s ease;
 }
-.feedback-btn:hover { filter: brightness(1.08); }
+.feedback-btn svg {
+  width: 15px; height: 15px; flex: none;
+  fill: none; stroke: currentColor; stroke-width: 1.9;
+  stroke-linecap: round; stroke-linejoin: round;
+  opacity: .9;
+}
+.feedback-btn:hover {
+  background: linear-gradient(180deg, rgba(93,143,154,.34), rgba(93,143,154,.20));
+  border-color: var(--accent);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0,0,0,.35);
+}
+.feedback-btn:active { transform: translateY(0); box-shadow: none; }
+.feedback-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #fb-text { min-height: 130px; }
