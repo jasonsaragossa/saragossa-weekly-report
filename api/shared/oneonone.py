@@ -96,6 +96,23 @@ def _activities(entity: str, datefield: str, uid: str, start: date, end: date) -
     })
 
 
+def _emails(uid: str, start: date, end: date) -> list:
+    """
+    Sales emails. NB: the email entity tags its purpose with
+    _recruit_purpose_value, NOT the _mercury_purpose_value used by calls and
+    appointments — checking only the latter made BD emails read as zero.
+    """
+    f = " or ".join(f"_recruit_purpose_value eq '{p}'" for p in BD_EMAIL)
+    return odata_get_all("emails", params={
+        "$select": "activityid,_recruit_purpose_value,subject,createdon",
+        "$filter": (f"({f}) and _ownerid_value eq '{odata_str(uid)}'"
+                    f" and createdon ge {start.isoformat()}"
+                    f" and createdon lt {end.isoformat()}"),
+        "$expand": ("regardingobjectid_account($select=name),"
+                    "regardingobjectid_contact($select=fullname,jobtitle,_parentcustomerid_value)"),
+    })
+
+
 def _shortlists(uid: str, start: date, end: date) -> list:
     s, e = start.isoformat(), end.isoformat()
     return odata_get_all("crimson_vacancycandidates", params={
@@ -257,13 +274,15 @@ def build_one_to_one(uid: str, week: date = None) -> dict:
             "ap_this":  pool.submit(_activities, "appointments", "scheduledstart", uid, week, next_week),
             "pl_last":  pool.submit(_placements_created, uid, last_week, week),
             "pl_month": pool.submit(_placements_created, uid, month_start, next_week),
+            "em_last":  pool.submit(_emails, uid, last_week, week),
+            "em_month": pool.submit(_emails, uid, month_start, next_week),
             "jobs":     pool.submit(_live_jobs, uid),
         }
         r = {k: v.result() for k, v in f.items()}
 
-    companies = _company_names(r["ca_month"] + r["ap_month"] + r["ap_this"])
+    companies = _company_names(r["ca_month"] + r["ap_month"] + r["ap_this"] + r["em_month"])
 
-    def detail(sl, calls, appts, pls):
+    def detail(sl, calls, appts, pls, emails):
         """The records behind each count, so every key input drills down."""
         def acts(purposes):
             return _sorted([_activity_row(c, "createdon", companies) for c in calls
@@ -279,7 +298,8 @@ def build_one_to_one(uid: str, week: date = None) -> dict:
             "client_meetings_existing": acts(EXISTING_CLIENT_MEETING),
             "deals":                    _sorted([_placement_row(p) for p in pls]),
             "pitches":                  acts(PITCH),
-            "bd_emails":                acts(BD_EMAIL),
+            "bd_emails": _sorted(acts(BD_EMAIL)
+                                 + [_activity_row(e, "createdon", companies) for e in emails]),
             "candidate_meets":          acts(CANDIDATE_MEETING),
             "candidate_calls":          acts(set(CANDIDATE_CALL_PURPOSES)),
             "leads":                    acts(LEADS),
@@ -288,8 +308,8 @@ def build_one_to_one(uid: str, week: date = None) -> dict:
     def inputs(det):
         return {k: len(v) for k, v in det.items()}
 
-    det_last  = detail(r["sl_last"],  r["ca_last"],  r["ap_last"],  r["pl_last"])
-    det_month = detail(r["sl_month"], r["ca_month"], r["ap_month"], r["pl_month"])
+    det_last  = detail(r["sl_last"],  r["ca_last"],  r["ap_last"],  r["pl_last"],  r["em_last"])
+    det_month = detail(r["sl_month"], r["ca_month"], r["ap_month"], r["pl_month"], r["em_month"])
 
     return {
         "week_start": week.isoformat(),
