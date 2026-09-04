@@ -1337,7 +1337,7 @@ select.oto-in { color-scheme: dark; }
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin-left: auto;
+  margin-left: 6px;
   padding: 9px 18px;
   border: 1px solid rgba(93, 143, 154, 0.55);
   border-radius: 999px;
