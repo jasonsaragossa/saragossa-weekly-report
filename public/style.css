@@ -1330,3 +1330,20 @@ select.oto-in { color-scheme: dark; }
 .oto-drill:hover { color: var(--accent); }
 /* Secondary line (job title) at the same size as the row, just dimmed */
 .oto-sub { font-size: 12px; color: var(--mid); margin-top: 1px; }
+
+/* Feedback button — deliberately prominent while these are pilots */
+.feedback-btn {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  color: #101820;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  padding: 8px 16px;
+  cursor: pointer;
+  margin-left: auto;
+}
+.feedback-btn:hover { filter: brightness(1.08); }
+#fb-text { min-height: 130px; }

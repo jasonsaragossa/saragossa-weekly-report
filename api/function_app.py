@@ -496,6 +496,56 @@ def board_schedule(req: func.HttpRequest) -> func.HttpResponse:
         return _server_error()
 
 
+# ── /api/feedback (POST) — send pilot feedback to Jason ───────────────────────
+# Any authenticated Saragossa user can send; the sender is taken from their
+# login rather than typed, so feedback can't be attributed to someone else.
+
+@app.route(route="feedback", methods=["POST"])
+def feedback(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_auth(req)
+    if err:
+        return err
+    try:
+        body = req.get_json() or {}
+    except ValueError:
+        body = {}
+    message = (body.get("message") or "").strip()
+    if not message:
+        return func.HttpResponse(json.dumps({"ok": False, "error": "Please write something first."}),
+                                 mimetype="application/json", status_code=400)
+    if len(message) > 8000:
+        message = message[:8000] + "…"
+
+    sender = os.environ.get("ALERT_SENDER")
+    to = [r.strip() for r in
+          os.environ.get("FEEDBACK_RECIPIENT", "jason@saragossa.io").split(",") if r.strip()]
+    if not sender or not to:
+        return func.HttpResponse(
+            json.dumps({"ok": False, "error": "Feedback email is not configured."}),
+            mimetype="application/json", status_code=500)
+
+    from html import escape
+    from shared.dataverse import graph_send_mail
+    page = (body.get("page") or "the app")[:80]
+    context = (body.get("context") or "")[:200]
+    try:
+        subject = f"App feedback · {page} · {email}"
+        text = f"From: {email}\nPage: {page}\n{context}\n\n{message}"
+        html = (
+            '<div style="font-family:Arial,Helvetica,sans-serif;color:#101820;">'
+            f'<p style="margin:0 0 4px;font-size:12px;color:#5a6b6e;">'
+            f'Feedback from <strong>{escape(email)}</strong> · {escape(page)}'
+            + (f' · {escape(context)}' if context else "") + '</p>'
+            f'<div style="white-space:pre-wrap;font-size:14px;border-left:3px solid #c8a84b;'
+            f'padding:8px 0 8px 12px;margin-top:12px;">{escape(message)}</div></div>')
+        graph_send_mail(sender, to, subject, text, body_html=html)
+        return func.HttpResponse(json.dumps({"ok": True}),
+                                 mimetype="application/json", status_code=200)
+    except Exception:
+        logging.exception("feedback error")
+        return _server_error()
+
+
 # ── Weekly 1:1 (pilot — Team Snoz) ────────────────────────────────────────────
 # Consultants see their own; the team lead sees the team. Limited to one team
 # while it is a pilot, so the roster is a constant rather than a settings screen.

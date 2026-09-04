@@ -19,8 +19,70 @@ let data = null;
   document.getElementById("oto-week").value = monday.toISOString().slice(0, 10);
   document.getElementById("oto-week").addEventListener("change", load);
   document.getElementById("oto-person").addEventListener("change", load);
+  document.getElementById("feedback-open").addEventListener("click", showFeedback);
   load();
 })();
+
+
+// ── Feedback to Jason ─────────────────────────────────────────────────────────
+// The sender comes from their login, not a typed field, so feedback can't be
+// misattributed. Context (whose 1:1, which week) is sent with it.
+
+function showFeedback() {
+  let overlay = document.getElementById("fb-modal");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "fb-modal";
+    overlay.className = "modal-overlay";
+    overlay.innerHTML = `<div class="modal-box">
+      <div class="modal-header">
+        <span class="modal-title">Feedback to Jason</span>
+        <button class="modal-close" id="fb-close" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="mbr-note" style="margin-top:0">Anything that's wrong, missing, confusing or
+          would make this more useful. It goes straight to Jason's inbox with your name on it.</p>
+        <textarea id="fb-text" rows="6" class="oto-in"
+          placeholder="What would you change?"></textarea>
+        <div class="mbr-savebar" style="margin-top:12px">
+          <button class="save-btn" id="fb-send">Send</button>
+          <span class="mbr-saved-note" id="fb-note"></span>
+        </div>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener("click", e => { if (e.target === overlay) overlay.style.display = "none"; });
+    overlay.querySelector("#fb-close").addEventListener("click",
+      () => { overlay.style.display = "none"; });
+    overlay.querySelector("#fb-send").addEventListener("click", sendFeedback);
+  }
+  overlay.querySelector("#fb-note").textContent = "";
+  overlay.style.display = "flex";
+  setTimeout(() => overlay.querySelector("#fb-text").focus(), 50);
+}
+
+async function sendFeedback() {
+  const btn = document.getElementById("fb-send");
+  const box = document.getElementById("fb-text");
+  const note = document.getElementById("fb-note");
+  if (!box.value.trim()) { note.textContent = "Write something first."; return; }
+  btn.disabled = true; btn.textContent = "Sending…";
+  try {
+    const who = data?.person?.name ? `${data.person.name}, week of ${data.week_start}` : "";
+    const resp = await fetch("/api/feedback", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: box.value, page: "121s", context: who }),
+    });
+    const d = await resp.json();
+    if (!d.ok) throw new Error(d.error || "unknown error");
+    note.textContent = "Sent — thank you.";
+    box.value = "";
+    setTimeout(() => { document.getElementById("fb-modal").style.display = "none"; }, 1200);
+  } catch (e) {
+    note.textContent = "Could not send: " + e.message;
+  }
+  btn.disabled = false; btn.textContent = "Send";
+}
 
 async function load() {
   const box = document.getElementById("oto-content");
