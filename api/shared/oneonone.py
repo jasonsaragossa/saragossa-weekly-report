@@ -213,9 +213,11 @@ def _live_jobs(uid: str) -> list:
                     f" and statecode eq 0"),
         "$expand": "crimson_clientid($select=name)",
     })
+    # Newest job first (Jason, Sept 2026). The Mercury priority field is unset
+    # across the board, so ordering by it would be arbitrary; it's still shown
+    # on the row for the jobs where someone has set it.
     live = [v for v in rows if v.get("statuscode") not in CLOSED_VACANCY_STATUS]
-    live.sort(key=lambda v: (PRIORITY_ORDER.get(v.get("mercury_priority"), 4),
-                             v.get("createdon") or ""))
+    live.sort(key=lambda v: v.get("createdon") or "", reverse=True)
     cvs = _live_cvs_by_job(uid, [v["crimson_vacancyid"] for v in live])
     return [{
         "client":   (v.get("crimson_clientid") or {}).get("name") or "(client)",
