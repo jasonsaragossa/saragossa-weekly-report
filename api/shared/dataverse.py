@@ -124,6 +124,24 @@ _UNASSIGNED_HOUSE_USERS = {
     "b835f278-3264-ee11-8def-6045bd0c1d6a": "Cameron Scott",  # Director of Solution Sales
 }
 
+def get_all_named_users() -> list[dict]:
+    """
+    Every named Mercury user, enabled or not, for name matching.
+
+    Wider than get_all_territory_consultants(): finance's commission sheets pay
+    people who have no territory at all — leavers whose territory was cleared,
+    and the generic "Saragossa House" account — and their contribution still has
+    to land somewhere rather than being dropped.
+    """
+    return odata_get_all(
+        "systemusers",
+        params={
+            "$select": "systemuserid,fullname,isdisabled,_territoryid_value",
+            "$filter": "isintegrationuser eq false and fullname ne null",
+        },
+    )
+
+
 def get_all_territory_consultants() -> list[dict]:
     """
     Returns active AND inactive users in the 6 territories, with isdisabled flag.
@@ -735,6 +753,48 @@ def upsert_solution_entries(userid: str, entries: list) -> None:
             odata_patch(f"crbb7_solutionentries({rid})", body)
         else:
             odata_post("crbb7_solutionentries", body)
+
+
+# ── Wholesale month replacement (commission spreadsheet import) ───────────────
+# The finance workbook is the source of truth for the month it covers, so an
+# import replaces that month outright: anyone absent from the sheet is zeroed
+# by having their row deleted, not left behind at a stale figure.
+
+_LEDGERS = {
+    "contract": {"set": "crbb7_contractentries", "id": "crbb7_contractentryid",
+                 "user": "crbb7_userid", "year": "crbb7_entryyear"},
+    "solution": {"set": "crbb7_solutionentries", "id": "crbb7_solutionentryid",
+                 "user": "crbb7_user_id", "year": "crbb7_entry_year"},
+}
+
+
+def replace_month_entries(kind: str, year: int, month: int, amounts: dict) -> dict:
+    """
+    amounts: {userid: amount}. Returns {"written": n, "deleted": n}.
+    """
+    t = _LEDGERS[kind]
+    year, month = int(year), int(month)
+    existing = odata_get_all(t["set"], params={
+        "$select": f"{t['id']},{t['user']},{t['year']},crbb7_month",
+        "$filter": f"{t['year']} eq {year} and crbb7_month eq {month}",
+    })
+    by_user = {r.get(t["user"]): r[t["id"]] for r in existing if r.get(t["user"])}
+
+    written = 0
+    for uid, amount in amounts.items():
+        body = {t["user"]: uid, t["year"]: year, "crbb7_month": month,
+                "crbb7_amount": float(amount),
+                "crbb7_name": f"{uid} {year}-{month:02d}"[:99]}
+        rid = by_user.pop(uid, None)
+        if rid:
+            odata_patch(f"{t['set']}({rid})", body)
+        else:
+            odata_post(t["set"], body)
+        written += 1
+
+    for rid in by_user.values():          # everyone the sheet no longer lists
+        odata_delete(f"{t['set']}({rid})")
+    return {"written": written, "deleted": len(by_user)}
 
 
 # ── NB-uplift qualification thresholds (crbb7_nbconfig, single row) ────────────

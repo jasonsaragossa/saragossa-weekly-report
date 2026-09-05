@@ -39,6 +39,14 @@ def _server_error() -> func.HttpResponse:
     )
 
 
+def _bad_request(message: str) -> func.HttpResponse:
+    return func.HttpResponse(
+        json.dumps({"ok": False, "error": message}),
+        mimetype="application/json",
+        status_code=400,
+    )
+
+
 # ── /api/report-data ──────────────────────────────────────────────────────────
 
 @app.route(route="report-data", methods=["GET"])
@@ -385,6 +393,95 @@ def solution_entries_post(req: func.HttpRequest) -> func.HttpResponse:
         )
     except Exception:
         logging.exception("solution-entries POST error")
+        return _server_error()
+
+
+# ── /api/commission-import (POST) — load finance's monthly workbook ───────────
+# Two passes: "preview" parses and matches names but writes nothing, so the
+# figures can be eyeballed first; "commit" replaces that month outright.
+
+@app.route(route="commission-import", methods=["POST"])
+def commission_import_post(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_admin(req)
+    if err:
+        return err
+    try:
+        import base64
+        from shared.commission_import import (
+            parse_workbook, match_to_users, month_from_filename)
+        from shared.dataverse import (get_all_named_users,
+                                      get_all_territory_consultants,
+                                      replace_month_entries)
+
+        body = req.get_json() or {}
+        filename = str(body.get("filename") or "")
+        try:
+            data = base64.b64decode(body.get("file") or "", validate=True)
+        except Exception:
+            data = b""
+        if not data:
+            return _bad_request("no file uploaded")
+
+        try:
+            parsed = parse_workbook(data)
+        except ValueError as exc:
+            return _bad_request(str(exc))
+
+        detected = month_from_filename(filename)
+        year, month = body.get("year"), body.get("month")
+        if year and month:
+            year, month = int(year), int(month)
+        elif detected:
+            year, month = detected
+        else:
+            return _bad_request(
+                "Could not tell which month this workbook covers from its name — "
+                "pick the month and try again.")
+        if not (1 <= month <= 12) or not (2000 <= year <= 2100):
+            return _bad_request("invalid year/month")
+
+        # Names are matched against every Mercury user, but only people the
+        # weekly report actually shows are imported — the rest (the generic
+        # Saragossa House account, leavers whose territory was cleared) are
+        # listed as ignored so the shortfall against the sheet total is visible.
+        m = match_to_users(parsed["totals"], get_all_named_users())
+        shown = {c["systemuserid"] for c in get_all_territory_consultants()}
+        # The ledger page sends the consultants it actually has a row for, which
+        # is narrower than territory membership (a leaver only appears on the
+        # report if they wrote something) and keeps a contract workbook from
+        # writing against a perm desk. Intersected, never widened.
+        on_page = body.get("allowed_uids")
+        if isinstance(on_page, list) and on_page:
+            shown &= {u for u in on_page if isinstance(u, str)}
+        matched = [r for r in m["matched"] if r["uid"] in shown]
+        ignored = [{"name": r["name"], "amount": r["amount"]}
+                   for r in m["matched"] if r["uid"] not in shown]
+        result = {
+            "ok": True, "kind": parsed["kind"], "year": year, "month": month,
+            "detected_month": bool(detected), "rows": parsed["rows"],
+            "sheets_used": parsed["sheets_used"],
+            "sheets_skipped": parsed["sheets_skipped"],
+            "matched": matched, "unmatched": m["unmatched"], "ignored": ignored,
+            "total": round(sum(parsed["totals"].values()), 2),
+            "matched_total": round(sum(r["amount"] for r in matched), 2),
+        }
+
+        if body.get("mode") == "commit":
+            # One row per consultant; a name appearing twice in Mercury is
+            # already collapsed to a single user id by match_to_users.
+            amounts = {}
+            for row in matched:
+                amounts[row["uid"]] = amounts.get(row["uid"], 0) + row["amount"]
+            counts = replace_month_entries(parsed["kind"], year, month, amounts)
+            logging.info("commission import by %s: %s %s-%02d %s",
+                         email, parsed["kind"], year, month, counts)
+            result.update(committed=True, **counts)
+        else:
+            result["committed"] = False
+        return func.HttpResponse(json.dumps(result),
+                                 mimetype="application/json", status_code=200)
+    except Exception:
+        logging.exception("commission-import error")
         return _server_error()
 
 

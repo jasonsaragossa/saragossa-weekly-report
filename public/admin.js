@@ -286,6 +286,10 @@ function buildContractEntrySection() {
     territories: CONTRACT_ENTRY_TERRITORIES,
     dataKey:     "contract_entries",
     endpoint:    "/api/contract-entries",
+    importKind:  "contract",
+    importHint:  "Upload finance's \"Contract Commission - <month>.xlsx\". It reads the " +
+      "Contribution column on the Commission Report sheet, in the figures' own currency, " +
+      "and replaces that whole month.",
     showRolling3: true,
     description: "Enter each contract consultant's monthly figure (territory currency). " +
       "The weekly report computes Total Margin YTD, Contract Last 12M and Rolling 3M from this ledger. " +
@@ -299,6 +303,10 @@ function buildSolutionEntrySection() {
     territories: SOLUTION_ENTRY_TERRITORIES,
     dataKey:     "solution_entries",
     endpoint:    "/api/solution-entries",
+    importKind:  "solution",
+    importHint:  "Upload finance's \"Deploy & Component Summary - <month>.xlsx\". It reads the " +
+      "Contribution column on the UK and US sheets, in the figures' own currency, " +
+      "and replaces that whole month.",
     showRolling3: false,
     description: "Enter each perm consultant's monthly Deploy & Component revenue (territory currency). " +
       "It adds to their YTD and Rolling 12M on the weekly report — shown there as a total with a " +
@@ -306,6 +314,161 @@ function buildSolutionEntrySection() {
       "Solution Revenue column and is deliberately kept out of perm written totals and budgets.",
     footnote: "Like the contract ledger, entry runs a month behind: the last column is last month.",
   });
+}
+
+// Upload finance's monthly commission workbook instead of typing the column.
+// Always previews first: the import replaces the whole month, so the figures
+// and any unmatched names get eyeballed before anything is written.
+// The consultants this ledger has a row for — the only people an import writes
+// against, so a name in the spreadsheet that isn't on the report is skipped.
+function ledgerMemberIds(territories) {
+  const ids = [];
+  for (const territory of territories) {
+    const tdata = reportData.territories[territory];
+    if (!tdata) continue;
+    const members = tdata.type === "teams"
+      ? tdata.groups.flatMap(g => g.members)
+      : (tdata.members || []);
+    for (const m of members) {
+      if (!String(m.uid).endsWith("__hist")) ids.push(m.uid);
+    }
+  }
+  return ids;
+}
+
+function buildImportWidget(opts, allowedUids) {
+  const box = document.createElement("div");
+  box.className = "import-box";
+  box.innerHTML = `
+    <div class="import-row">
+      <label class="import-file">
+        <input type="file" accept=".xlsx" class="import-input">
+        <span class="import-file-label">Choose spreadsheet…</span>
+      </label>
+      <span class="import-month" hidden>Month
+        <select class="import-month-select"></select>
+      </span>
+      <button class="save-btn import-preview" disabled>Preview import</button>
+      <button class="save-btn import-commit" hidden>Confirm &amp; replace month</button>
+    </div>
+    <p class="settings-desc import-hint">${esc(opts.importHint)}</p>
+    <div class="import-result" hidden></div>`;
+
+  const input   = box.querySelector(".import-input");
+  const label   = box.querySelector(".import-file-label");
+  const monthEl = box.querySelector(".import-month");
+  const select  = box.querySelector(".import-month-select");
+  const preview = box.querySelector(".import-preview");
+  const commit  = box.querySelector(".import-commit");
+  const result  = box.querySelector(".import-result");
+
+  for (const c of contractEntryMonths().slice().reverse()) {
+    const o = document.createElement("option");
+    o.value = `${c.y}-${c.m}`;
+    o.textContent = c.label;
+    select.appendChild(o);
+  }
+
+  let fileB64 = null, fileName = "";
+  input.addEventListener("change", async () => {
+    const f = input.files && input.files[0];
+    commit.hidden = true; result.hidden = true; monthEl.hidden = true;
+    if (!f) { label.textContent = "Choose spreadsheet…"; preview.disabled = true; return; }
+    label.textContent = f.name;
+    fileName = f.name;
+    fileB64 = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload  = () => res(String(r.result).split(",")[1]);
+      r.onerror = () => rej(r.error);
+      r.readAsDataURL(f);
+    });
+    preview.disabled = false;
+  });
+
+  const send = async (mode, btn, busyText) => {
+    const body = { file: fileB64, filename: fileName, mode, allowed_uids: allowedUids };
+    if (!monthEl.hidden && select.value) {
+      const [y, m] = select.value.split("-");
+      body.year = parseInt(y); body.month = parseInt(m);
+    }
+    const old = btn.textContent;
+    btn.textContent = busyText; btn.disabled = true;
+    try {
+      const resp = await fetch("/api/commission-import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await resp.json();
+      if (!data.ok) { alert("Import failed: " + (data.error || "unknown error")); return null; }
+      return data;
+    } catch (err) {
+      alert("Import failed: " + err.message);
+      return null;
+    } finally {
+      btn.textContent = old; btn.disabled = false;
+    }
+  };
+
+  preview.addEventListener("click", async () => {
+    const data = await send("preview", preview, "Reading…");
+    if (!data) return;
+    if (data.kind !== opts.importKind) {
+      alert(`That looks like the ${data.kind === "contract" ? "contract commission" :
+        "Deploy & Component"} workbook — upload it in the other section.`);
+      return;
+    }
+    select.value = `${data.year}-${data.month}`;
+    monthEl.hidden = false;
+    renderImportPreview(result, data);
+    result.hidden = false;
+    commit.hidden = false;
+  });
+
+  commit.addEventListener("click", async () => {
+    const month = select.options[select.selectedIndex].textContent;
+    if (!confirm(`Replace ALL ${month} figures in this ledger with the spreadsheet?\n\n` +
+                 `Anyone not in the spreadsheet has their ${month} figure removed.`)) return;
+    const data = await send("commit", commit, "Importing…");
+    if (!data) return;
+    renderImportPreview(result, data);
+    commit.hidden = true;
+    // Ledger inputs on screen are now stale; reload so they show what was written.
+    setTimeout(() => location.reload(), 1500);
+  });
+
+  return box;
+}
+
+function renderImportPreview(el, d) {
+  const money = n => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  const monthLabel = `${MONTH_ABBR[d.month - 1]} ${String(d.year).slice(2)}`;
+  const ignored = d.ignored || [];
+  const leavers = d.matched.filter(r => r.disabled);
+  const rows = d.matched.map(r => `<tr>
+      <td>${esc(r.name)}${r.disabled ? ' <span class="import-flag">left</span>' : ""}</td>
+      <td class="num">${money(r.amount)}</td></tr>`).join("");
+
+  el.innerHTML = `
+    <p class="import-summary">${d.committed ? "Imported" : "Ready to import"}
+      <strong>${monthLabel}</strong> — ${d.matched.length} consultants,
+      ${money(d.matched_total)} of ${money(d.total)} total, from ${d.rows} rows.
+      ${d.committed ? `Wrote ${d.written} rows and cleared ${d.deleted} that the sheet no longer lists.` : ""}</p>
+    ${d.detected_month ? "" :
+      '<p class="import-warn">Could not read the month from the filename — check the month above.</p>'}
+    ${ignored.length ? `<p class="import-warn">Skipped — no row in this ledger
+      (${money(ignored.reduce((a, u) => a + u.amount, 0))}):
+      ${ignored.map(u => `${esc(u.name)} (${money(u.amount)})`).join(", ")}.</p>` : ""}
+    ${d.unmatched.length ? `<p class="import-warn">Skipped — no Mercury user
+      (${money(d.unmatched.reduce((a, u) => a + u.amount, 0))}):
+      ${d.unmatched.map(u => `${esc(u.name)} (${money(u.amount)})`).join(", ")}.</p>` : ""}
+    ${leavers.length ? `<p class="import-warn">Recorded against leavers:
+      ${leavers.map(r => esc(r.name)).join(", ")}.</p>` : ""}
+    ${d.sheets_skipped.length ? `<p class="settings-desc">Sheets not read:
+      ${d.sheets_skipped.map(esc).join(", ")}.</p>` : ""}
+    <div class="table-wrap"><table class="monthly-table import-table">
+      <thead><tr><th>Consultant</th><th class="num">${monthLabel}</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
 }
 
 function buildLedgerSection(opts) {
@@ -319,6 +482,7 @@ function buildLedgerSection(opts) {
   desc.style.marginBottom = "14px";
   desc.textContent = opts.description;
   section.appendChild(desc);
+  section.appendChild(buildImportWidget(opts, ledgerMemberIds(opts.territories)));
 
   for (const territory of opts.territories) {
     const tdata = reportData.territories[territory];
