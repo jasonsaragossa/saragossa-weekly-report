@@ -63,6 +63,33 @@ def test_territory_sheets_are_not_double_counted():
     assert out["sheets_skipped"] == ["Chicago Contract"]
 
 
+def test_a_plain_commission_sheet_is_accepted_as_the_master():
+    """April 26 names its master sheet 'Commission', not 'Commission Report'."""
+    out = parse_workbook(_book({"Commission": [
+        CONTRACT_HEADER, _contract_row("Phin Smith", 1000.0)]}))
+    assert out["kind"] == "contract"
+    assert out["totals"] == {"Phin Smith": 1000.0}
+
+
+def test_with_both_master_sheets_the_fuller_one_wins():
+    """
+    April 26 holds a partial set on 'Commission Report' and the whole month on
+    'Commission'. Summing both would double-count, and taking the smaller one
+    silently loses two thirds of the month.
+    """
+    out = parse_workbook(_book({
+        "Commission Report": [CONTRACT_HEADER, _contract_row("Peter Head", 31290.53)],
+        "Commission":        [CONTRACT_HEADER,
+                              _contract_row("Peter Head", 38843.40),
+                              _contract_row("Phin Smith", 137749.74),
+                              _contract_row("Makenzie Thompson", 32896.71)],
+    }))
+    assert out["sheets_used"] == ["Commission"]
+    assert "Commission Report" in out["sheets_skipped"]
+    assert out["totals"]["Peter Head"] == 38843.40
+    assert "Makenzie Thompson" in out["totals"]
+
+
 def test_deploy_reads_repeated_headers_and_credits_the_owner():
     """Each consultant's block repeats the header; column 5 is the contractor."""
     data = _book({"Deploy & Component": [

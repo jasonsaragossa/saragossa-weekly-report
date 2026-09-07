@@ -22,7 +22,10 @@ import re
 from collections import defaultdict
 from datetime import date
 
-CONTRACT_SHEET = "Commission Report"
+# The contract master is usually "Commission Report", but April 26 carries the
+# full month on a sheet called plain "Commission" and leaves a partial set on
+# "Commission Report" — so both names are accepted and the fuller one wins.
+CONTRACT_SHEETS = ("Commission Report", "Commission")
 DEPLOY_SHEETS = ("Deploy & Component", "Deploy & Component US")
 NO_CONSULTANT = "(no consultant on the row)"
 MONTHS = ("jan", "feb", "mar", "apr", "may", "jun",
@@ -113,10 +116,18 @@ def parse_workbook(data: bytes) -> dict:
     wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True, read_only=True)
     names = set(wb.sheetnames)
 
-    if CONTRACT_SHEET in names:
+    if names & set(CONTRACT_SHEETS):
         # The territory sheets are slices of the master, so reading only the
-        # master avoids double-counting.
-        kind, sheets = "contract", [CONTRACT_SHEET]
+        # master avoids double-counting. Where a workbook holds more than one
+        # candidate master, the one carrying the most rows is the complete
+        # month — never both, which would double it.
+        kind = "contract"
+        candidates = [s for s in CONTRACT_SHEETS if s in names]
+        if len(candidates) > 1:
+            counts = {s: len(_rows_from_sheet(wb[s], allow_unnamed=True))
+                      for s in candidates}
+            candidates = [max(counts, key=lambda s: counts[s])]
+        sheets = candidates
     elif names & set(DEPLOY_SHEETS):
         kind = "solution"
         sheets = [s for s in DEPLOY_SHEETS if s in names]
@@ -124,6 +135,10 @@ def parse_workbook(data: bytes) -> dict:
         raise ValueError(
             "Unrecognised workbook — expected a 'Commission Report' sheet (contract) "
             f"or a 'Deploy & Component' sheet. Found: {', '.join(sorted(names))}")
+    # read_only workbooks stream rows, so a sheet counted above must be reset
+    # before it is read again for its figures.
+    wb.close()
+    wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True, read_only=True)
 
     totals, count = defaultdict(float), 0
     for sheet in sheets:

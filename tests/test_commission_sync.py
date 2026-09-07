@@ -51,6 +51,34 @@ def test_actual_wins_over_the_earlier_draft():
     assert not picked["ambiguous"]
 
 
+def test_the_folders_own_month_beats_a_stray_from_another():
+    """The Apr-26 folder holds both 'Apr 26' and a leftover 'May 26'."""
+    picked = pick_files([
+        _f("Deploy & Component Summary - Apr 26.xlsx"),
+        _f("Deploy & Component Summary - May 26.xlsx"),
+    ], month=4)
+    assert picked["chosen"]["solution"]["name"].endswith("Apr 26.xlsx")
+    assert not picked["ambiguous"]
+
+
+def test_actual_still_decides_once_the_month_matches():
+    """Both May files name May, so the '- Actual' rule settles it."""
+    picked = pick_files([
+        _f("Deploy & Component Summary - May 26.xlsx"),
+        _f("Deploy & Component Summary - May 26 - Actual.xlsx"),
+    ], month=5)
+    assert picked["chosen"]["solution"]["name"].endswith("- Actual.xlsx")
+
+
+def test_a_lone_stray_is_not_promoted_by_the_month_rule():
+    """
+    With nothing named for this folder's month, the stray is still the only
+    candidate — sync_year's conflict check is what rejects it, not this.
+    """
+    picked = pick_files([_f("Deploy & Component Summary - May 26.xlsx")], month=4)
+    assert picked["chosen"]["solution"]["name"].endswith("May 26.xlsx")
+
+
 def test_two_equal_candidates_are_reported_not_guessed():
     picked = pick_files([
         _f("Contract Commission - Jun 26.xlsx"),

@@ -12,6 +12,8 @@ whole month, so the rules are deliberately conservative:
     month is treated as a conflict and skipped — the Apr-26 folder has held a
     file called "Deploy & Component Summary - May 26.xlsx" which really was
     May's data, so trusting either one alone files it under the wrong month;
+  * where a folder offers several candidates, one named for the folder's own
+    month wins, which is how April's deploy file beats that same stray;
   * a file marked "Actual" beats one without, which is how the two May deploy
     files differ;
   * anything still ambiguous — two candidate files, or a folder whose month
@@ -117,9 +119,9 @@ def _kind_of(filename: str):
     return None
 
 
-def pick_files(entries: list) -> dict:
+def pick_files(entries: list, month: int = None) -> dict:
     """
-    {kind: (name, download_url)} for one month folder.
+    {kind: entry} for one month folder.
     Returns a kind only when the choice is unambiguous; ties are left out so
     the caller can report them rather than import the wrong draft.
     """
@@ -133,6 +135,13 @@ def pick_files(entries: list) -> dict:
 
     chosen, ambiguous = {}, {}
     for kind, files in by_kind.items():
+        if len(files) > 1 and month:
+            # A file named for this folder's own month beats a stray from
+            # another one: the Apr-26 folder holds both "Apr 26" and a leftover
+            # "May 26", and April's is the April figures.
+            named = [f for f in files if (month_from_filename(f["name"]) or (0, 0))[1] == month]
+            if named:
+                files = named
         if len(files) > 1:
             # "…- Actual.xlsx" is finance's own marker for the final version.
             actual = [f for f in files if "actual" in f["name"].lower()]
@@ -173,7 +182,7 @@ def sync_year(year: int, months: list = None, commit: bool = False) -> dict:
             continue
 
         entries = _children(drive, f"{ROOT}/{year}/{folder['name']}")
-        picked = pick_files(entries)
+        picked = pick_files(entries, month)
         for kind, names in picked["ambiguous"].items():
             skipped.append({"month": month, "kind": kind, "folder": folder["name"],
                             "reason": f"more than one candidate: {', '.join(names)}"})
