@@ -1424,3 +1424,29 @@ select.oto-in { color-scheme: dark; }
 }
 .import-table { max-width: 420px; }
 .import-table td { font-size: 12px; }
+
+/* Batch import: one row per chosen file */
+.import-batch th, .import-batch td { font-size: 11px; vertical-align: middle; }
+.import-batch { max-width: 100%; }
+.import-check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.import-check input { accent-color: var(--accent); cursor: pointer; }
+.import-month-pick {
+  font-size: 11px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--panel, #1a1a1a);
+  color: var(--white);
+}
+.import-bad td { color: var(--red); }
+.import-detail { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 6px; }
+.import-detail summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--mid);
+  list-style: none;
+}
+.import-detail summary::before { content: "▸ "; }
+.import-detail[open] summary::before { content: "▾ "; }
+.import-detail summary:hover { color: var(--white); }
+.import-done { font-size: 11px; color: var(--mid); line-height: 1.7; margin-left: 16px; }

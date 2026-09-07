@@ -347,105 +347,187 @@ function buildImportWidget(opts, allowedUids) {
   box.innerHTML = `
     <div class="import-row">
       <label class="import-file">
-        <input type="file" accept=".xlsx" class="import-input">
-        <span class="import-file-label">Choose spreadsheet…</span>
+        <input type="file" accept=".xlsx" class="import-input" multiple>
+        <span class="import-file-label">Choose spreadsheets…</span>
       </label>
-      <span class="import-month" hidden>Month
-        <select class="import-month-select"></select>
-      </span>
       <button class="save-btn import-preview" disabled>Preview import</button>
-      <button class="save-btn import-commit" hidden>Confirm &amp; replace month</button>
+      <button class="save-btn import-commit" hidden>Import all</button>
     </div>
     <p class="settings-desc import-hint">${esc(opts.importHint)}</p>
     <div class="import-result" hidden></div>`;
 
   const input   = box.querySelector(".import-input");
   const label   = box.querySelector(".import-file-label");
-  const monthEl = box.querySelector(".import-month");
-  const select  = box.querySelector(".import-month-select");
   const preview = box.querySelector(".import-preview");
   const commit  = box.querySelector(".import-commit");
   const result  = box.querySelector(".import-result");
 
-  for (const c of contractEntryMonths().slice().reverse()) {
-    const o = document.createElement("option");
-    o.value = `${c.y}-${c.m}`;
-    o.textContent = c.label;
-    select.appendChild(o);
-  }
+  const monthOptions = contractEntryMonths().slice().reverse();
+  const monthLabel = (y, m) => `${MONTH_ABBR[m - 1]} ${String(y).slice(2)}`;
 
-  let fileB64 = null, fileName = "";
+  // One entry per chosen file, previewed independently so that a file with a
+  // problem can be excluded without abandoning the rest of the batch.
+  let items = [];
+
   input.addEventListener("change", async () => {
-    const f = input.files && input.files[0];
-    commit.hidden = true; result.hidden = true; monthEl.hidden = true;
-    if (!f) { label.textContent = "Choose spreadsheet…"; preview.disabled = true; return; }
-    label.textContent = f.name;
-    fileName = f.name;
-    fileB64 = await new Promise((res, rej) => {
-      const r = new FileReader();
-      r.onload  = () => res(String(r.result).split(",")[1]);
-      r.onerror = () => rej(r.error);
-      r.readAsDataURL(f);
-    });
-    preview.disabled = false;
+    const files = [...(input.files || [])];
+    commit.hidden = true; result.hidden = true; items = [];
+    label.textContent = files.length
+      ? `${files.length} file${files.length === 1 ? "" : "s"} chosen`
+      : "Choose spreadsheets…";
+    preview.disabled = !files.length;
+    for (const f of files) {
+      items.push({
+        name: f.name,
+        b64: await new Promise((res, rej) => {
+          const r = new FileReader();
+          r.onload  = () => res(String(r.result).split(",")[1]);
+          r.onerror = () => rej(r.error);
+          r.readAsDataURL(f);
+        }),
+        include: true, data: null, error: null, year: null, month: null,
+      });
+    }
   });
 
-  const send = async (mode, btn, busyText) => {
-    const body = { file: fileB64, filename: fileName, mode, allowed_uids: allowedUids };
-    if (!monthEl.hidden && select.value) {
-      const [y, m] = select.value.split("-");
-      body.year = parseInt(y); body.month = parseInt(m);
-    }
-    const old = btn.textContent;
-    btn.textContent = busyText; btn.disabled = true;
+  const call = async (item, mode) => {
+    const body = { file: item.b64, filename: item.name, mode, allowed_uids: allowedUids };
+    if (item.year && item.month) { body.year = item.year; body.month = item.month; }
     try {
       const resp = await fetch("/api/commission-import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = await resp.json();
-      if (!data.ok) { alert("Import failed: " + (data.error || "unknown error")); return null; }
-      return data;
+      return await resp.json();
     } catch (err) {
-      alert("Import failed: " + err.message);
-      return null;
-    } finally {
-      btn.textContent = old; btn.disabled = false;
+      return { ok: false, error: err.message };
     }
   };
 
   preview.addEventListener("click", async () => {
-    const data = await send("preview", preview, "Reading…");
-    if (!data) return;
-    if (data.kind !== opts.importKind) {
-      alert(`That looks like the ${data.kind === "contract" ? "contract commission" :
-        "Deploy & Consult"} workbook — upload it in the other section.`);
-      return;
+    preview.disabled = true;
+    const old = preview.textContent;
+    let n = 0;
+    for (const item of items) {
+      preview.textContent = `Reading ${++n} of ${items.length}…`;
+      const d = await call(item, "preview");
+      if (!d.ok) {
+        item.error = d.error; item.include = false;
+      } else if (d.kind !== opts.importKind) {
+        item.error = `This is the ${d.kind === "contract" ? "contract commission" :
+          "Deploy & Consult"} workbook — import it in the other section.`;
+        item.include = false;
+      } else {
+        item.data = d; item.year = d.year; item.month = d.month;
+        // A month we had to guess is never imported silently.
+        if (!d.detected_month) item.include = false;
+      }
     }
-    select.value = `${data.year}-${data.month}`;
-    monthEl.hidden = false;
-    renderImportPreview(result, data);
-    result.hidden = false;
-    commit.hidden = false;
+    preview.textContent = old; preview.disabled = false;
+    renderBatch();
   });
 
+  function renderBatch() {
+    result.hidden = false;
+    const rows = items.map((item, i) => {
+      if (item.error) {
+        return `<tr class="import-bad"><td colspan="5">${esc(item.name)} — ${esc(item.error)}</td></tr>`;
+      }
+      const d = item.data;
+      const monthOpts = monthOptions.map(c =>
+        `<option value="${c.y}-${c.m}"${c.y === item.year && c.m === item.month ? " selected" : ""}
+         >${c.label}</option>`).join("");
+      const skipped = (d.ignored || []).concat(d.unmatched || [])
+        .reduce((a, u) => a + u.amount, 0);
+      return `<tr>
+        <td><label class="import-check"><input type="checkbox" data-i="${i}"
+            ${item.include ? "checked" : ""}> ${esc(item.name)}</label>
+            ${d.detected_month ? "" : ' <span class="import-flag">month unknown</span>'}</td>
+        <td><select class="import-month-pick" data-i="${i}">${monthOpts}</select></td>
+        <td class="num">${d.matched.length}</td>
+        <td class="num">${Math.round(d.matched_total).toLocaleString()}</td>
+        <td class="num">${skipped ? Math.round(skipped).toLocaleString() : "—"}</td>
+      </tr>`;
+    }).join("");
+
+    // Two files claiming the same month would silently overwrite each other.
+    const seen = {}, clashes = new Set();
+    for (const it of items) {
+      if (!it.include || !it.data) continue;
+      const k = `${it.year}-${it.month}`;
+      if (seen[k]) clashes.add(monthLabel(it.year, it.month));
+      seen[k] = true;
+    }
+    const chosen = items.filter(it => it.include && it.data);
+
+    result.innerHTML = `
+      <div class="table-wrap"><table class="monthly-table import-table import-batch">
+        <thead><tr><th>File</th><th>Month</th><th class="num">People</th>
+          <th class="num">Imports</th><th class="num">Skipped</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+      ${clashes.size ? `<p class="import-warn">Two files are both set to
+        ${[...clashes].join(", ")} — the second would overwrite the first.
+        Change a month or untick one.</p>` : ""}
+      ${items.some(i => i.data && !i.data.detected_month)
+        ? `<p class="import-warn">A month could not be read from the filename —
+           set it below and tick the file to include it.</p>` : ""}
+      <p class="settings-desc">${chosen.length} of ${items.length} file${
+        items.length === 1 ? "" : "s"} will be imported. Each replaces its whole
+        month: anyone missing from that file loses that month's figure.</p>
+      ${importDetails(items)}`;
+
+    result.querySelectorAll(".import-check input").forEach(cb =>
+      cb.addEventListener("change", () => {
+        items[+cb.dataset.i].include = cb.checked;
+        renderBatch();
+      }));
+    result.querySelectorAll(".import-month-pick").forEach(sel =>
+      sel.addEventListener("change", () => {
+        const it = items[+sel.dataset.i];
+        const [y, m] = sel.value.split("-");
+        it.year = parseInt(y); it.month = parseInt(m);
+        renderBatch();
+      }));
+
+    commit.hidden = !chosen.length || clashes.size > 0;
+  }
+
   commit.addEventListener("click", async () => {
-    const month = select.options[select.selectedIndex].textContent;
-    if (!confirm(`Replace ALL ${month} figures in this ledger with the spreadsheet?\n\n` +
-                 `Anyone not in the spreadsheet has their ${month} figure removed.`)) return;
-    const data = await send("commit", commit, "Importing…");
-    if (!data) return;
-    renderImportPreview(result, data);
+    const chosen = items.filter(it => it.include && it.data)
+                        .sort((a, b) => (a.year - b.year) || (a.month - b.month));
+    const months = chosen.map(it => monthLabel(it.year, it.month)).join(", ");
+    if (!confirm(`Replace ${months} in this ledger with the chosen spreadsheets?\n\n` +
+                 `For each month, anyone not in that file loses their figure.`)) return;
+    commit.disabled = true;
+    const done = [];
+    let n = 0;
+    for (const item of chosen) {
+      commit.textContent = `Importing ${++n} of ${chosen.length}…`;
+      const d = await call(item, "commit");
+      done.push({ name: item.name, month: monthLabel(item.year, item.month), d });
+      if (!d.ok) break;
+    }
+    const failed = done.find(x => !x.d.ok);
+    result.innerHTML = `
+      <p class="import-summary">Imported ${done.filter(x => x.d.ok).length} of
+        ${chosen.length} file${chosen.length === 1 ? "" : "s"}.</p>
+      ${failed ? `<p class="import-warn">${esc(failed.month)} (${esc(failed.name)})
+        failed: ${esc(failed.d.error || "unknown error")}. Nothing after it was
+        imported.</p>` : ""}
+      <ul class="import-done">${done.filter(x => x.d.ok).map(x =>
+        `<li>${esc(x.month)} — ${x.d.written} written, ${x.d.deleted} cleared</li>`).join("")}</ul>`;
     commit.hidden = true;
     // Ledger inputs on screen are now stale; reload so they show what was written.
-    setTimeout(() => location.reload(), 1500);
+    setTimeout(() => location.reload(), 2500);
   });
 
   return box;
 }
 
-function renderImportPreview(el, d) {
+// Per-file detail, shown on demand under the batch table: who each figure
+// lands against, and every name and pound the import leaves behind.
+function importDetailHtml(d, filename) {
   const money = n => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
   const monthLabel = `${MONTH_ABBR[d.month - 1]} ${String(d.year).slice(2)}`;
   const ignored = d.ignored || [];
@@ -454,13 +536,9 @@ function renderImportPreview(el, d) {
       <td>${esc(r.name)}${r.disabled ? ' <span class="import-flag">left</span>' : ""}</td>
       <td class="num">${money(r.amount)}</td></tr>`).join("");
 
-  el.innerHTML = `
-    <p class="import-summary">${d.committed ? "Imported" : "Ready to import"}
-      <strong>${monthLabel}</strong> — ${d.matched.length} consultants,
-      ${money(d.matched_total)} of ${money(d.total)} total, from ${d.rows} rows.
-      ${d.committed ? `Wrote ${d.written} rows and cleared ${d.deleted} that the sheet no longer lists.` : ""}</p>
-    ${d.detected_month ? "" :
-      '<p class="import-warn">Could not read the month from the filename — check the month above.</p>'}
+  return `
+    <p class="import-summary"><strong>${monthLabel}</strong> — ${d.matched.length} consultants,
+      ${money(d.matched_total)} of ${money(d.total)} in the file, from ${d.rows} rows.</p>
     ${ignored.length ? `<p class="import-warn">Skipped — no row in this ledger
       (${money(ignored.reduce((a, u) => a + u.amount, 0))}):
       ${ignored.map(u => `${esc(u.name)} (${money(u.amount)})`).join(", ")}.</p>` : ""}
@@ -474,6 +552,14 @@ function renderImportPreview(el, d) {
     <div class="table-wrap"><table class="monthly-table import-table">
       <thead><tr><th>Consultant</th><th class="num">${monthLabel}</th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
+}
+
+function importDetails(items) {
+  return items.filter(it => it.data).map(it => `
+    <details class="import-detail">
+      <summary>${esc(it.name)}</summary>
+      ${importDetailHtml(it.data, it.name)}
+    </details>`).join("");
 }
 
 function buildLedgerSection(opts) {
