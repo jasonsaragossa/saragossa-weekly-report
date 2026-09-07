@@ -68,8 +68,15 @@ def _get(url: str, **kw):
 
 
 def _drive_id() -> str:
-    """The default document library of the Finance site."""
-    return _get(f"{GRAPH}/sites/{SITE}/drive").json()["id"]
+    """
+    The default document library of the Finance site.
+
+    The site is resolved to its id first. Addressing it by path and appending
+    a relation in one go ("/sites/host:/sites/X/drive") makes Graph read
+    "/drive" as part of the site path and answer 404.
+    """
+    site_id = _get(f"{GRAPH}/sites/{SITE}").json()["id"]
+    return _get(f"{GRAPH}/sites/{site_id}/drive").json()["id"]
 
 
 def _children(drive: str, path: str) -> list:
