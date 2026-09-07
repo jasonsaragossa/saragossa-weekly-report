@@ -30,8 +30,18 @@ import requests
 
 from shared.commission_import import (match_to_users, month_from_filename,
                                       parse_workbook)
-from shared.dataverse import (_graph_token, get_all_named_users,
+from shared.dataverse import (TERRITORY_IDS, _graph_token, get_all_named_users,
                               get_all_territory_consultants, replace_month_entries)
+
+# Which desks each ledger actually has a row for — the same rule the manual
+# upload applies by sending the rows on screen. Without it a scheduled run
+# would write against people the ledger never displays, and the two routes
+# would disagree about the same workbook.
+LEDGER_TERRITORIES = {
+    "contract": {"London Contract", "Chicago Contract"},
+    "solution": {"Bristol", "London", "Chicago", "New York",
+                 "London Contract", "Chicago Contract"},
+}
 
 GRAPH = "https://graph.microsoft.com/v1.0"
 TIMEOUT = 60
@@ -145,7 +155,12 @@ def sync_year(year: int, months: list = None, commit: bool = False) -> dict:
     """
     drive = _drive_id()
     users = get_all_named_users()
-    shown = {c["systemuserid"] for c in get_all_territory_consultants()}
+    by_territory = {name: tid for name, tid in TERRITORY_IDS.items()}
+    on_ledger = {}
+    for kind, territories in LEDGER_TERRITORIES.items():
+        wanted = {by_territory[t] for t in territories if t in by_territory}
+        on_ledger[kind] = {c["systemuserid"] for c in get_all_territory_consultants()
+                           if c.get("_territoryid_value") in wanted}
 
     imported, skipped = [], []
     for folder in _children(drive, f"{ROOT}/{year}"):
@@ -190,7 +205,7 @@ def sync_year(year: int, months: list = None, commit: bool = False) -> dict:
                 continue
 
             m = match_to_users(parsed["totals"], users)
-            matched = [r for r in m["matched"] if r["uid"] in shown]
+            matched = [r for r in m["matched"] if r["uid"] in on_ledger[kind]]
             amounts = {}
             for row in matched:
                 amounts[row["uid"]] = amounts.get(row["uid"], 0) + row["amount"]
