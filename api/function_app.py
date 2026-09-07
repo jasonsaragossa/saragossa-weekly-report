@@ -1025,6 +1025,77 @@ def board_schedule_run(req: func.HttpRequest) -> func.HttpResponse:
         return _server_error()
 
 
+# ── /api/commission-sync (POST) — pull the workbooks from SharePoint ──────────
+# Admin-triggered. Previews by default; ?commit=1 writes.
+
+@app.route(route="commission-sync", methods=["POST"])
+def commission_sync_post(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_admin(req)
+    if err:
+        return err
+    try:
+        from shared.commission_sync import SyncError, sync_year
+        body = req.get_json() or {}
+        year = int(body.get("year") or date.today().year)
+        months = body.get("months") or None
+        if months is not None:
+            months = [int(m) for m in months]
+        result = sync_year(year, months, commit=bool(body.get("commit")))
+        return func.HttpResponse(json.dumps({"ok": True, **result}),
+                                 mimetype="application/json", status_code=200)
+    except SyncError as exc:
+        return _bad_request(str(exc))
+    except Exception:
+        logging.exception("commission-sync error")
+        return _server_error()
+
+
+# ── /api/commission-sync-run (POST) — the monthly scheduled pull ──────────────
+# Called by the Logic App. No user identity, so it is guarded by the same shared
+# key as the board scheduler, and it only acts on the second Friday of a month
+# unless forced. Importing a month twice is harmless — each import replaces it.
+
+@app.route(route="commission-sync-run", methods=["POST"])
+def commission_sync_run(req: func.HttpRequest) -> func.HttpResponse:
+    import hmac
+    expected = os.environ.get("SCHEDULE_RUNNER_KEY") or ""
+    supplied = req.headers.get("x-api-key") or ""
+    if not expected or not hmac.compare_digest(expected, supplied):
+        logging.warning("commission-sync-run: bad or missing key")
+        return func.HttpResponse("Forbidden", status_code=403)
+    try:
+        from shared.commission_sync import (SyncError, compose_report,
+                                            is_second_friday, sync_year)
+        forced = (req.params.get("force") or "").lower() in ("1", "true", "yes")
+        if not forced and not is_second_friday():
+            return func.HttpResponse(json.dumps({"ok": True, "skipped": "not the second Friday"}),
+                                     mimetype="application/json", status_code=200)
+
+        today = date.today()
+        try:
+            result = sync_year(today.year, commit=True)
+            subject, text = compose_report(result)
+        except SyncError as exc:
+            result = {"ok": False, "error": str(exc)}
+            subject = "Commission sync failed"
+            text = str(exc)
+
+        sender = os.environ.get("ALERT_SENDER")
+        to = [e.strip() for e in
+              (os.environ.get("COMMISSION_SYNC_RECIPIENTS") or "").split(",") if e.strip()]
+        if sender and to:
+            from shared.dataverse import graph_send_mail
+            graph_send_mail(sender, to, subject, text)
+        else:
+            logging.warning("commission-sync-run: no ALERT_SENDER/"
+                            "COMMISSION_SYNC_RECIPIENTS, not reporting by email")
+        return func.HttpResponse(json.dumps({"ok": True, "subject": subject, **result}),
+                                 mimetype="application/json", status_code=200)
+    except Exception:
+        logging.exception("commission-sync-run error")
+        return _server_error()
+
+
 # ── /api/nb-target (GET) — new-business £1m target drill-in ───────────────────
 # Visible to the tracked person themselves and to admins.
 
