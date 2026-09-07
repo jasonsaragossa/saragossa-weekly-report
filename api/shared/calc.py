@@ -264,6 +264,12 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
     }
 
 
+# Desks whose consultants have no perm column: their billings are contract
+# margin, so Deploy & Component revenue joins the contract figures rather than
+# sitting alongside perm revenue.
+_WRITTEN_CONTRACT_TERRITORIES = {"London Contract", "Chicago Contract"}
+
+
 def contract_manual_metrics(user_entries: dict, today: date) -> dict:
     """
     Weekly-report contract figures from the manual monthly ledger
@@ -814,8 +820,6 @@ def build_admin_report(
     from collections import defaultdict
     by_territory = defaultdict(list)
 
-    _WRITTEN_CONTRACT_TERRITORIES = {"London Contract", "Chicago Contract"}
-
     def _written_fields(uid, terr, ccy, after_date=None, before_date=None):
         """Member fields for the Written view (created-in-month basis)."""
         cmode  = terr in _WRITTEN_CONTRACT_TERRITORIES
@@ -1229,10 +1233,16 @@ def build_report(
                                   (nb_alert_state or {}).get(uid))
         wnf     = compute_wnf(uid, live_contracts, ccy, to_gbp, to_usd)
 
-        # Deploy & Component revenue folds into the perm consultant's YTD and
-        # rolling 12M, which the UI shows as totals with a Perm/Solution split.
+        # Deploy & Component revenue is entered in one ledger for everybody; where
+        # it lands differs by desk. A perm consultant carries it as its own
+        # Solution Revenue alongside perm billings, so it folds into their YTD and
+        # rolling 12M as a total the UI can split. A contract consultant has no
+        # perm column to sit beside — their deploy and consult work belongs with
+        # the contract margin, so it folds into Total Margin YTD instead. Either
+        # way it is entered once and counted once.
         sol = solution_manual_metrics((solution_entries or {}).get(uid), today)
-        if sol["solution_ytd"] or sol["solution_roll12"]:
+        is_contract_desk = territory in _WRITTEN_CONTRACT_TERRITORIES
+        if (sol["solution_ytd"] or sol["solution_roll12"]) and not is_contract_desk:
             metrics = {
                 **metrics,
                 "perm_ytd":     metrics["ytd"],
@@ -1251,6 +1261,15 @@ def build_report(
             "contract_last12m": ov.get("crbb7_contractlast12m"),
             "rolling_3m":       ov.get("crbb7_rolling3m"),
         }
+        if is_contract_desk and (sol["solution_ytd"] or sol["solution_roll12"]):
+            cm = {
+                **cm,
+                "contract_only_ytd":    cm["margin_ytd"] or 0,
+                "contract_only_last12": cm["contract_last12m"] or 0,
+                "margin_ytd":       round((cm["margin_ytd"] or 0) + sol["solution_ytd"], 2),
+                "contract_last12m": round((cm["contract_last12m"] or 0) + sol["solution_roll12"], 2),
+                **sol,
+            }
 
         by_territory[territory].append({
             "uid":              uid,

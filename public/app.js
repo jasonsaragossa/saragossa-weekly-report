@@ -138,7 +138,8 @@ function renderReport(data) {
     const sp = e.target.closest(".split-link");
     if (sp) {
       showSplit(sp.dataset.name, sp.dataset.label, sp.dataset.sym,
-                parseFloat(sp.dataset.perm), parseFloat(sp.dataset.sol));
+                parseFloat(sp.dataset.perm), parseFloat(sp.dataset.sol),
+                sp.dataset.base);
       return;
     }
     const reb = e.target.closest(".rebate-link");
@@ -191,7 +192,8 @@ function showNbClients(name, clients) {
 
 // ── Perm / Solution split drill-down ──────────────────────────────────────────
 
-function showSplit(name, label, sym, perm, solution) {
+function showSplit(name, label, sym, perm, solution, baseLabel) {
+  baseLabel = baseLabel || "Perm Revenue";
   let overlay = document.getElementById("split-modal");
   if (!overlay) {
     overlay = document.createElement("div");
@@ -213,7 +215,7 @@ function showSplit(name, label, sym, perm, solution) {
   overlay.querySelector("#split-body").innerHTML = `
     <div class="table-wrap"><table>
       <tbody>
-        <tr><td>Perm Revenue</td><td class="num">${fmt(perm, sym)}</td></tr>
+        <tr><td>${esc(baseLabel)}</td><td class="num">${fmt(perm, sym)}</td></tr>
         <tr><td>Solution Revenue</td><td class="num">${fmt(solution, sym)}</td></tr>
         <tr class="split-total"><td><strong>Total</strong></td>
             <td class="num"><strong>${fmt(perm + solution, sym)}</strong></td></tr>
@@ -397,11 +399,12 @@ function nameCell(name) {
 
 // YTD and Rolling 12M include Deploy & Component revenue when there is any —
 // shown as a total, clickable for the Perm / Solution split.
-function splitCell(m, total, permKey, solKey, label) {
+function splitCell(m, total, permKey, solKey, label, baseLabel) {
   const sol = m[solKey] || 0;
   if (!sol) return fmt(total, m.sym);
   return `<span class="split-link" data-name="${esc(m.name)}" data-label="${esc(label)}"
       data-sym="${esc(m.sym)}" data-perm="${m[permKey] || 0}" data-sol="${sol}"
+      data-base="${esc(baseLabel || "Perm Revenue")}"
       >${fmt(total, m.sym)}</span>`;
 }
 
@@ -473,8 +476,12 @@ function buildContractTable(tdata) {
     return `<tr>
       <td>${esc(m.name)}</td>
       <td class="role-cell">${esc(m.role)}</td>
-      <td class="num">${m.margin_ytd       != null ? fmt(m.margin_ytd,       m.sym) : "—"}</td>
-      <td class="num">${m.contract_last12m != null ? fmt(m.contract_last12m, m.sym) : "—"}</td>
+      <td class="num">${m.margin_ytd != null
+          ? splitCell(m, m.margin_ytd, "contract_only_ytd", "solution_ytd",
+                      "Total Margin YTD", "Contract Margin") : "—"}</td>
+      <td class="num">${m.contract_last12m != null
+          ? splitCell(m, m.contract_last12m, "contract_only_last12", "solution_roll12",
+                      "Contract Last 12M", "Contract Margin") : "—"}</td>
       <td class="num">${m.rolling_3m       != null ? fmt(m.rolling_3m,       m.sym) : "—"}</td>
       <td class="num">${fmt(m.wnf, m.sym)}</td>
       <td class="num year-billing-cell">${yearBilling}</td>

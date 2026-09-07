@@ -266,8 +266,11 @@ function hpbSubheading(text) {
 // ── Contract Entry (manual monthly ledger for contract territories) ───────────
 
 const CONTRACT_ENTRY_TERRITORIES = ["London Contract", "Chicago Contract"];
-// Deploy & Component revenue is booked against perm consultants
-const SOLUTION_ENTRY_TERRITORIES = ["Bristol", "London", "Chicago", "New York"];
+// Deploy & Component revenue is booked against every desk. On a perm desk it
+// shows as its own Solution Revenue column; on a contract desk it joins Total
+// Margin YTD, since those consultants have no perm column for it to sit beside.
+const SOLUTION_ENTRY_TERRITORIES = ["Bristol", "London", "Chicago", "New York",
+                                    "London Contract", "Chicago Contract"];
 
 function contractEntryMonths() {
   // Contract data is always a month behind: rolling 12 months ending with
@@ -306,12 +309,15 @@ function buildSolutionEntrySection() {
     importKind:  "solution",
     importHint:  "Upload finance's \"Deploy & Component Summary - <month>.xlsx\". It reads the " +
       "Contribution column on the UK and US sheets, in the figures' own currency, " +
-      "and replaces that whole month.",
+      "and replaces that whole month. Consult revenue is not in that workbook — " +
+      "re-enter it here after importing.",
     showRolling3: false,
-    description: "Enter each perm consultant's monthly Deploy & Component revenue (territory currency). " +
-      "It adds to their YTD and Rolling 12M on the weekly report — shown there as a total with a " +
-      "Perm / Solution split — and to US quarterly HPB billings. On Analytics it appears as its own " +
-      "Solution Revenue column and is deliberately kept out of perm written totals and budgets.",
+    description: "Enter each consultant's monthly Deploy, Component and Consult revenue " +
+      "(territory currency). " +
+      "For a perm consultant it adds to their YTD and Rolling 12M on the weekly report — shown there " +
+      "as a total with a Perm / Solution split — and to US quarterly HPB billings. For a contract " +
+      "consultant it adds to Total Margin YTD and Contract Last 12M instead. On Analytics it appears " +
+      "as its own Solution Revenue column and is deliberately kept out of perm written totals and budgets.",
     footnote: "Like the contract ledger, entry runs a month behind: the last column is last month.",
   });
 }
