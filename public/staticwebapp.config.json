@@ -25,6 +25,16 @@
       "allowedRoles": ["anonymous"]
     },
     {
+      "comment": "Monthly SharePoint pull, same scheduler and same x-api-key guard",
+      "route": "/api/commission-sync-run",
+      "allowedRoles": ["anonymous"]
+    },
+    {
+      "comment": "Read by the promotion tracker — guarded by PROMOTION_TRACKER_KEY, or an admin session",
+      "route": "/api/promotion-data",
+      "allowedRoles": ["anonymous"]
+    },
+    {
       "route": "/api/*",
       "allowedRoles": ["authenticated"]
     },
