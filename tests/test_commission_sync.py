@@ -10,6 +10,7 @@ os.environ.setdefault("DATAVERSE_URL", "https://example.invalid")
 for _k in ("DATAVERSE_TENANT_ID", "DATAVERSE_CLIENT_ID", "DATAVERSE_CLIENT_SECRET"):
     os.environ.setdefault(_k, "test")
 
+from shared.commission_import import month_from_filename  # noqa: E402
 from shared.commission_sync import folder_month, is_second_friday, pick_files  # noqa: E402
 
 
@@ -59,11 +60,25 @@ def test_two_equal_candidates_are_reported_not_guessed():
     assert len(picked["ambiguous"]["contract"]) == 2
 
 
-def test_the_misfiled_month_takes_the_folders_month_not_the_filename():
-    """The Apr-26 folder has held a file named 'May 26'; the folder decides."""
-    picked = pick_files([_f("Deploy & Component Summary - May 26.xlsx")])
-    assert picked["chosen"]["solution"]["name"].endswith("May 26.xlsx")
+def test_a_filename_that_disagrees_with_its_folder_is_a_conflict():
+    """
+    The Apr-26 folder has held 'Deploy & Component Summary - May 26.xlsx', which
+    really was May's data. Trusting the folder files May under April; trusting
+    the name leaves April empty. sync_year must refuse rather than pick one.
+    """
     assert folder_month("4. Apr-26") == 4
+    assert month_from_filename("Deploy & Component Summary - May 26.xlsx") == (2026, 5)
+
+
+@pytest.mark.parametrize("folder,filename", [
+    ("3. Mar-26",    "Contract Commission - March 26.xlsx"),
+    ("8. August-26", "Contract Commission Report - August 26.xlsx"),
+    ("5. May-26",    "Deploy & Component Summary - May 26 - Actual.xlsx"),
+    ("7. July-26",   "Deploy & Component Summary - July 26.xlsx"),
+])
+def test_finances_real_filenames_agree_with_their_folders(folder, filename):
+    """Inconsistent naming is fine as long as it still resolves to the same month."""
+    assert month_from_filename(filename)[1] == folder_month(folder)
 
 
 def test_folders_are_not_mistaken_for_files():

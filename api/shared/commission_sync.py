@@ -8,8 +8,10 @@ imports it the same way the manual upload does.
 The folder is not tidy enough to import blindly, and every import replaces a
 whole month, so the rules are deliberately conservative:
 
-  * the MONTH COMES FROM THE FOLDER, not the filename — the Apr-26 folder has
-    held a file called "Deploy & Component Summary - May 26.xlsx";
+  * the month comes from the folder, but a filename that names a DIFFERENT
+    month is treated as a conflict and skipped — the Apr-26 folder has held a
+    file called "Deploy & Component Summary - May 26.xlsx" which really was
+    May's data, so trusting either one alone files it under the wrong month;
   * a file marked "Actual" beats one without, which is how the two May deploy
     files differ;
   * anything still ambiguous — two candidate files, or a folder whose month
@@ -26,7 +28,8 @@ from datetime import date
 
 import requests
 
-from shared.commission_import import parse_workbook, match_to_users
+from shared.commission_import import (match_to_users, month_from_filename,
+                                      parse_workbook)
 from shared.dataverse import (_graph_token, get_all_named_users,
                               get_all_territory_consultants, replace_month_entries)
 
@@ -154,6 +157,13 @@ def sync_year(year: int, months: list = None, commit: bool = False) -> dict:
                             "reason": f"more than one candidate: {', '.join(names)}"})
 
         for kind, entry in picked["chosen"].items():
+            named = month_from_filename(entry["name"])
+            if named and named[1] != month:
+                skipped.append({
+                    "month": month, "kind": kind, "file": entry["name"],
+                    "reason": f"filed under {MONTHS[month - 1].title()} but named "
+                              f"{MONTHS[named[1] - 1].title()} — check which month it is"})
+                continue
             url = entry.get("@microsoft.graph.downloadUrl")
             if not url:
                 skipped.append({"month": month, "kind": kind, "file": entry["name"],
