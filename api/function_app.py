@@ -1025,6 +1025,93 @@ def board_schedule_run(req: func.HttpRequest) -> func.HttpResponse:
         return _server_error()
 
 
+# ── /api/promotion-data (GET) — feed the promotion tracker ────────────────────
+# Machine-to-machine, guarded by a shared key the way the ROI tracker is; an
+# admin session is also accepted so the payload can be eyeballed in a browser.
+# One row per consultant, with revenue already assembled the way the weekly
+# report shows it — including Deploy & Consult, which counts toward promotion.
+
+@app.route(route="promotion-data", methods=["GET"])
+def promotion_data(req: func.HttpRequest) -> func.HttpResponse:
+    import hmac
+    expected = os.environ.get("PROMOTION_TRACKER_KEY") or ""
+    supplied = req.headers.get("x-api-key") or ""
+    if not (expected and hmac.compare_digest(expected, supplied)):
+        email, err = require_admin(req)
+        if err:
+            return err
+    try:
+        from shared.calc import SOLUTION_PERM_START, _WRITTEN_CONTRACT_TERRITORIES
+        today = date.today()
+        start = date(today.year - 1, today.month, 1).isoformat()
+        end   = date(today.year, 12, 31).isoformat()
+        try:
+            fx_rates = get_fx_rates()
+        except Exception:
+            logging.warning("promotion-data: using fallback FX rates")
+            fx_rates = None
+
+        report = build_report(
+            get_active_consultants(), get_placements(start, end), get_overrides(),
+            today, get_team_membership_map(), get_live_contract_placements(today.isoformat()),
+            fx_rates, get_nb_thresholds(), get_contract_placements(start, end),
+            get_manual_nb_clients(),
+            contract_entries=get_contract_entries(),
+            solution_entries=get_solution_entries())
+
+        emails = {c["systemuserid"]: c.get("internalemailaddress")
+                  for c in get_all_territory_consultants()}
+
+        people = []
+        for territory, tdata in report.items():
+            if not isinstance(tdata, dict) or "type" not in tdata:
+                continue
+            members = (tdata["groups"] and [m for g in tdata["groups"] for m in g["members"]]
+                       if tdata["type"] == "teams" else tdata.get("members") or [])
+            is_contract = territory in _WRITTEN_CONTRACT_TERRITORIES
+            for m in members:
+                uid = str(m["uid"])
+                if uid.endswith("__hist"):
+                    continue          # a previous-territory row, not a person
+                solution = m.get("solution_ytd", 0) or 0
+                if is_contract:
+                    revenue = m.get("margin_ytd") or 0
+                    base    = m.get("contract_only_ytd", revenue - solution)
+                else:
+                    revenue = m.get("ytd") or 0
+                    base    = m.get("perm_ytd", revenue - solution)
+                people.append({
+                    "uid": uid, "name": m.get("name"), "email": emails.get(uid),
+                    "territory": territory, "team": m.get("team"), "role": m.get("role"),
+                    "currency": "GBP" if m.get("sym") == "£" else "USD",
+                    "is_contract": is_contract,
+                    # revenue_ytd is what counts toward promotion: contract
+                    # margin or perm billings, plus Deploy & Consult.
+                    "revenue_ytd":  round(revenue, 2),
+                    "base_ytd":     round(base, 2),
+                    "solution_ytd": round(solution, 2),
+                    "target":       m.get("target"),
+                    "revenue_roll12":  m.get("roll12"),
+                    "solution_roll12": m.get("solution_roll12", 0) or 0,
+                    "roll12_total":    m.get("roll12_total"),
+                    "written_ytd":     m.get("written"),
+                    "nb_clients":      m.get("nb_clients"),
+                })
+        people.sort(key=lambda p: (p["territory"], p["name"] or ""))
+        return func.HttpResponse(
+            json.dumps({
+                "ok": True, "as_of": today.isoformat(), "year": today.year,
+                # Earlier Deploy & Consult months are in the ledger but do not
+                # count toward a perm consultant's revenue or target.
+                "solution_counts_from": "%04d-%02d" % SOLUTION_PERM_START,
+                "people": people,
+            }),
+            mimetype="application/json", status_code=200)
+    except Exception:
+        logging.exception("promotion-data error")
+        return _server_error()
+
+
 # ── /api/commission-sync (POST) — pull the workbooks from SharePoint ──────────
 # Admin-triggered. Previews by default; ?commit=1 writes.
 

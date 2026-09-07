@@ -33,12 +33,15 @@ assert solution_year_total(ledger, 2026) == 2000*3 + 3000*3 + 4000 + 9999
 assert solution_year_total(ledger, 2025) == 5000
 print(f"Year total 2026 {solution_year_total(ledger, 2026):,}  2025 {solution_year_total(ledger, 2025):,} OK")
 
-# HPB quarters
+# HPB quarters. HPB is a perm bonus, and Deploy & Consult only counts toward
+# perm figures from April 2026, so Q1 contributes nothing — see
+# test_solution_start.py.
 q = solution_quarters(ledger, 2026)
-assert q["1"] == 6000, q          # Jan-Mar
+assert q["1"] == 0, q             # Jan-Mar, before the April start
 assert q["2"] == 9000, q          # Apr-Jun
 assert q["3"] == 4000 + 9999, q   # Jul-Sep
 assert q["4"] == 0, q
+assert solution_quarters(ledger, 2026, since_start=False)["1"] == 6000
 print(f"Quarters {q} OK")
 
 # Empty / missing ledgers must be harmless

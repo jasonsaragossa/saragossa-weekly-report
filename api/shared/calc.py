@@ -293,13 +293,34 @@ def contract_manual_metrics(user_entries: dict, today: date) -> dict:
     }
 
 
-def solution_manual_metrics(user_entries: dict, today: date) -> dict:
+# Deploy & Consult revenue only began counting toward PERM consultants'
+# figures and targets on 1 April 2026 (Jason, Sep 2026). Earlier months stay in
+# the ledger and are still reported in the Analytics Solution Revenue column —
+# they simply do not fold into a perm consultant's revenue or target. Contract
+# desks are unaffected: it has always been part of their margin.
+SOLUTION_PERM_START = (2026, 4)
+
+
+def _from_perm_start(user_entries: dict) -> dict:
+    """The ledger with anything before SOLUTION_PERM_START dropped."""
+    out = {}
+    for k, v in (user_entries or {}).items():
+        y, m = k.split("-")
+        if (int(y), int(m)) >= SOLUTION_PERM_START:
+            out[k] = v
+    return out
+
+
+def solution_manual_metrics(user_entries: dict, today: date, since_start: bool = False) -> dict:
     """
     Deploy & Consult revenue from the manual monthly ledger
     ({"YYYY-M": amount}). Entered a month behind like the contract ledger, so
     both windows end at the PREVIOUS month.
+
+    since_start: drop months before SOLUTION_PERM_START — set for perm
+    consultants, whose figures only include this revenue from April 2026.
     """
-    entries = user_entries or {}
+    entries = _from_perm_start(user_entries) if since_start else (user_entries or {})
 
     def month_key(offset):
         y, m = today.year, today.month - offset
@@ -319,10 +340,14 @@ def solution_year_total(user_entries: dict, year: int) -> float:
                      if k.startswith(f"{year}-")), 2)
 
 
-def solution_quarters(user_entries: dict, year: int) -> dict:
-    """{"1": amount, …} by quarter — added to HPB quarterly billings."""
+def solution_quarters(user_entries: dict, year: int, since_start: bool = True) -> dict:
+    """
+    {"1": amount, …} by quarter — added to HPB quarterly billings.
+    HPB is a perm bonus, so it defaults to counting only from April 2026.
+    """
     q = {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0}
-    for k, v in (user_entries or {}).items():
+    entries = _from_perm_start(user_entries) if since_start else (user_entries or {})
+    for k, v in entries.items():
         y, m = k.split("-")
         if int(y) == year:
             q[(int(m) - 1) // 3 + 1] += v
@@ -1240,8 +1265,9 @@ def build_report(
         # perm column to sit beside — their deploy and consult work belongs with
         # the contract margin, so it folds into Total Margin YTD instead. Either
         # way it is entered once and counted once.
-        sol = solution_manual_metrics((solution_entries or {}).get(uid), today)
         is_contract_desk = territory in _WRITTEN_CONTRACT_TERRITORIES
+        sol = solution_manual_metrics((solution_entries or {}).get(uid), today,
+                                      since_start=not is_contract_desk)
         if (sol["solution_ytd"] or sol["solution_roll12"]) and not is_contract_desk:
             metrics = {
                 **metrics,
