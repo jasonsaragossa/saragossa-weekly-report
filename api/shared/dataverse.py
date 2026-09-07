@@ -700,7 +700,7 @@ def upsert_contract_entries(userid: str, entries: list) -> None:
 
 
 # ── Solution monthly entries (crbb7_solutionentry) ────────────────────────────
-# Deploy & Component revenue booked against a perm consultant, entered by hand
+# Deploy & Consult revenue booked against a perm consultant, entered by hand
 # the same way as the contract ledger. Column names differ slightly from the
 # contract table (crbb7_user_id / crbb7_entry_year) — they were auto-generated.
 

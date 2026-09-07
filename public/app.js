@@ -221,7 +221,7 @@ function showSplit(name, label, sym, perm, solution, baseLabel) {
             <td class="num"><strong>${fmt(perm + solution, sym)}</strong></td></tr>
       </tbody>
     </table></div>
-    <p class="nbt-note">Solution Revenue is Deploy &amp; Component work entered against this consultant.
+    <p class="nbt-note">Solution Revenue is Deploy &amp; Consult work entered against this consultant.
     It counts toward their ${esc(label)} here and toward US quarterly HPB billings, but is reported
     separately on Analytics and excluded from perm written totals and budgets.</p>`;
   overlay.style.display = "flex";
@@ -397,7 +397,7 @@ function nameCell(name) {
   return `<span class="nbt-link" data-who="${esc(who)}" title="New business target">${esc(name)}</span>`;
 }
 
-// YTD and Rolling 12M include Deploy & Component revenue when there is any —
+// YTD and Rolling 12M include Deploy & Consult revenue when there is any —
 // shown as a total, clickable for the Perm / Solution split.
 function splitCell(m, total, permKey, solKey, label, baseLabel) {
   const sol = m[solKey] || 0;

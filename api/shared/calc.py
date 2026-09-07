@@ -265,7 +265,7 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
 
 
 # Desks whose consultants have no perm column: their billings are contract
-# margin, so Deploy & Component revenue joins the contract figures rather than
+# margin, so Deploy & Consult revenue joins the contract figures rather than
 # sitting alongside perm revenue.
 _WRITTEN_CONTRACT_TERRITORIES = {"London Contract", "Chicago Contract"}
 
@@ -295,7 +295,7 @@ def contract_manual_metrics(user_entries: dict, today: date) -> dict:
 
 def solution_manual_metrics(user_entries: dict, today: date) -> dict:
     """
-    Deploy & Component revenue from the manual monthly ledger
+    Deploy & Consult revenue from the manual monthly ledger
     ({"YYYY-M": amount}). Entered a month behind like the contract ledger, so
     both windows end at the PREVIOUS month.
     """
@@ -654,7 +654,7 @@ def _hpb_quarter_billings(uid: str, placements: list, to_usd: dict, today: date,
 
 
 def _hpb_billings_with_solution(uid, placements, to_usd, today, year, solution_entries):
-    """Quarterly billings including any Deploy & Component revenue for that quarter.
+    """Quarterly billings including any Deploy & Consult revenue for that quarter.
     US ledger entries are already in USD (entries use the territory currency)."""
     q = _hpb_quarter_billings(uid, placements, to_usd, today, year)
     sol = solution_quarters((solution_entries or {}).get(uid), year)
@@ -1014,7 +1014,7 @@ def build_admin_report(
             "territory_written_last_total":       round(sum(t_w_last_months.values()), 2),
             "territory_written_last_count_total": round(sum(t_w_last_counts.values()), 1),
             "budget":                   budget_map.get(territory, {"months": {}, "total": 0.0}),
-            # Deploy & Component revenue — reported in its own column, NOT added
+            # Deploy & Consult revenue — reported in its own column, NOT added
             # into written totals or the budget comparison (Jason, Aug 2026).
             "territory_solution_total": round(sum(
                 solution_year_total((solution_entries or {}).get(m["uid"]), year)
@@ -1178,7 +1178,7 @@ def build_report(
     manual_nb_clients: dict = None,
     nb_alert_state: dict = None,   # uid -> set of client ids already in a milestone
     contract_entries: dict = None, # uid -> {"YYYY-M": amount} manual contract ledger
-    solution_entries: dict = None, # uid -> {"YYYY-M": amount} Deploy & Component ledger
+    solution_entries: dict = None, # uid -> {"YYYY-M": amount} Deploy & Consult ledger
 ) -> dict:
     """
     Assembles the full report structure.
@@ -1233,7 +1233,7 @@ def build_report(
                                   (nb_alert_state or {}).get(uid))
         wnf     = compute_wnf(uid, live_contracts, ccy, to_gbp, to_usd)
 
-        # Deploy & Component revenue is entered in one ledger for everybody; where
+        # Deploy & Consult revenue is entered in one ledger for everybody; where
         # it lands differs by desk. A perm consultant carries it as its own
         # Solution Revenue alongside perm billings, so it folds into their YTD and
         # rolling 12M as a total the UI can split. A contract consultant has no

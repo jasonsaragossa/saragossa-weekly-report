@@ -89,7 +89,7 @@ function buildAnalyticsTabs() {
       } },
     { id: "atab-budgets",   label: "Budgets",            build: () => buildBudgetSection() },
     { id: "atab-contract",  label: "Contract Entry",     build: () => buildContractEntrySection() },
-    { id: "atab-solution",  label: "Deploy & Component", build: () => buildSolutionEntrySection() },
+    { id: "atab-solution",  label: "Deploy & Consult", build: () => buildSolutionEntrySection() },
     { id: "atab-breakdown", label: "Monthly Breakdown",  build: () => buildBreakdownTabs() },
   ];
   if (reportData.hpb) {
@@ -266,7 +266,7 @@ function hpbSubheading(text) {
 // ── Contract Entry (manual monthly ledger for contract territories) ───────────
 
 const CONTRACT_ENTRY_TERRITORIES = ["London Contract", "Chicago Contract"];
-// Deploy & Component revenue is booked against every desk. On a perm desk it
+// Deploy & Consult revenue is booked against every desk. On a perm desk it
 // shows as its own Solution Revenue column; on a contract desk it joins Total
 // Margin YTD, since those consultants have no perm column for it to sit beside.
 const SOLUTION_ENTRY_TERRITORIES = ["Bristol", "London", "Chicago", "New York",
@@ -312,8 +312,7 @@ function buildSolutionEntrySection() {
       "and replaces that whole month. Consult revenue is not in that workbook — " +
       "re-enter it here after importing.",
     showRolling3: false,
-    description: "Enter each consultant's monthly Deploy, Component and Consult revenue " +
-      "(territory currency). " +
+    description: "Enter each consultant's monthly Deploy & Consult revenue (territory currency). " +
       "For a perm consultant it adds to their YTD and Rolling 12M on the weekly report — shown there " +
       "as a total with a Perm / Solution split — and to US quarterly HPB billings. For a contract " +
       "consultant it adds to Total Margin YTD and Contract Last 12M instead. On Analytics it appears " +
@@ -421,7 +420,7 @@ function buildImportWidget(opts, allowedUids) {
     if (!data) return;
     if (data.kind !== opts.importKind) {
       alert(`That looks like the ${data.kind === "contract" ? "contract commission" :
-        "Deploy & Component"} workbook — upload it in the other section.`);
+        "Deploy & Consult"} workbook — upload it in the other section.`);
       return;
     }
     select.value = `${data.year}-${data.month}`;
@@ -650,7 +649,7 @@ function buildSummarySection() {
     <th>Territory <button class="gbp-toggle" id="summary-gbp-toggle" title="Convert Chicago / New York to GBP">${summaryGbp ? "Show local $" : "USD→£"}</button></th>
     <th class="num">Full Year Written</th>
     <th class="num">YoY %</th>
-    <th class="num" title="Deploy &amp; Component revenue — reported separately, not added to written or budgets">Solution Revenue</th>
+    <th class="num" title="Deploy &amp; Consult revenue — reported separately, not added to written or budgets">Solution Revenue</th>
     <th class="num">Full Year Written Last YTD</th>
     <th class="num">Budget YTD</th>
     <th class="num">vs Budget</th>

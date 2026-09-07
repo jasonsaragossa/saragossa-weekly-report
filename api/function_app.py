@@ -356,7 +356,7 @@ def contract_entries_post(req: func.HttpRequest) -> func.HttpResponse:
         return _server_error()
 
 
-# ── /api/solution-entries (POST) — Deploy & Component monthly ledger ──────────
+# ── /api/solution-entries (POST) — Deploy & Consult monthly ledger ───────────
 
 @app.route(route="solution-entries", methods=["POST"])
 def solution_entries_post(req: func.HttpRequest) -> func.HttpResponse:
