@@ -1153,15 +1153,25 @@ def commission_sync_run(req: func.HttpRequest) -> func.HttpResponse:
     try:
         from shared.commission_sync import (SyncError, compose_report,
                                             is_second_friday, sync_year)
-        forced = (req.params.get("force") or "").lower() in ("1", "true", "yes")
+        def _flag(name):
+            return (req.params.get(name) or "").lower() in ("1", "true", "yes")
+
+        forced = _flag("force")
+        # preview=1 walks the library and reports without writing or emailing —
+        # how the wiring gets checked before a schedule is trusted with it.
+        preview = _flag("preview")
         if not forced and not is_second_friday():
             return func.HttpResponse(json.dumps({"ok": True, "skipped": "not the second Friday"}),
                                      mimetype="application/json", status_code=200)
 
         today = date.today()
         try:
-            result = sync_year(today.year, commit=True)
+            result = sync_year(today.year, commit=not preview)
             subject, text = compose_report(result)
+            if preview:
+                return func.HttpResponse(json.dumps({"ok": True, "preview": True,
+                                                     "report": text, **result}),
+                                         mimetype="application/json", status_code=200)
         except SyncError as exc:
             result = {"ok": False, "error": str(exc)}
             subject = "Commission sync failed"
