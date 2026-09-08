@@ -55,12 +55,49 @@ def test_contract_sums_a_consultants_rows():
     assert out["rows"] == 3
 
 
-def test_territory_sheets_are_not_double_counted():
-    """They are slices of the master sheet, so only the master is read."""
-    rows = [CONTRACT_HEADER, _contract_row("Phin Smith", 1000.0)]
-    out = parse_workbook(_book({"Commission Report": rows, "Chicago Contract": rows}))
+def test_the_office_tabs_are_the_contract_source():
+    """
+    Contract figures come from the per-office tabs, not the summary sheet —
+    they disagree for several people each month, and the tabs are what finance
+    works from. The summary must not be added on top of them.
+    """
+    out = parse_workbook(_book({
+        "Commission Report": [CONTRACT_HEADER, _contract_row("Phin Smith", 999.0)],
+        "London Contract":   [CONTRACT_HEADER, _contract_row("Louis Warren", 1000.0)],
+        "Chicago Contract":  [CONTRACT_HEADER, _contract_row("Reid Millikan", 500.0)],
+    }))
+    assert out["sheets_used"] == ["London Contract", "Chicago Contract"]
+    assert out["totals"] == {"Louis Warren": 1000.0, "Reid Millikan": 500.0}
+    assert "Commission Report" in out["sheets_skipped"]
+
+
+def test_an_office_tabs_total_row_is_not_counted():
+    """Each office tab closes with a total row whose consultant cell is blank."""
+    total_row = [None, None, None, None, None, None, None, None, None, None,
+                 None, None, None, 1500.0]
+    out = parse_workbook(_book({"Bristol": [
+        CONTRACT_HEADER,
+        _contract_row("Jade Moger", 1000.0),
+        _contract_row("Sion Johnson", 500.0),
+        total_row,
+    ]}))
+    assert out["totals"] == {"Jade Moger": 1000.0, "Sion Johnson": 500.0}
+
+
+def test_the_us_tab_is_read_whichever_name_it_uses():
+    """June calls it 'New York'; the other months say 'NYC'."""
+    for tab in ("NYC", "New York"):
+        out = parse_workbook(_book({tab: [
+            CONTRACT_HEADER, _contract_row("Ryan Grant", 9600.48)]}))
+        assert out["totals"] == {"Ryan Grant": 9600.48}
+
+
+def test_the_summary_sheet_is_only_a_fallback():
+    """A workbook with no office tabs at all still parses."""
+    out = parse_workbook(_book({"Commission Report": [
+        CONTRACT_HEADER, _contract_row("Phin Smith", 1000.0)]}))
+    assert out["sheets_used"] == ["Commission Report"]
     assert out["totals"] == {"Phin Smith": 1000.0}
-    assert out["sheets_skipped"] == ["Chicago Contract"]
 
 
 def test_a_plain_commission_sheet_is_accepted_as_the_master():
@@ -71,23 +108,19 @@ def test_a_plain_commission_sheet_is_accepted_as_the_master():
     assert out["totals"] == {"Phin Smith": 1000.0}
 
 
-def test_with_both_master_sheets_the_fuller_one_wins():
+def test_aprils_split_summary_sheets_are_both_ignored():
     """
     April 26 holds a partial set on 'Commission Report' and the whole month on
-    'Commission'. Summing both would double-count, and taking the smaller one
-    silently loses two thirds of the month.
+    'Commission'. Reading the office tabs sidesteps the question — and neither
+    summary may be added on top, which would double the month.
     """
     out = parse_workbook(_book({
         "Commission Report": [CONTRACT_HEADER, _contract_row("Peter Head", 31290.53)],
-        "Commission":        [CONTRACT_HEADER,
-                              _contract_row("Peter Head", 38843.40),
-                              _contract_row("Phin Smith", 137749.74),
-                              _contract_row("Makenzie Thompson", 32896.71)],
+        "Commission":        [CONTRACT_HEADER, _contract_row("Peter Head", 38843.40)],
+        "London Contract":   [CONTRACT_HEADER, _contract_row("Peter Head", 38843.40)],
     }))
-    assert out["sheets_used"] == ["Commission"]
-    assert "Commission Report" in out["sheets_skipped"]
-    assert out["totals"]["Peter Head"] == 38843.40
-    assert "Makenzie Thompson" in out["totals"]
+    assert out["sheets_used"] == ["London Contract"]
+    assert out["totals"] == {"Peter Head": 38843.40}
 
 
 def test_deploy_reads_repeated_headers_and_credits_the_owner():

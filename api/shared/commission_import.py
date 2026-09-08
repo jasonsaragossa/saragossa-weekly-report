@@ -4,9 +4,10 @@ Import finance's monthly commission spreadsheets into the manual ledgers.
 Two workbooks, one shape each:
 
   "Contract Commission - <Mon YY>.xlsx"      -> the Contract Entry ledger
-      sheet "Commission Report": one row per contractor per week, with a
-      Contribution column. Territory sheets are slices of the same rows, so
-      only the master sheet is read.
+      the per-office tabs (Bristol, London, London Contract, Chicago, Chicago
+      Contract, NYC): one row per contractor per week, summed by Contribution
+      against each person's name. Each tab closes with a total row whose
+      consultant cell is blank, which is why blank owners are skipped here.
 
   "Deploy & Component Summary - <Mon YY>.xlsx" -> the Deploy & Component ledger
       sheets "Deploy & Component" and "Deploy & Component US": blocks per
@@ -22,9 +23,14 @@ import re
 from collections import defaultdict
 from datetime import date
 
-# The contract master is usually "Commission Report", but April 26 carries the
-# full month on a sheet called plain "Commission" and leaves a partial set on
-# "Commission Report" — so both names are accepted and the fuller one wins.
+# Contract figures come from the per-office tabs, summing Contribution against
+# each person's name (Jason, Sep 2026). The summary sheets are not used: they
+# disagree with the tabs for several people each month, and April 26 splits
+# itself across "Commission" and a partial "Commission Report", which the tabs
+# sidestep entirely. June names its US tab "New York" where others say "NYC".
+OFFICE_SHEETS = ("Bristol", "London", "London Contract",
+                 "Chicago", "Chicago Contract", "NYC", "New York")
+# Only used when a workbook carries no office tabs at all.
 CONTRACT_SHEETS = ("Commission Report", "Commission")
 DEPLOY_SHEETS = ("Deploy & Component", "Deploy & Component US")
 NO_CONSULTANT = "(no consultant on the row)"
@@ -116,33 +122,27 @@ def parse_workbook(data: bytes) -> dict:
     wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True, read_only=True)
     names = set(wb.sheetnames)
 
-    if names & set(CONTRACT_SHEETS):
-        # The territory sheets are slices of the master, so reading only the
-        # master avoids double-counting. Where a workbook holds more than one
-        # candidate master, the one carrying the most rows is the complete
-        # month — never both, which would double it.
-        kind = "contract"
-        candidates = [s for s in CONTRACT_SHEETS if s in names]
-        if len(candidates) > 1:
-            counts = {s: len(_rows_from_sheet(wb[s], allow_unnamed=True))
-                      for s in candidates}
-            candidates = [max(counts, key=lambda s: counts[s])]
-        sheets = candidates
+    # A blank owner means different things per sheet: a running total on the
+    # office and deploy sheets, a real row with the owner left out on a summary
+    # sheet. Only the summary sheets keep those.
+    if names & set(OFFICE_SHEETS):
+        kind, unnamed = "contract", False
+        sheets = [s for s in wb.sheetnames if s in set(OFFICE_SHEETS)]
+    elif names & set(CONTRACT_SHEETS):
+        kind, unnamed = "contract", True
+        sheets = [s for s in CONTRACT_SHEETS if s in names][:1]
     elif names & set(DEPLOY_SHEETS):
-        kind = "solution"
+        kind, unnamed = "solution", False
         sheets = [s for s in DEPLOY_SHEETS if s in names]
     else:
         raise ValueError(
-            "Unrecognised workbook — expected a 'Commission Report' sheet (contract) "
-            f"or a 'Deploy & Component' sheet. Found: {', '.join(sorted(names))}")
-    # read_only workbooks stream rows, so a sheet counted above must be reset
-    # before it is read again for its figures.
-    wb.close()
-    wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True, read_only=True)
+            "Unrecognised workbook — expected per-office tabs or a 'Commission "
+            "Report' sheet (contract), or a 'Deploy & Component' sheet. "
+            f"Found: {', '.join(sorted(names))}")
 
     totals, count = defaultdict(float), 0
     for sheet in sheets:
-        for name, value in _rows_from_sheet(wb[sheet], allow_unnamed=(kind == "contract")):
+        for name, value in _rows_from_sheet(wb[sheet], allow_unnamed=unnamed):
             totals[name] += value
             count += 1
     wb.close()
