@@ -2,7 +2,7 @@
 Split calculation logic.
 Mirrors the logic in build_report.py but works on live Dataverse data.
 """
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 # HMRC 2025 annual average FX rates (unitsPerGbp → used as multiplier from foreign to GBP)
 # Source: https://www.gov.uk/government/collections/exchange-rates-for-customs-and-vat
@@ -270,26 +270,57 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
 _WRITTEN_CONTRACT_TERRITORIES = {"London Contract", "Chicago Contract"}
 
 
+def second_friday(year: int, month: int) -> date:
+    """The day that month's commission figures land."""
+    first = date(year, month, 1)
+    return first + timedelta(days=(4 - first.weekday()) % 7 + 7)
+
+
+def last_complete_ledger_month(today: date = None) -> tuple:
+    """
+    (year, month) of the newest month whose figures are actually in.
+
+    A month is paid, and entered, in the month AFTER it — arriving on the
+    second Friday. So through the first part of September, August is still
+    empty and July is the newest complete month. Rolling windows have to end
+    there, otherwise they take in an empty August while dropping August last
+    year, and a consultant silently loses a month of revenue.
+    """
+    today = today or date.today()
+    lag = 1 if today >= second_friday(today.year, today.month) else 2
+    y, m = today.year, today.month - lag
+    while m <= 0:
+        y, m = y - 1, m + 12
+    return y, m
+
+
+def _window(entries: dict, end: tuple, months: int) -> float:
+    """Sum the `months` ledger months ending at `end` inclusive."""
+    y, m = end
+    total = 0.0
+    for _ in range(months):
+        total += (entries or {}).get(f"{y}-{m}", 0)
+        m -= 1
+        if m == 0:
+            y, m = y - 1, 12
+    return total
+
+
 def contract_manual_metrics(user_entries: dict, today: date) -> dict:
     """
     Weekly-report contract figures from the manual monthly ledger
-    ({"YYYY-M": amount}). Contract data is always a month behind, so every
-    window ends at the PREVIOUS month: YTD = Jan..last month, last 12M /
-    rolling 3M = trailing windows ending last month.
+    ({"YYYY-M": amount}). Every window ends at the newest COMPLETE month, so
+    an unfilled month never displaces a real one — see
+    last_complete_ledger_month.
     """
-    def month_key(offset):
-        y, m = today.year, today.month - offset
-        while m <= 0:
-            y, m = y - 1, m + 12
-        return f"{y}-{m}"
-    ytd = sum(v for k, v in user_entries.items()
-              if k.startswith(f"{today.year}-") and int(k.split("-")[1]) < today.month)
-    l12 = sum(user_entries.get(month_key(o), 0) for o in range(1, 13))
-    r3  = sum(user_entries.get(month_key(o), 0) for o in range(1, 4))
+    end = last_complete_ledger_month(today)
+    ytd = sum(v for k, v in (user_entries or {}).items()
+              if k.startswith(f"{today.year}-")
+              and int(k.split("-")[1]) <= end[1]) if end[0] == today.year else 0
     return {
         "margin_ytd":       round(ytd, 2),
-        "contract_last12m": round(l12, 2),
-        "rolling_3m":       round(r3, 2),
+        "contract_last12m": round(_window(user_entries, end, 12), 2),
+        "rolling_3m":       round(_window(user_entries, end, 3), 2),
     }
 
 
@@ -314,24 +345,19 @@ def _from_perm_start(user_entries: dict) -> dict:
 def solution_manual_metrics(user_entries: dict, today: date, since_start: bool = False) -> dict:
     """
     Deploy & Consult revenue from the manual monthly ledger
-    ({"YYYY-M": amount}). Entered a month behind like the contract ledger, so
-    both windows end at the PREVIOUS month.
+    ({"YYYY-M": amount}). Filled on the same monthly cycle as the contract
+    ledger, so both windows end at the newest COMPLETE month.
 
     since_start: drop months before SOLUTION_PERM_START — set for perm
     consultants, whose figures only include this revenue from April 2026.
     """
     entries = _from_perm_start(user_entries) if since_start else (user_entries or {})
-
-    def month_key(offset):
-        y, m = today.year, today.month - offset
-        while m <= 0:
-            y, m = y - 1, m + 12
-        return f"{y}-{m}"
-
+    end = last_complete_ledger_month(today)
     ytd = sum(v for k, v in entries.items()
-              if k.startswith(f"{today.year}-") and int(k.split("-")[1]) < today.month)
-    l12 = sum(entries.get(month_key(o), 0) for o in range(1, 13))
-    return {"solution_ytd": round(ytd, 2), "solution_roll12": round(l12, 2)}
+              if k.startswith(f"{today.year}-")
+              and int(k.split("-")[1]) <= end[1]) if end[0] == today.year else 0
+    return {"solution_ytd": round(ytd, 2),
+            "solution_roll12": round(_window(entries, end, 12), 2)}
 
 
 def solution_year_total(user_entries: dict, year: int) -> float:

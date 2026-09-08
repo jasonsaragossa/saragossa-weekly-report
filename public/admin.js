@@ -272,12 +272,23 @@ const CONTRACT_ENTRY_TERRITORIES = ["London Contract", "Chicago Contract"];
 const SOLUTION_ENTRY_TERRITORIES = ["Bristol", "London", "Chicago", "New York",
                                     "London Contract", "Chicago Contract"];
 
+// A month is paid, and entered, in the month after it — landing on the second
+// Friday. Until then the ledger is two months behind rather than one, so the
+// grid keeps last year's equivalent month instead of opening an empty column
+// and dropping a real one off the far end.
+function ledgerLagMonths() {
+  const now = new Date();
+  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).getDay();
+  const secondFriday = 1 + ((5 - firstDay + 7) % 7) + 7;
+  return now.getDate() >= secondFriday ? 1 : 2;
+}
+
 function contractEntryMonths() {
-  // Contract data is always a month behind: rolling 12 months ending with
-  // the PREVIOUS month (in July: Jul 25 → Jun 26). [{y, m, label}]
+  // Rolling 12 months ending with the newest COMPLETE month. [{y, m, label}]
+  const lag = ledgerLagMonths();
   const out = [];
-  for (let off = 12; off >= 1; off--) {
-    let y = currentYear, m = currentMonth - off;
+  for (let off = 11; off >= 0; off--) {
+    let y = currentYear, m = currentMonth - lag - off;
     while (m <= 0) { y -= 1; m += 12; }
     out.push({ y, m, label: `${MONTH_ABBR[m - 1]} ${String(y).slice(2)}` });
   }

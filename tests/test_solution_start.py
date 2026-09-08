@@ -17,8 +17,9 @@ for _k in ("DATAVERSE_TENANT_ID", "DATAVERSE_CLIENT_ID", "DATAVERSE_CLIENT_SECRE
 from shared.calc import (SOLUTION_PERM_START, solution_manual_metrics,  # noqa: E402
                          solution_quarters, solution_year_total)
 
-# A full year in the ledger, straddling the April start. Today is 7 Sep 2026,
-# and the ledger runs a month behind, so every window ends with August.
+# A full year in the ledger, straddling the April start. Today is 7 Sep 2026 —
+# before September's second Friday, so August's figures are not in yet and
+# every window ends with July (see test_ledger_window.py).
 TODAY = date(2026, 9, 7)
 LEDGER = {
     "2025-10": 500, "2025-11": 500, "2025-12": 500,
@@ -28,7 +29,7 @@ LEDGER = {
     "2026-9": 9999,                                    # current month — excluded
 }
 BEFORE = 3000     # Jan-Mar 2026
-AFTER  = 12000    # Apr-Aug 2026
+AFTER  = 9000     # Apr-Jul 2026 — August is not in the window yet
 
 
 def test_the_start_is_april_2026():
@@ -73,9 +74,12 @@ def test_hpb_quarters_can_still_be_asked_for_the_whole_year():
 def test_the_analytics_column_still_reports_everything_booked():
     """
     Solution Revenue on Analytics is a report of what was booked, kept out of
-    perm written totals and budgets — so it is not cut off at April.
+    perm written totals and budgets — so it is cut off neither at April nor at
+    the rolling window's end. Every 2026 month counts, September included.
     """
-    assert solution_year_total(LEDGER, 2026) == BEFORE + AFTER + 9999
+    assert solution_year_total(LEDGER, 2026) == sum(
+        v for k, v in LEDGER.items() if k.startswith("2026-"))
+    assert solution_year_total(LEDGER, 2026) == 24999
 
 
 @pytest.mark.parametrize("entries", [None, {}])
