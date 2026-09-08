@@ -6,13 +6,13 @@
   <title>Weekly 1:1 — Saragossa</title>
   <link rel="stylesheet" href="/style.css">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <script>
+    /* Set on <html> in the head so the dark palette never paints first. */
+    try { if (localStorage.getItem("saragossa-theme") === "light")
+      document.documentElement.classList.add("theme-light"); } catch (e) {}
+  </script>
 </head>
 <body>
-<script>
-  /* Applied before the page paints so the dark palette never flashes first. */
-  try { if (localStorage.getItem("saragossa-theme") === "light")
-    document.body.classList.add("theme-light"); } catch (e) {}
-</script>
 
 <header class="header">
   <img src="/logo.svg" alt="Saragossa" class="logo">

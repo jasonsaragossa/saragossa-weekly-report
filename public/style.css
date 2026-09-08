@@ -48,6 +48,7 @@
   --ok:       #35a56b;
   --warn:     #d98b8b;
   --disabled: #4a4a4a;
+  --scheme:   dark;
   --tab-h:    48px;
   --font:     'Aeonik Pro', -apple-system, BlinkMacSystemFont, sans-serif;
   --mono:     'SF Mono', 'Fira Code', ui-monospace, monospace;
@@ -57,6 +58,7 @@
 
 html, body {
   height: 100%;
+  color-scheme: var(--scheme);
   background: var(--bg);
   color: var(--light);
   font-family: var(--font);
@@ -1095,7 +1097,7 @@ tbody tr.other-row:hover td {
   font-family: var(--mono);
   font-size: 11px;
   padding: 3px 6px;
-  color-scheme: dark;
+  color-scheme: var(--scheme);
 }
 .nbt-today {
   background: none;
@@ -1151,7 +1153,7 @@ tr.nbt-pl-out td { color: var(--mid); }
   color: var(--white);
   font-size: 11px;
   padding: 4px 7px;
-  color-scheme: dark;
+  color-scheme: var(--scheme);
 }
 .sched-add input[type="text"] { min-width: 260px; }
 .sched-note { flex-basis: 100%; font-size: 10px; color: var(--mid); margin: 0; }
@@ -1197,7 +1199,7 @@ tr.split-total td { border-top: 1px solid var(--border); }
 .mbr-ctl { font-size: 11px; color: var(--mid); display: inline-flex; align-items: center; gap: 6px; }
 .mbr-ctl select, .mbr-ctl input {
   background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
-  color: var(--white); font-size: 11px; padding: 4px 7px; color-scheme: dark;
+  color: var(--white); font-size: 11px; padding: 4px 7px; color-scheme: var(--scheme);
 }
 .mbr-section { margin-bottom: 30px; }
 .mbr-section h2 {
@@ -1234,10 +1236,10 @@ tr.mbr-prompt-row td { background: var(--tint); padding: 8px 14px 12px; }
 .action-text { width: 100%; background: var(--surface); border: 1px solid var(--border);
   border-radius: 4px; color: var(--white); font-size: 12px; padding: 5px 8px; }
 .action-status { background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
-  color: var(--white); font-size: 11px; padding: 4px 6px; color-scheme: dark; width: 100%; }
+  color: var(--white); font-size: 11px; padding: 4px 6px; color-scheme: var(--scheme); width: 100%; }
 .action-remove, .carry-status { background: none; border: 1px solid var(--border); border-radius: 4px;
   color: var(--mid); font-size: 11px; padding: 3px 7px; cursor: pointer; }
-.carry-status { width: 100%; background: var(--surface); color: var(--white); color-scheme: dark; }
+.carry-status { width: 100%; background: var(--surface); color: var(--white); color-scheme: var(--scheme); }
 .action-remove:hover { color: var(--warn); border-color: var(--warn); }
 .mbr-savebar { display: flex; align-items: center; gap: 14px; }
 .mbr-saved-note { font-size: 11px; color: var(--ok); }
@@ -1247,7 +1249,7 @@ tr.mbr-prompt-row td { background: var(--tint); padding: 8px 14px 12px; }
 .scope-add { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; }
 .scope-add select {
   background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
-  color: var(--white); font-size: 11px; padding: 5px 8px; color-scheme: dark; min-width: 240px;
+  color: var(--white); font-size: 11px; padding: 5px 8px; color-scheme: var(--scheme); min-width: 240px;
 }
 .scope-terrs { display: flex; flex-wrap: wrap; gap: 10px; }
 .scope-terrs label { font-size: 11px; color: var(--mid); display: inline-flex; align-items: center; gap: 4px; }
@@ -1329,7 +1331,7 @@ tr.mbr-prompt-row td { background: var(--tint); padding: 8px 14px 12px; }
   width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
   color: var(--white); font-family: var(--font); font-size: 12px; padding: 5px 7px; resize: vertical;
 }
-select.oto-in { color-scheme: dark; }
+select.oto-in { color-scheme: var(--scheme); }
 .oto-fixed { color: var(--white); font-size: 12px; }
 .oto-meta { display: block; font-size: 9px; color: var(--mid); margin-top: 2px; }
 
@@ -1471,15 +1473,18 @@ select.oto-in { color-scheme: dark; }
 .import-done { font-size: 11px; color: var(--mid); line-height: 1.7; margin-left: 16px; }
 
 /* ── Light mode ──────────────────────────────────────────────────────────────
-   Opt-in per page via <body class="theme-light">, set before first paint by the
-   inline script in 121.html / mbr.html so the dark palette never flashes first.
+   Opt-in per page via <html class="theme-light">, set by the inline script in
+   the head of 121.html / mbr.html so the dark palette never flashes first. It
+   goes on <html> rather than <body> because <html> paints the canvas too: with
+   the tokens overridden only on <body>, the page turned light but the surface
+   behind it stayed dark.
    Only the tokens change: every rule above is written against them, so the two
    themes cannot drift apart.
 
    These pages are filled in during live 1:1 and review conversations, often on
    a laptop in a bright meeting room, where the dark theme reads poorly. */
 
-body.theme-light {
+.theme-light {
   --bg:       #f7f7f8;
   --surface:  #ffffff;
   --surface2: #f0f0f2;
@@ -1500,23 +1505,24 @@ body.theme-light {
   --ok:       #15803d;
   --warn:     #b91c1c;
   --disabled: #a6a6ad;
+  --scheme:   light;
 }
 
 /* The logo is white artwork, so it disappears on a light ground. */
-body.theme-light .logo { filter: invert(1) brightness(.25); }
+.theme-light .logo { filter: invert(1) brightness(.25); }
 
 /* The accent-tinted fills were built for a dark ground and wash out on white. */
-body.theme-light .feedback-btn {
+.theme-light .feedback-btn {
   background: linear-gradient(180deg, rgba(63,109,120,.14), rgba(63,109,120,.07));
   color: #26525c;
 }
-body.theme-light .feedback-btn:hover {
+.theme-light .feedback-btn:hover {
   background: linear-gradient(180deg, rgba(63,109,120,.24), rgba(63,109,120,.14));
   color: #17343c;
 }
-body.theme-light .oto-week.current { color: #ffffff; }
-body.theme-light .mbr-bar-fill.hit,
-body.theme-light .nbt-bar-hit { background: var(--ok); }
+.theme-light .oto-week.current { color: #ffffff; }
+.theme-light .mbr-bar-fill.hit,
+.theme-light .nbt-bar-hit { background: var(--ok); }
 
 /* Theme toggle */
 .theme-toggle {

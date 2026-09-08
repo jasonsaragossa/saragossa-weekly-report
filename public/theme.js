@@ -15,7 +15,7 @@
   }
 
   function apply(isLight) {
-    document.body.classList.toggle("theme-light", isLight);
+    document.documentElement.classList.toggle("theme-light", isLight);
     var btn = document.getElementById("theme-toggle");
     if (btn) {
       btn.textContent = label(isLight);
@@ -27,9 +27,9 @@
   function init() {
     var btn = document.getElementById("theme-toggle");
     if (!btn) return;
-    apply(document.body.classList.contains("theme-light"));
+    apply(document.documentElement.classList.contains("theme-light"));
     btn.addEventListener("click", function () {
-      var isLight = !document.body.classList.contains("theme-light");
+      var isLight = !document.documentElement.classList.contains("theme-light");
       apply(isLight);
       // A browser with storage blocked still toggles for this page view.
       try { localStorage.setItem(KEY, isLight ? "light" : "dark"); } catch (e) {}
