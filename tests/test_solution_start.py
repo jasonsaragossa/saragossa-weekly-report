@@ -73,13 +73,22 @@ def test_hpb_quarters_can_still_be_asked_for_the_whole_year():
 
 def test_the_analytics_column_still_reports_everything_booked():
     """
-    Solution Revenue on Analytics is a report of what was booked, kept out of
-    perm written totals and budgets — so it is cut off neither at April nor at
-    the rolling window's end. Every 2026 month counts, September included.
+    Solution Revenue on Analytics is a calendar year of what was booked, so it
+    is not cut off at the rolling window's end — September counts even though
+    the window stops at July. A contract desk, which has always counted this
+    revenue, sees the whole year.
     """
     assert solution_year_total(LEDGER, 2026) == sum(
         v for k, v in LEDGER.items() if k.startswith("2026-"))
     assert solution_year_total(LEDGER, 2026) == 24999
+
+
+def test_the_analytics_column_starts_at_april_for_a_perm_desk():
+    """
+    A perm desk counts none of it before April, so the column has to agree
+    with the weekly report rather than showing a bigger number on its own.
+    """
+    assert solution_year_total(LEDGER, 2026, since_start=True) == 24999 - BEFORE
 
 
 @pytest.mark.parametrize("entries", [None, {}])

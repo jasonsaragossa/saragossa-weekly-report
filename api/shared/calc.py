@@ -360,10 +360,16 @@ def solution_manual_metrics(user_entries: dict, today: date, since_start: bool =
             "solution_roll12": round(_window(entries, end, 12), 2)}
 
 
-def solution_year_total(user_entries: dict, year: int) -> float:
-    """Everything booked in a calendar year — the Analytics solution column."""
-    return round(sum(v for k, v in (user_entries or {}).items()
-                     if k.startswith(f"{year}-")), 2)
+def solution_year_total(user_entries: dict, year: int, since_start: bool = False) -> float:
+    """
+    A calendar year's booked Deploy & Consult revenue — the Analytics column.
+
+    since_start: drop months before SOLUTION_PERM_START, set for perm desks so
+    the column agrees with the weekly report rather than showing a larger
+    figure that counts months the business does not.
+    """
+    entries = _from_perm_start(user_entries) if since_start else (user_entries or {})
+    return round(sum(v for k, v in entries.items() if k.startswith(f"{year}-")), 2)
 
 
 def solution_quarters(user_entries: dict, year: int, since_start: bool = True) -> dict:
@@ -1067,8 +1073,12 @@ def build_admin_report(
             "budget":                   budget_map.get(territory, {"months": {}, "total": 0.0}),
             # Deploy & Consult revenue — reported in its own column, NOT added
             # into written totals or the budget comparison (Jason, Aug 2026).
+            # A perm desk counts it only from April 2026, so this column shows
+            # the same figure the weekly report does rather than a larger one
+            # nothing else agrees with.
             "territory_solution_total": round(sum(
-                solution_year_total((solution_entries or {}).get(m["uid"]), year)
+                solution_year_total((solution_entries or {}).get(m["uid"]), year,
+                                    since_start=territory not in _WRITTEN_CONTRACT_TERRITORIES)
                 for m in members), 2),
         })
         report[territory] = result
