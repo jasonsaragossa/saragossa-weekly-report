@@ -157,6 +157,16 @@ html, body {
   border: 1px solid var(--border);
 }
 
+/* The weekly report's own chrome — sticky header, tabs, panel padding and the
+   footer — is about 230px. Cap the table to what is left so the PAGE never
+   scrolls: once it does, the table scrolls out of view and takes its sticky
+   header with it, which is why the headings vanished when scrolling to a name
+   further down a team. */
+.panels .table-wrap {
+  max-height: calc(100vh - 236px);
+  min-height: 260px;
+}
+
 /* Freeze column headers while scrolling a table */
 .table-wrap thead th,
 .settings-table-wrap thead th {
