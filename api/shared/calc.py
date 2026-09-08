@@ -269,6 +269,17 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
 # sitting alongside perm revenue.
 _WRITTEN_CONTRACT_TERRITORIES = {"London Contract", "Chicago Contract"}
 
+# The currency each desk's figures are held and displayed in.
+CCY_BY_TERRITORY = {
+    "Bristol":          "GBP",
+    "London":           "GBP",
+    "London Contract":  "GBP",
+    "Chicago":          "USD",
+    "New York":         "USD",
+    "Chicago Contract": "USD",
+    "Cameron Scott":    "GBP",
+}
+
 
 def second_friday(year: int, month: int) -> date:
     """The day that month's commission figures land."""
@@ -851,15 +862,7 @@ def build_admin_report(
     except ValueError:  # 29 Feb in a non-leap previous year
         last_ytd_cutoff = date(year - 1, today.month, 28)
 
-    CCY = {
-        "Bristol":          "GBP",
-        "London":           "GBP",
-        "London Contract":  "GBP",
-        "Chicago":          "USD",
-        "New York":         "USD",
-        "Chicago Contract": "USD",
-        "Cameron Scott":    "GBP",
-    }
+    CCY = CCY_BY_TERRITORY
 
     # Budget map for current year: {territory: {months: {1: amt, ...}, total: float}}
     budget_map = {}
@@ -1263,15 +1266,7 @@ def build_report(
     override_map = {o["crbb7_userid"]: o for o in overrides}
 
     # Territory → display currency
-    CCY = {
-        "Bristol":          "GBP",
-        "London":           "GBP",
-        "London Contract":  "GBP",
-        "Chicago":          "USD",
-        "New York":         "USD",
-        "Chicago Contract": "USD",
-        "Cameron Scott":    "GBP",
-    }
+    CCY = CCY_BY_TERRITORY
 
     # Default team ordering per territory (team → sort key)
     # (defined at module level as TEAM_ORDER)

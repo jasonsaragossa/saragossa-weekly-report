@@ -1028,8 +1028,12 @@ def board_schedule_run(req: func.HttpRequest) -> func.HttpResponse:
 # ── /api/promotion-data (GET) — feed the promotion tracker ────────────────────
 # Machine-to-machine, guarded by a shared key the way the ROI tracker is; an
 # admin session is also accepted so the payload can be eyeballed in a browser.
-# One row per consultant, with revenue already assembled the way the weekly
-# report shows it — including Deploy & Consult, which counts toward promotion.
+#
+# The tracker reads permanent placements from Mercury itself and works out its
+# own rolling 12 months. The one thing it cannot see is the manual Deploy &
+# Consult ledger, which counts toward promotion — so this returns exactly that,
+# per consultant, BY MONTH, in the tracker's own "YYYY-MM" key format, ready to
+# fold into its buckets.
 
 @app.route(route="promotion-data", methods=["GET"])
 def promotion_data(req: func.HttpRequest) -> func.HttpResponse:
@@ -1041,68 +1045,57 @@ def promotion_data(req: func.HttpRequest) -> func.HttpResponse:
         if err:
             return err
     try:
-        from shared.calc import SOLUTION_PERM_START, _WRITTEN_CONTRACT_TERRITORIES
+        from shared.calc import (CCY_BY_TERRITORY, SOLUTION_PERM_START,
+                                 _WRITTEN_CONTRACT_TERRITORIES)
+        from shared.dataverse import (TERRITORY_IDS, get_all_territory_consultants,
+                                      get_solution_entries)
+
         today = date.today()
-        start = date(today.year - 1, today.month, 1).isoformat()
-        end   = date(today.year, 12, 31).isoformat()
-        try:
-            fx_rates = get_fx_rates()
-        except Exception:
-            logging.warning("promotion-data: using fallback FX rates")
-            fx_rates = None
-
-        report = build_report(
-            get_active_consultants(), get_placements(start, end), get_overrides(),
-            today, get_team_membership_map(), get_live_contract_placements(today.isoformat()),
-            fx_rates, get_nb_thresholds(), get_contract_placements(start, end),
-            get_manual_nb_clients(),
-            contract_entries=get_contract_entries(),
-            solution_entries=get_solution_entries())
-
-        emails = {c["systemuserid"]: c.get("internalemailaddress")
-                  for c in get_all_territory_consultants()}
+        by_id = {tid: name for name, tid in TERRITORY_IDS.items()}
+        ledger = get_solution_entries()
 
         people = []
-        for territory, tdata in report.items():
-            if not isinstance(tdata, dict) or "type" not in tdata:
+        for c in get_all_territory_consultants():
+            uid = c["systemuserid"]
+            entries = ledger.get(uid)
+            if not entries:
                 continue
-            members = (tdata["groups"] and [m for g in tdata["groups"] for m in g["members"]]
-                       if tdata["type"] == "teams" else tdata.get("members") or [])
+            territory = by_id.get(c.get("_territoryid_value"))
+            # A perm desk counts this revenue only from April 2026; a contract
+            # desk always has. The tracker covers perm desks only, but the flag
+            # keeps the payload honest either way.
             is_contract = territory in _WRITTEN_CONTRACT_TERRITORIES
-            for m in members:
-                uid = str(m["uid"])
-                if uid.endswith("__hist"):
-                    continue          # a previous-territory row, not a person
-                solution = m.get("solution_ytd", 0) or 0
-                if is_contract:
-                    revenue = m.get("margin_ytd") or 0
-                    base    = m.get("contract_only_ytd", revenue - solution)
-                else:
-                    revenue = m.get("ytd") or 0
-                    base    = m.get("perm_ytd", revenue - solution)
-                people.append({
-                    "uid": uid, "name": m.get("name"), "email": emails.get(uid),
-                    "territory": territory, "team": m.get("team"), "role": m.get("role"),
-                    "currency": "GBP" if m.get("sym") == "£" else "USD",
-                    "is_contract": is_contract,
-                    # revenue_ytd is what counts toward promotion: contract
-                    # margin or perm billings, plus Deploy & Consult.
-                    "revenue_ytd":  round(revenue, 2),
-                    "base_ytd":     round(base, 2),
-                    "solution_ytd": round(solution, 2),
-                    "target":       m.get("target"),
-                    "revenue_roll12":  m.get("roll12"),
-                    "solution_roll12": m.get("solution_roll12", 0) or 0,
-                    "roll12_total":    m.get("roll12_total"),
-                    "written_ytd":     m.get("written"),
-                    "nb_clients":      m.get("nb_clients"),
-                })
-        people.sort(key=lambda p: (p["territory"], p["name"] or ""))
+            months = {}
+            for key, amount in entries.items():
+                y, m = (int(p) for p in key.split("-"))
+                if not is_contract and (y, m) < SOLUTION_PERM_START:
+                    continue
+                if amount:
+                    # Zero-padded to match the tracker's own month keys.
+                    months[f"{y}-{m:02d}"] = round(float(amount), 2)
+            if not months:
+                continue
+            people.append({
+                "uid": uid,
+                "email": (c.get("internalemailaddress") or "").lower().strip() or None,
+                "name": c.get("fullname"),
+                "territory": territory,
+                "is_contract": is_contract,
+                # Ledger figures are stored in the desk's own currency.
+                "currency": CCY_BY_TERRITORY.get(territory, "GBP"),
+                "months": dict(sorted(months.items())),
+                "total": round(sum(months.values()), 2),
+            })
+
+        people.sort(key=lambda p: (p["territory"] or "", p["name"] or ""))
         return func.HttpResponse(
             json.dumps({
-                "ok": True, "as_of": today.isoformat(), "year": today.year,
-                # Earlier Deploy & Consult months are in the ledger but do not
-                # count toward a perm consultant's revenue or target.
+                "ok": True,
+                "as_of": today.isoformat(),
+                # Deploy & Consult revenue per consultant, by month, for the
+                # promotion tracker to fold into its own rolling window. It
+                # reads placements from Mercury itself; this manual ledger is
+                # the part it cannot see.
                 "solution_counts_from": "%04d-%02d" % SOLUTION_PERM_START,
                 "people": people,
             }),
