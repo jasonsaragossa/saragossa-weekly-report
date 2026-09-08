@@ -927,7 +927,8 @@ def build_admin_report(
             m_last_cur = compute_monthly_breakdown(uid, placements_last, ccy, year - 1, to_gbp, to_usd, after_date=move_date)
             tot_this_cur = sum(m_this_cur.values())
             tot_last_cur = sum(m_last_cur.values())
-            if is_active or tot_this_cur > 0 or tot_last_cur > 0:
+            if (is_active or tot_this_cur > 0 or tot_last_cur > 0
+                    or solution_year_total((solution_entries or {}).get(uid), year)):
                 by_territory[territory].append({
                     "uid":              uid,
                     "name":             c.get("fullname", ""),
@@ -983,7 +984,11 @@ def build_admin_report(
             total_this  = sum(months_this.values())
             total_last  = sum(months_last.values())
 
-            if not is_active and total_this == 0 and total_last == 0:
+            # A leaver is dropped once their placements are out of the window —
+            # but not while they still carry Deploy & Consult revenue, or the
+            # territory's Solution Revenue silently loses it.
+            if (not is_active and total_this == 0 and total_last == 0
+                    and not solution_year_total((solution_entries or {}).get(uid), year)):
                 continue
 
             by_territory[territory].append({
