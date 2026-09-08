@@ -1165,10 +1165,17 @@ def commission_sync_run(req: func.HttpRequest) -> func.HttpResponse:
                                      mimetype="application/json", status_code=200)
 
         today = date.today()
-        # months=1,2,3 restricts a run — a backfill of a whole year can outlast
-        # the 45-second gateway limit even with the writes parallelised.
+        # months=1,2,3 restricts a run. Left unset, a scheduled run does the
+        # month that has just landed plus the one before it — enough to pick up
+        # a restatement, while a whole-year sweep would outlast the 45-second
+        # gateway limit even with the writes parallelised. A backfill is done
+        # by passing months= explicitly, a few at a time.
         months = [int(m) for m in (req.params.get("months") or "").split(",")
-                  if m.strip().isdigit()] or None
+                  if m.strip().isdigit()]
+        if not months:
+            from shared.calc import last_complete_ledger_month
+            _, newest = last_complete_ledger_month(today)
+            months = sorted({newest, 12 if newest == 1 else newest - 1})
         try:
             result = sync_year(today.year, months, commit=not preview)
             subject, text = compose_report(result)
