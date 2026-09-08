@@ -780,21 +780,28 @@ def replace_month_entries(kind: str, year: int, month: int, amounts: dict) -> di
     })
     by_user = {r.get(t["user"]): r[t["id"]] for r in existing if r.get(t["user"])}
 
-    written = 0
-    for uid, amount in amounts.items():
+    def _write(uid, amount):
         body = {t["user"]: uid, t["year"]: year, "crbb7_month": month,
                 "crbb7_amount": float(amount),
                 "crbb7_name": f"{uid} {year}-{month:02d}"[:99]}
-        rid = by_user.pop(uid, None)
+        rid = by_user.get(uid)
         if rid:
             odata_patch(f"{t['set']}({rid})", body)
         else:
             odata_post(t["set"], body)
-        written += 1
 
-    for rid in by_user.values():          # everyone the sheet no longer lists
-        odata_delete(f"{t['set']}({rid})")
-    return {"written": written, "deleted": len(by_user)}
+    stale = [rid for uid, rid in by_user.items() if uid not in amounts]
+
+    # A month is a couple of dozen records and each round trip to Dataverse is
+    # a few hundred milliseconds; run sequentially, backfilling a year breaches
+    # the Static Web Apps 45-second gateway limit long before it finishes.
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        jobs = [pool.submit(_write, uid, amount) for uid, amount in amounts.items()]
+        jobs += [pool.submit(odata_delete, f"{t['set']}({rid})") for rid in stale]
+        for job in jobs:
+            job.result()          # surface the first failure rather than swallow it
+    return {"written": len(amounts), "deleted": len(stale)}
 
 
 # ── NB-uplift qualification thresholds (crbb7_nbconfig, single row) ────────────

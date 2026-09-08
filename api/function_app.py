@@ -1165,8 +1165,12 @@ def commission_sync_run(req: func.HttpRequest) -> func.HttpResponse:
                                      mimetype="application/json", status_code=200)
 
         today = date.today()
+        # months=1,2,3 restricts a run — a backfill of a whole year can outlast
+        # the 45-second gateway limit even with the writes parallelised.
+        months = [int(m) for m in (req.params.get("months") or "").split(",")
+                  if m.strip().isdigit()] or None
         try:
-            result = sync_year(today.year, commit=not preview)
+            result = sync_year(today.year, months, commit=not preview)
             subject, text = compose_report(result)
             if preview:
                 return func.HttpResponse(json.dumps({"ok": True, "preview": True,
