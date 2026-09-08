@@ -8,6 +8,11 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 </head>
 <body>
+<script>
+  /* Applied before the page paints so the dark palette never flashes first. */
+  try { if (localStorage.getItem("saragossa-theme") === "light")
+    document.body.classList.add("theme-light"); } catch (e) {}
+</script>
 
 <header class="header">
   <img src="/logo.svg" alt="Saragossa" class="logo">
@@ -22,6 +27,7 @@
         <a href="/settings" class="menu-link">⚙ Settings</a>
       </span>
     </nav>
+    <button class="theme-toggle" id="theme-toggle" type="button">◑ Light</button>
     <a href="/.auth/logout" class="logout-link">Sign out</a>
   </div>
 </header>
@@ -41,6 +47,7 @@
 
 <div class="footer" id="footer">Saragossa · MBR beta</div>
 
+<script src="/theme.js"></script>
 <script src="/mbr.js"></script>
 </body>
 </html>

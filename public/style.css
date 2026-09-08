@@ -39,6 +39,15 @@
   --accent:   #5d8f9a;
   --green:    #4ade80;
   --red:      #f87171;
+  --panel:    #1a1a1a;
+  --deep:     #0a0a0a;
+  --hover:    rgba(255,255,255,.03);
+  --tint:     rgba(255,255,255,.02);
+  --hairline: rgba(255,255,255,.05);
+  --track:    rgba(255,255,255,.08);
+  --ok:       #35a56b;
+  --warn:     #d98b8b;
+  --disabled: #4a4a4a;
   --tab-h:    48px;
   --font:     'Aeonik Pro', -apple-system, BlinkMacSystemFont, sans-serif;
   --mono:     'SF Mono', 'Fira Code', ui-monospace, monospace;
@@ -204,11 +213,11 @@ td {
 }
 
 tbody tr:last-child td { border-bottom: none; }
-tbody tr:hover:not(.team-header) { background: rgba(255,255,255,.03); }
+tbody tr:hover:not(.team-header) { background: var(--hover); }
 
 /* Team header rows */
 tr.team-header td {
-  background: #0a0a0a;
+  background: var(--deep);
   color: var(--accent);
   font-size: 10px;
   font-weight: 700;
@@ -921,9 +930,9 @@ td.clickable-cell:hover {
 .modal-table tbody td.num { text-align: right; }
 .modal-table thead th:last-child,
 .modal-table tbody td:last-child { padding-right: 0; }
-.modal-table tbody tr { border-bottom: 1px solid rgba(255,255,255,.04); }
+.modal-table tbody tr { border-bottom: 1px solid var(--hairline); }
 .modal-table tbody tr:last-child { border-bottom: none; }
-.modal-table tbody tr:hover td { background: rgba(255,255,255,.03); }
+.modal-table tbody tr:hover td { background: var(--hover); }
 .modal-table tbody td {
   padding: 9px 16px 9px 0;
   color: var(--light);
@@ -1059,13 +1068,13 @@ tbody tr.other-row:hover td {
 .nbt-of { font-size: 0.8rem; font-weight: 400; color: var(--mid); margin-left: 6px; }
 .nbt-bar {
   height: 8px;
-  background: rgba(255,255,255,.08);
+  background: var(--track);
   border-radius: 4px;
   margin: 10px 0;
   overflow: hidden;
 }
 .nbt-bar-fill { height: 100%; background: var(--accent); border-radius: 4px; }
-.nbt-bar-hit { background: #35a56b; }
+.nbt-bar-hit { background: var(--ok); }
 .nbt-toggle {
   font-size: 11px;
   color: var(--mid);
@@ -1107,7 +1116,7 @@ tbody tr.other-row:hover td {
 }
 .nbt-client-row { cursor: pointer; }
 .nbt-caret { color: var(--accent); font-size: 8px; margin-right: 6px; }
-.nbt-detail-row > td { padding: 0 0 8px 26px !important; background: rgba(255,255,255,.02); }
+.nbt-detail-row > td { padding: 0 0 8px 26px !important; background: var(--tint); }
 table.nbt-detail { width: 100%; border-collapse: collapse; }
 table.nbt-detail th {
   font-size: 9px;
@@ -1117,7 +1126,7 @@ table.nbt-detail th {
   padding: 6px 8px;
   border-bottom: 1px solid var(--border);
 }
-table.nbt-detail td { font-size: 11px; padding: 5px 8px; border-bottom: 1px solid rgba(255,255,255,.05); }
+table.nbt-detail td { font-size: 11px; padding: 5px 8px; border-bottom: 1px solid var(--hairline); }
 tr.nbt-pl-out td { color: var(--mid); }
 .nbt-out-tag { font-size: 9px; text-transform: uppercase; letter-spacing: .06em; }
 
@@ -1125,7 +1134,7 @@ tr.nbt-pl-out td { color: var(--mid); }
 .rebate-note {
   display: block;
   font-size: 10px;
-  color: #d98b8b;
+  color: var(--warn);
   margin-top: 2px;
   font-family: var(--font);
 }
@@ -1150,8 +1159,8 @@ tr.nbt-pl-out td { color: var(--mid); }
   background: none; border: 1px solid var(--border); border-radius: 4px;
   color: var(--mid); font-size: 10px; padding: 2px 8px; cursor: pointer;
 }
-.sched-cancel:hover { color: #d98b8b; border-color: #d98b8b; }
-.sched-sent { color: #35a56b; }
+.sched-cancel:hover { color: var(--warn); border-color: var(--warn); }
+.sched-sent { color: var(--ok); }
 .sched-due { color: var(--accent); }
 .sched-default { color: var(--mid); font-style: italic; }
 
@@ -1173,8 +1182,8 @@ tr.split-total td { border-top: 1px solid var(--border); }
 }
 .menu-link:hover { color: var(--white); border-color: var(--border); }
 .menu-link.active { color: var(--white); border-color: var(--border); background: var(--surface2); }
-.menu-link.disabled { color: #4a4a4a; cursor: not-allowed; }
-.menu-link.disabled:hover { color: #4a4a4a; border-color: transparent; }
+.menu-link.disabled { color: var(--disabled); cursor: not-allowed; }
+.menu-link.disabled:hover { color: var(--disabled); border-color: transparent; }
 .beta-tag {
   font-size: 8px; text-transform: uppercase; letter-spacing: .1em;
   color: var(--accent); border: 1px solid var(--accent); border-radius: 3px;
@@ -1197,7 +1206,7 @@ tr.split-total td { border-top: 1px solid var(--border); }
 }
 .mbr-src { float: right; text-transform: none; letter-spacing: 0; color: var(--mid); font-size: 10px; }
 tr.mbr-family td {
-  background: #0a0a0a; color: var(--mid); font-size: 9px; text-transform: uppercase;
+  background: var(--deep); color: var(--mid); font-size: 9px; text-transform: uppercase;
   letter-spacing: .12em; padding: 10px 12px 6px;
 }
 tr.mbr-flagged td { background: rgba(200,168,75,.06); }
@@ -1207,7 +1216,7 @@ tr.mbr-flagged td { background: rgba(200,168,75,.06); }
   border: 1px solid var(--accent); border-radius: 3px; padding: 0 4px; margin-left: 8px;
 }
 .mbr-target-pct { font-size: 10px; color: var(--mid); margin-left: 6px; }
-tr.mbr-prompt-row td { background: rgba(255,255,255,.02); padding: 8px 14px 12px; }
+tr.mbr-prompt-row td { background: var(--tint); padding: 8px 14px 12px; }
 .mbr-prompt-q { color: var(--white); font-size: 12px; }
 .mbr-prompt-why { color: var(--mid); font-size: 10px; margin-left: 8px; }
 .mbr-prompt-answer, .mbr-field textarea {
@@ -1229,9 +1238,9 @@ tr.mbr-prompt-row td { background: rgba(255,255,255,.02); padding: 8px 14px 12px
 .action-remove, .carry-status { background: none; border: 1px solid var(--border); border-radius: 4px;
   color: var(--mid); font-size: 11px; padding: 3px 7px; cursor: pointer; }
 .carry-status { width: 100%; background: var(--surface); color: var(--white); color-scheme: dark; }
-.action-remove:hover { color: #d98b8b; border-color: #d98b8b; }
+.action-remove:hover { color: var(--warn); border-color: var(--warn); }
 .mbr-savebar { display: flex; align-items: center; gap: 14px; }
-.mbr-saved-note { font-size: 11px; color: #35a56b; }
+.mbr-saved-note { font-size: 11px; color: var(--ok); }
 
 /* MBR access grants (settings) */
 .scope-title { font-size: 10px; color: var(--mid); }
@@ -1247,7 +1256,7 @@ tr.mbr-prompt-row td { background: rgba(255,255,255,.02); padding: 8px 14px 12px
   background: none; border: 1px solid var(--border); border-radius: 4px;
   color: var(--mid); font-size: 10px; padding: 3px 8px; cursor: pointer;
 }
-.scope-remove:hover { color: #d98b8b; border-color: #d98b8b; }
+.scope-remove:hover { color: var(--warn); border-color: var(--warn); }
 .scope-msg { font-size: 11px; color: var(--mid); }
 
 /* MBR headline cards */
@@ -1269,17 +1278,17 @@ tr.mbr-prompt-row td { background: rgba(255,255,255,.02); padding: 8px 14px 12px
   font-size: 1.7rem; font-weight: 700; color: var(--white); font-variant-numeric: tabular-nums;
 }
 .mbr-card-sub { font-size: 11px; color: var(--mid); }
-.mbr-bar { display: block; height: 5px; background: rgba(255,255,255,.08); border-radius: 3px; margin-top: 7px; overflow: hidden; }
+.mbr-bar { display: block; height: 5px; background: var(--track); border-radius: 3px; margin-top: 7px; overflow: hidden; }
 .mbr-bar-fill { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
-.mbr-bar-fill.hit { background: #35a56b; }
+.mbr-bar-fill.hit { background: var(--ok); }
 
 /* ── Performance Stats (pilot) ─────────────────────────────────────────────── */
 .perf-page { padding: 22px 26px 60px; }
 .perf-head { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
 .perf-sub { font-size: 11px; color: var(--mid); }
 .perf-delta { font-size: 11px; }
-.perf-delta.pos { color: #35a56b; }
-.perf-delta.neg { color: #d98b8b; }
+.perf-delta.pos { color: var(--ok); }
+.perf-delta.neg { color: var(--warn); }
 .perf-trends { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 22px; }
 .perf-chart-title {
   font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--mid);
@@ -1313,7 +1322,7 @@ tr.mbr-prompt-row td { background: rgba(255,255,255,.02); padding: 8px 14px 12px
   font-family: var(--mono);
 }
 .oto-week:hover { color: var(--white); border-color: var(--mid); }
-.oto-week.done { color: #35a56b; border-color: rgba(53,165,110,.5); }
+.oto-week.done { color: var(--ok); border-color: rgba(53,165,110,.5); }
 .oto-week.current { background: var(--accent); border-color: var(--accent); color: #101820; font-weight: 700; }
 .oto-q-count { font-size: 10px; color: var(--mid); }
 .oto-in {
@@ -1384,7 +1393,7 @@ select.oto-in { color-scheme: dark; }
   border-radius: 6px;
   padding: 12px 14px;
   margin-bottom: 18px;
-  background: rgba(255,255,255,.02);
+  background: var(--tint);
 }
 .import-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .import-file { cursor: pointer; }
@@ -1410,7 +1419,7 @@ select.oto-in { color-scheme: dark; }
   padding: 3px 6px;
   border-radius: 4px;
   border: 1px solid var(--border);
-  background: var(--panel, #1a1a1a);
+  background: var(--panel);
   color: var(--white);
 }
 .import-hint { margin-top: 8px; }
@@ -1445,7 +1454,7 @@ select.oto-in { color-scheme: dark; }
   padding: 2px 5px;
   border-radius: 4px;
   border: 1px solid var(--border);
-  background: var(--panel, #1a1a1a);
+  background: var(--panel);
   color: var(--white);
 }
 .import-bad td { color: var(--red); }
@@ -1460,3 +1469,66 @@ select.oto-in { color-scheme: dark; }
 .import-detail[open] summary::before { content: "▾ "; }
 .import-detail summary:hover { color: var(--white); }
 .import-done { font-size: 11px; color: var(--mid); line-height: 1.7; margin-left: 16px; }
+
+/* ── Light mode ──────────────────────────────────────────────────────────────
+   Opt-in per page via <body class="theme-light">, set before first paint by the
+   inline script in 121.html / mbr.html so the dark palette never flashes first.
+   Only the tokens change: every rule above is written against them, so the two
+   themes cannot drift apart.
+
+   These pages are filled in during live 1:1 and review conversations, often on
+   a laptop in a bright meeting room, where the dark theme reads poorly. */
+
+body.theme-light {
+  --bg:       #f7f7f8;
+  --surface:  #ffffff;
+  --surface2: #f0f0f2;
+  --border:   #dcdce0;
+  --mid:      #6b6b7a;   /* passes AA on the light surface */
+  --light:    #1e1e22;   /* body text — the dark theme's "light" inverts */
+  --contrast: #5a6450;
+  --white:    #000000;   /* "strongest text", not literally white */
+  --accent:   #3f6d78;   /* darkened for contrast on white */
+  --green:    #15803d;
+  --red:      #b91c1c;
+  --panel:    #ffffff;
+  --deep:     #ececed;
+  --hover:    rgba(0,0,0,.035);
+  --tint:     rgba(0,0,0,.022);
+  --hairline: rgba(0,0,0,.07);
+  --track:    rgba(0,0,0,.10);
+  --ok:       #15803d;
+  --warn:     #b91c1c;
+  --disabled: #a6a6ad;
+}
+
+/* The logo is white artwork, so it disappears on a light ground. */
+body.theme-light .logo { filter: invert(1) brightness(.25); }
+
+/* The accent-tinted fills were built for a dark ground and wash out on white. */
+body.theme-light .feedback-btn {
+  background: linear-gradient(180deg, rgba(63,109,120,.14), rgba(63,109,120,.07));
+  color: #26525c;
+}
+body.theme-light .feedback-btn:hover {
+  background: linear-gradient(180deg, rgba(63,109,120,.24), rgba(63,109,120,.14));
+  color: #17343c;
+}
+body.theme-light .oto-week.current { color: #ffffff; }
+body.theme-light .mbr-bar-fill.hit,
+body.theme-light .nbt-bar-hit { background: var(--ok); }
+
+/* Theme toggle */
+.theme-toggle {
+  font-size: 11px;
+  color: var(--mid);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 9px;
+  cursor: pointer;
+  transition: .15s;
+  font-family: var(--font);
+  line-height: 1.5;
+}
+.theme-toggle:hover { color: var(--light); border-color: var(--contrast); }
