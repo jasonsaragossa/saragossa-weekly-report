@@ -139,6 +139,30 @@ def test_deploy_reads_repeated_headers_and_credits_the_owner():
     assert out["totals"] == {"Jake Cogzell": 1635.47, "Jono Paisley": 1043.21}
 
 
+@pytest.mark.parametrize("label", [
+    "Deal Originator", "Origination", "Origination - Cam's scheme",
+    "Origination? Client Owner?", "originator",
+])
+def test_origination_rows_are_left_out(label):
+    """A finder's credit, not the consultant's own delivered revenue."""
+    row = _deploy_row("Adam Woolley", "Bianca Barroso", 3732.48)
+    row[1] = label
+    out = parse_workbook(_book({"Deploy & Component": [
+        DEPLOY_HEADER,
+        _deploy_row("Jake Cogzell", "V M", 1000.0),
+        row,
+    ]}))
+    assert out["totals"] == {"Jake Cogzell": 1000.0}
+
+
+def test_other_labels_are_untouched():
+    for label in ("Candidate Owner", "Client Owner", "Resourcer", "Lead (>15% margin)"):
+        row = _deploy_row("Connor Newhouse", "Jacob Ramroop", 1577.41)
+        row[1] = label
+        out = parse_workbook(_book({"Deploy & Component": [DEPLOY_HEADER, row]}))
+        assert out["totals"] == {"Connor Newhouse": 1577.41}, label
+
+
 def test_uk_and_us_deploy_sheets_are_combined():
     out = parse_workbook(_book({
         "Deploy & Component":    [DEPLOY_HEADER, _deploy_row("Adam Woolley", "X", 100.0)],

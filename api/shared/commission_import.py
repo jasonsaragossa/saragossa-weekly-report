@@ -38,6 +38,12 @@ MONTHS = ("jan", "feb", "mar", "apr", "may", "jun",
           "jul", "aug", "sep", "oct", "nov", "dec")
 CONTRIBUTION = "contribution"
 CONSULTANT = "consultant"
+CONSULTANT_LABEL = "consultant label"
+# Origination is a finder's credit rather than the consultant's own delivered
+# revenue, so it is left out of the ledgers (Jason, Sep 2026). Matched as a
+# substring to catch "Deal Originator", "Origination" and the variants finance
+# writes by hand, e.g. "Origination - Cam's scheme".
+EXCLUDED_LABEL = "originat"
 # Rows that are structural rather than data
 SKIP_VALUES = {"consultant", "january commission", "february commission",
                "march commission", "april commission", "may commission",
@@ -95,6 +101,9 @@ def _rows_from_sheet(ws, allow_unnamed: bool) -> list:
         name = row[cols[CONSULTANT]] if cols.get(CONSULTANT) is not None else None
         name = str(name).strip() if name is not None else ""
         if name.lower() in SKIP_VALUES:
+            continue
+        label = row[cols[CONSULTANT_LABEL]] if cols.get(CONSULTANT_LABEL) is not None else None
+        if label and EXCLUDED_LABEL in str(label).lower():
             continue
         raw = row[cols[CONTRIBUTION]] if cols.get(CONTRIBUTION) is not None else None
         if not isinstance(raw, (int, float)) or isinstance(raw, bool):
