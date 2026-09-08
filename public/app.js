@@ -383,6 +383,7 @@ function permHeaders() {
     <th>Consultant</th>
     <th>Role</th>
     <th class="num">YTD Perm</th>
+    <th class="num" title="Deploy &amp; Consult revenue booked against this consultant">Solutions YTD</th>
     <th class="num">Written Perm</th>
     <th class="num">Year Prediction</th>
     <th class="num">Rolling 12M</th>
@@ -397,8 +398,9 @@ function nameCell(name) {
   return `<span class="nbt-link" data-who="${esc(who)}" title="New business target">${esc(name)}</span>`;
 }
 
-// YTD and Rolling 12M include Deploy & Consult revenue when there is any —
-// shown as a total, clickable for the Perm / Solution split.
+// Rolling 12M includes Deploy & Consult revenue when there is any — shown as a
+// total, clickable for the Perm / Solution split. YTD keeps the two apart in
+// columns of their own instead.
 function splitCell(m, total, permKey, solKey, label, baseLabel) {
   const sol = m[solKey] || 0;
   if (!sol) return fmt(total, m.sym);
@@ -412,7 +414,8 @@ function permRow(m) {
   return `<tr>
     <td>${nameCell(m.name)}</td>
     <td class="role-cell">${esc(m.role)}</td>
-    <td class="num">${splitCell(m, m.ytd, "perm_ytd", "solution_ytd", "YTD")}</td>
+    <td class="num">${fmt(m.perm_ytd != null ? m.perm_ytd : m.ytd, m.sym)}</td>
+    <td class="num">${m.solution_ytd ? fmt(m.solution_ytd, m.sym) : "—"}</td>
     <td class="num">${fmt(m.written, m.sym)}</td>
     <td class="num">${fmt(m.year_pred, m.sym)}</td>
     <td class="num">${splitCell(m, m.roll12, "perm_roll12", "solution_roll12", "Rolling 12M")}${rebateHtml(m)}</td>
@@ -446,7 +449,7 @@ function nbClientsHtml(m) {
 function buildPermTeamTable(groups) {
   let body = "";
   for (const g of groups) {
-    body += `<tr class="team-header"><td colspan="8">${esc(g.team)}</td></tr>`;
+    body += `<tr class="team-header"><td colspan="9">${esc(g.team)}</td></tr>`;
     body += g.members.map(permRow).join("");
   }
   return tableWrap(`<table>${permHeaders()}<tbody>${body}</tbody></table>`);
