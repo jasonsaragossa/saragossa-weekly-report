@@ -1538,3 +1538,6 @@ select.oto-in { color-scheme: var(--scheme); }
   line-height: 1.5;
 }
 .theme-toggle:hover { color: var(--light); border-color: var(--contrast); }
+
+/* "+ Add row" under the 121's editable tables */
+.oto-add { margin-top: 8px; }

@@ -118,14 +118,46 @@ function rowsTable(head, rows, empty) {
 
 // Repeating free-text tables (BD actions, meetings, actions) keep their rows in
 // a JSON array so next week can carry them forward.
-function editRows(name, saved, cols, seed) {
-  const rows = (saved && saved.length ? saved : seed || [{}, {}, {}]);
-  return rows.map((r, i) => `<tr data-row="${name}">
+// Column specs by table name, so "+ Add row" can build a matching blank row
+// later without the render having to pass them around.
+const EDIT_TABLES = {};
+
+function editRow(name, r, cols, i) {
+  return `<tr data-row="${name}">
     ${cols.map(c => c.fixed
       ? `<td class="oto-fixed">${S(r[c.key])}</td>`
       : `<td><textarea rows="1" class="oto-in" data-name="${name}" data-key="${c.key}"
            data-idx="${i}">${S(r[c.key])}</textarea></td>`).join("")}
-  </tr>`).join("");
+  </tr>`;
+}
+
+function editRows(name, saved, cols, seed) {
+  EDIT_TABLES[name] = cols;
+  const rows = (saved && saved.length ? saved : seed || [{}, {}, {}]);
+  return rows.map((r, i) => editRow(name, r, cols, i)).join("");
+}
+
+// Sits directly under its table; the click handler finds the tbody from there.
+function addRowButton(name, label) {
+  return `<button type="button" class="save-btn oto-add" data-name="${name}">+ ${label}</button>`;
+}
+
+function addRow(btn) {
+  const name = btn.dataset.name;
+  const cols = EDIT_TABLES[name];
+  const tbody = btn.previousElementSibling && btn.previousElementSibling.querySelector("tbody");
+  if (!cols || !tbody) return;
+  const empty = tbody.querySelector(".mbr-empty");
+  if (empty) empty.closest("tr").remove();
+  const idx = tbody.querySelectorAll(`tr[data-row="${name}"]`).length;
+  tbody.insertAdjacentHTML("beforeend", editRow(name, {}, cols, idx));
+  const tr = tbody.lastElementChild;
+  tr.querySelectorAll("textarea").forEach(t => {
+    autoGrow(t);
+    t.addEventListener("input", () => autoGrow(t));
+  });
+  const first = tr.querySelector("textarea");
+  if (first) first.focus();
 }
 
 function render(d) {
@@ -250,9 +282,11 @@ function render(d) {
       <h3 class="perf-col-title">Existing client</h3>
       ${rowsTable([{label:"Action last week"},{label:"Outcome"}],
         editRows("bd_existing", saved.bd_existing, [{key:"action"},{key:"outcome"}]), "")}
+      ${addRowButton("bd_existing", "Add row")}
       <h3 class="perf-col-title" style="margin-top:14px">New client</h3>
       ${rowsTable([{label:"Action last week"},{label:"Outcome"}],
         editRows("bd_new", saved.bd_new, [{key:"action"},{key:"outcome"}]), "")}
+      ${addRowButton("bd_new", "Add row")}
     </section>
 
     <section class="mbr-section">
@@ -283,6 +317,7 @@ function render(d) {
       <h2>Actions from this 1:1</h2>
       ${rowsTable([{label:"Action"},{label:"Owner"}],
         editRows("actions", saved.actions, [{key:"action"},{key:"owner"}]), "")}
+      ${addRowButton("actions", "Add action")}
       <p class="mbr-note">These carry forward to next week's "performance vs last week's actions".</p>
     </section>
 
@@ -351,6 +386,7 @@ function wireAutoGrow(root) {
     autoGrow(t);
     t.addEventListener("input", () => autoGrow(t));
   });
+  root.querySelectorAll(".oto-add").forEach(b => b.addEventListener("click", () => addRow(b)));
 }
 
 function collect(name) {
