@@ -56,39 +56,65 @@ def report_data(req: func.HttpRequest) -> func.HttpResponse:
         return err
 
     try:
+        import time
+        t0 = time.monotonic()
         today = date.today()
 
         # Date window: placements from 12 months ago through end of this year
         start = date(today.year - 1, today.month, 1).isoformat()
         end   = date(today.year, 12, 31).isoformat()
 
-        consultants     = get_active_consultants()
-        placements      = get_placements(start, end)
-        contract_pl     = get_contract_placements(start, end)
-        overrides       = get_overrides()
-        team_map        = get_team_membership_map()
-        live_contracts  = get_live_contract_placements(today.isoformat())
-        nb_thresholds   = get_nb_thresholds()
-        manual_nb       = get_manual_nb_clients()
-        try:
-            alert_state = {u: s["client_ids"] for u, s in get_nb_alert_state().items()}
-        except Exception:
-            logging.warning("report-data: could not read NB alert state")
-            alert_state = {}
-        try:
-            fx_rates = get_fx_rates()
-        except Exception:
-            logging.warning("Could not fetch live FX rates — using hardcoded fallback")
-            fx_rates = None
+        # Twelve independent reads of Dataverse. Run one after another they add
+        # up to most of the page's load time, and on a cold start they used to
+        # reach the 45-second gateway limit; none of them depends on another.
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=12) as pool:
+            futs = {
+                "consultants":      pool.submit(get_active_consultants),
+                "placements":       pool.submit(get_placements, start, end),
+                "contract_pl":      pool.submit(get_contract_placements, start, end),
+                "overrides":        pool.submit(get_overrides),
+                "team_map":         pool.submit(get_team_membership_map),
+                "live_contracts":   pool.submit(get_live_contract_placements, today.isoformat()),
+                "nb_thresholds":    pool.submit(get_nb_thresholds),
+                "manual_nb":        pool.submit(get_manual_nb_clients),
+                "alert_state":      pool.submit(get_nb_alert_state),
+                "fx_rates":         pool.submit(get_fx_rates),
+                "contract_entries": pool.submit(get_contract_entries),
+                "solution_entries": pool.submit(get_solution_entries),
+            }
+            got = {}
+            for name, fut in futs.items():
+                try:
+                    got[name] = fut.result()
+                except Exception:
+                    # FX and the alert state each have a working fallback; the
+                    # rest are load-bearing and must surface as a failure.
+                    if name not in ("fx_rates", "alert_state"):
+                        raise
+                    logging.warning("report-data: %s unavailable, using fallback", name)
+                    got[name] = None
 
-        report = build_report(consultants, placements, overrides, today, team_map,
-                              live_contracts, fx_rates, nb_thresholds, contract_pl, manual_nb,
+        fetch_ms = round((time.monotonic() - t0) * 1000)
+        alert_state = {u: s["client_ids"] for u, s in (got["alert_state"] or {}).items()}
+
+        report = build_report(got["consultants"], got["placements"], got["overrides"],
+                              today, got["team_map"], got["live_contracts"],
+                              got["fx_rates"], got["nb_thresholds"], got["contract_pl"],
+                              got["manual_nb"],
                               nb_alert_state=alert_state,
-                              contract_entries=get_contract_entries(),
-                              solution_entries=get_solution_entries())
+                              contract_entries=got["contract_entries"],
+                              solution_entries=got["solution_entries"])
 
+        total_ms = round((time.monotonic() - t0) * 1000)
+        # Where the time went, so a slow load can be diagnosed from the payload
+        # rather than guessed at: fetch is Dataverse, build is our own maths.
+        logging.info("report-data: fetch %dms, build %dms, total %dms",
+                     fetch_ms, total_ms - fetch_ms, total_ms)
         return func.HttpResponse(
-            json.dumps({"ok": True, "report": report, "as_of": today.isoformat()}),
+            json.dumps({"ok": True, "report": report, "as_of": today.isoformat(),
+                        "ms": {"fetch": fetch_ms, "build": total_ms - fetch_ms,
+                               "total": total_ms}}),
             mimetype="application/json",
             status_code=200,
         )

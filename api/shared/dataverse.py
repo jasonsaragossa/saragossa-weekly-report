@@ -194,12 +194,18 @@ def get_team_membership_map() -> dict:
         "$select": "teamid,name",
         "$filter": name_filter,
     })
+    # One query per team, so run them together — sequentially this is a dozen
+    # round trips on the critical path of every report load.
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        rosters = list(pool.map(
+            lambda t: odata_get_all(f"teams({t['teamid']})/teammembership_association",
+                                    params={"$select": "systemuserid"}),
+            teams))
+
+    # Kept in team order, so the first team to list someone still wins.
     uid_to_team = {}
-    for team in teams:
-        members = odata_get_all(
-            f"teams({team['teamid']})/teammembership_association",
-            params={"$select": "systemuserid"},
-        )
+    for team, members in zip(teams, rosters):
         for m in members:
             uid = m.get("systemuserid")
             if uid and uid not in uid_to_team:
