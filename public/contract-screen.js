@@ -34,16 +34,12 @@
         '<td class="num">' + money(r.l12, d.sym) + "</td></tr>";
     }).join("");
     if (!rows) rows = '<tr><td class="empty" colspan="4">Nothing to show yet.</td></tr>';
-    var t = d.totals || {};
+    // No team total on the wall — it is the individuals that are being shown.
     return '<section class="desk"><h2>' + esc(d.label) +
       '<span class="ccy">' + esc(d.currency) + "</span></h2>" +
       '<div class="scaler"><table><thead><tr><th>Consultant</th>' +
       '<th class="num">WNF</th><th class="num">Actual YTD Billing</th>' +
       '<th class="num">Actual Last 12M</th></tr></thead><tbody>' + rows +
-      '<tr class="total"><td>Team</td>' +
-      '<td class="num">' + money(t.wnf, d.sym) + "</td>" +
-      '<td class="num">' + money(t.ytd, d.sym) + "</td>" +
-      '<td class="num">' + money(t.l12, d.sym) + "</td></tr>" +
       "</tbody></table></div></section>";
   }
 
