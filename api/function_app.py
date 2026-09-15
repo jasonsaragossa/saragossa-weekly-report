@@ -49,77 +49,150 @@ def _bad_request(message: str) -> func.HttpResponse:
 
 # ── /api/report-data ──────────────────────────────────────────────────────────
 
+def _load_report(today: date) -> tuple:
+    """
+    Fetch everything the weekly report needs and build it.
+    Returns (report, fetch_ms, build_ms). Shared by the report page and the
+    contract screen, so the two can never disagree about a figure.
+    """
+    import time
+    t0 = time.monotonic()
+
+    # Date window: placements from 12 months ago through end of this year
+    start = date(today.year - 1, today.month, 1).isoformat()
+    end   = date(today.year, 12, 31).isoformat()
+
+    # Twelve independent reads of Dataverse. Run one after another they add
+    # up to most of the page's load time, and on a cold start they used to
+    # reach the 45-second gateway limit; none of them depends on another.
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        futs = {
+            "consultants":      pool.submit(get_active_consultants),
+            "placements":       pool.submit(get_placements, start, end),
+            "contract_pl":      pool.submit(get_contract_placements, start, end),
+            "overrides":        pool.submit(get_overrides),
+            "team_map":         pool.submit(get_team_membership_map),
+            "live_contracts":   pool.submit(get_live_contract_placements, today.isoformat()),
+            "nb_thresholds":    pool.submit(get_nb_thresholds),
+            "manual_nb":        pool.submit(get_manual_nb_clients),
+            "alert_state":      pool.submit(get_nb_alert_state),
+            "fx_rates":         pool.submit(get_fx_rates),
+            "contract_entries": pool.submit(get_contract_entries),
+            "solution_entries": pool.submit(get_solution_entries),
+        }
+        got = {}
+        for name, fut in futs.items():
+            try:
+                got[name] = fut.result()
+            except Exception:
+                # FX and the alert state each have a working fallback; the
+                # rest are load-bearing and must surface as a failure.
+                if name not in ("fx_rates", "alert_state"):
+                    raise
+                logging.warning("report: %s unavailable, using fallback", name)
+                got[name] = None
+
+    fetch_ms = round((time.monotonic() - t0) * 1000)
+    alert_state = {u: s["client_ids"] for u, s in (got["alert_state"] or {}).items()}
+
+    report = build_report(got["consultants"], got["placements"], got["overrides"],
+                          today, got["team_map"], got["live_contracts"],
+                          got["fx_rates"], got["nb_thresholds"], got["contract_pl"],
+                          got["manual_nb"],
+                          nb_alert_state=alert_state,
+                          contract_entries=got["contract_entries"],
+                          solution_entries=got["solution_entries"])
+    total_ms = round((time.monotonic() - t0) * 1000)
+    return report, fetch_ms, total_ms - fetch_ms
+
+
 @app.route(route="report-data", methods=["GET"])
 def report_data(req: func.HttpRequest) -> func.HttpResponse:
     email, err = require_auth(req)
     if err:
         return err
-
     try:
-        import time
-        t0 = time.monotonic()
         today = date.today()
-
-        # Date window: placements from 12 months ago through end of this year
-        start = date(today.year - 1, today.month, 1).isoformat()
-        end   = date(today.year, 12, 31).isoformat()
-
-        # Twelve independent reads of Dataverse. Run one after another they add
-        # up to most of the page's load time, and on a cold start they used to
-        # reach the 45-second gateway limit; none of them depends on another.
-        from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=12) as pool:
-            futs = {
-                "consultants":      pool.submit(get_active_consultants),
-                "placements":       pool.submit(get_placements, start, end),
-                "contract_pl":      pool.submit(get_contract_placements, start, end),
-                "overrides":        pool.submit(get_overrides),
-                "team_map":         pool.submit(get_team_membership_map),
-                "live_contracts":   pool.submit(get_live_contract_placements, today.isoformat()),
-                "nb_thresholds":    pool.submit(get_nb_thresholds),
-                "manual_nb":        pool.submit(get_manual_nb_clients),
-                "alert_state":      pool.submit(get_nb_alert_state),
-                "fx_rates":         pool.submit(get_fx_rates),
-                "contract_entries": pool.submit(get_contract_entries),
-                "solution_entries": pool.submit(get_solution_entries),
-            }
-            got = {}
-            for name, fut in futs.items():
-                try:
-                    got[name] = fut.result()
-                except Exception:
-                    # FX and the alert state each have a working fallback; the
-                    # rest are load-bearing and must surface as a failure.
-                    if name not in ("fx_rates", "alert_state"):
-                        raise
-                    logging.warning("report-data: %s unavailable, using fallback", name)
-                    got[name] = None
-
-        fetch_ms = round((time.monotonic() - t0) * 1000)
-        alert_state = {u: s["client_ids"] for u, s in (got["alert_state"] or {}).items()}
-
-        report = build_report(got["consultants"], got["placements"], got["overrides"],
-                              today, got["team_map"], got["live_contracts"],
-                              got["fx_rates"], got["nb_thresholds"], got["contract_pl"],
-                              got["manual_nb"],
-                              nb_alert_state=alert_state,
-                              contract_entries=got["contract_entries"],
-                              solution_entries=got["solution_entries"])
-
-        total_ms = round((time.monotonic() - t0) * 1000)
+        report, fetch_ms, build_ms = _load_report(today)
         # Where the time went, so a slow load can be diagnosed from the payload
         # rather than guessed at: fetch is Dataverse, build is our own maths.
-        logging.info("report-data: fetch %dms, build %dms, total %dms",
-                     fetch_ms, total_ms - fetch_ms, total_ms)
+        logging.info("report-data: fetch %dms, build %dms", fetch_ms, build_ms)
         return func.HttpResponse(
             json.dumps({"ok": True, "report": report, "as_of": today.isoformat(),
-                        "ms": {"fetch": fetch_ms, "build": total_ms - fetch_ms,
-                               "total": total_ms}}),
+                        "ms": {"fetch": fetch_ms, "build": build_ms,
+                               "total": fetch_ms + build_ms}}),
             mimetype="application/json",
             status_code=200,
         )
     except Exception as e:
         logging.exception("report-data error")
+        return _server_error()
+
+
+# ── /api/contract-screen (GET) — the contract desks, for a wall screen ────────
+# Shown through OneUp, which cannot sign in, so the route is anonymous and
+# guarded by a key carried in the screen's own URL. The figures are the weekly
+# report's, cached for a few minutes so a screen polling every five does not
+# rebuild the whole report each time.
+
+_SCREEN_CACHE = {"at": 0.0, "body": None}
+_SCREEN_TTL_S = 300
+
+
+@app.route(route="contract-screen", methods=["GET"])
+def contract_screen(req: func.HttpRequest) -> func.HttpResponse:
+    import hmac, time
+    expected = os.environ.get("SCREEN_KEY") or ""
+    supplied = req.params.get("key") or req.headers.get("x-screen-key") or ""
+    if not expected or not hmac.compare_digest(expected, supplied):
+        return func.HttpResponse("Forbidden", status_code=403)
+    try:
+        now = time.monotonic()
+        if _SCREEN_CACHE["body"] and now - _SCREEN_CACHE["at"] < _SCREEN_TTL_S:
+            return func.HttpResponse(_SCREEN_CACHE["body"],
+                                     mimetype="application/json", status_code=200)
+
+        today = date.today()
+        report, _, _ = _load_report(today)
+
+        def desk(territory, label):
+            tdata = report.get(territory) or {}
+            members = (tdata.get("members") or []) if tdata.get("type") == "flat" else \
+                      [m for g in tdata.get("groups", []) for m in g["members"]]
+            rows = []
+            for m in members:
+                if str(m["uid"]).endswith("__hist"):
+                    continue
+                wnf = m.get("wnf") or 0
+                ytd = m.get("margin_ytd") or 0
+                l12 = m.get("contract_last12m") or 0
+                # Support staff sit in these territories too; a row of zeros
+                # on a wall screen is noise rather than information.
+                if not (wnf or ytd or l12):
+                    continue
+                rows.append({"name": m.get("name"), "wnf": round(wnf, 2),
+                             "ytd": round(ytd, 2), "l12": round(l12, 2)})
+            rows.sort(key=lambda r: -r["ytd"])
+            return {
+                "label": label,
+                "currency": "GBP" if territory == "London Contract" else "USD",
+                "sym": "£" if territory == "London Contract" else "$",
+                "rows": rows,
+                "totals": {k: round(sum(r[k] for r in rows), 2) for k in ("wnf", "ytd", "l12")},
+            }
+
+        body = json.dumps({
+            "ok": True,
+            "as_of": today.isoformat(),
+            "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "desks": [desk("London Contract", "Contract UK"),
+                      desk("Chicago Contract", "Contract USA")],
+        })
+        _SCREEN_CACHE.update(at=now, body=body)
+        return func.HttpResponse(body, mimetype="application/json", status_code=200)
+    except Exception:
+        logging.exception("contract-screen error")
         return _server_error()
 
 

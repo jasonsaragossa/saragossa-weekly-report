@@ -35,6 +35,46 @@
       "allowedRoles": ["anonymous"]
     },
     {
+      "comment": "Wall screen shown through OneUp, which cannot sign in — the page carries a key in its URL and the API checks it against SCREEN_KEY. Framing is allowed so OneUp can embed it.",
+      "route": "/contract-screen",
+      "allowedRoles": ["anonymous"],
+      "headers": {
+        "X-Frame-Options": "ALLOWALL",
+        "Content-Security-Policy": "frame-ancestors *",
+        "Cache-Control": "no-cache"
+      }
+    },
+    {
+      "route": "/contract-screen.html",
+      "allowedRoles": ["anonymous"],
+      "headers": {
+        "X-Frame-Options": "ALLOWALL",
+        "Content-Security-Policy": "frame-ancestors *",
+        "Cache-Control": "no-cache"
+      }
+    },
+    {
+      "route": "/contract-screen.js",
+      "allowedRoles": ["anonymous"]
+    },
+    {
+      "route": "/api/contract-screen",
+      "allowedRoles": ["anonymous"]
+    },
+    {
+      "comment": "Brand assets the wall screen needs before anyone has signed in",
+      "route": "/logo.svg",
+      "allowedRoles": ["anonymous"]
+    },
+    {
+      "route": "/favicon.svg",
+      "allowedRoles": ["anonymous"]
+    },
+    {
+      "route": "/fonts/*",
+      "allowedRoles": ["anonymous"]
+    },
+    {
       "route": "/api/*",
       "allowedRoles": ["authenticated"]
     },

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contract — Saragossa</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <style>
+    /* Self-contained: this page is framed by OneUp on a wall screen and must not
+       depend on the app's stylesheet, theme toggle or sign-in. Dark only. */
+    @font-face { font-family: 'Aeonik Pro'; font-weight: 400; font-display: swap;
+      src: url('/fonts/AeonikPro-Regular.woff2') format('woff2'); }
+    @font-face { font-family: 'Aeonik Pro'; font-weight: 500; font-display: swap;
+      src: url('/fonts/AeonikPro-Medium.woff2') format('woff2'); }
+
+    :root {
+      --bg: #0b0b0c; --panel: #151516; --border: #2a2a2b;
+      --mid: #8a8a99; --light: #d6d7db; --white: #fff; --accent: #5d8f9a;
+      --font: 'Aeonik Pro', -apple-system, BlinkMacSystemFont, sans-serif;
+      --mono: 'SF Mono', 'Fira Code', ui-monospace, monospace;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: var(--bg); color: var(--light);
+      font-family: var(--font); overflow: hidden; }
+
+    .wrap { height: 100%; display: flex; flex-direction: column; padding: 2.2vh 2.4vw; }
+
+    .top { display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 1.6vh; }
+    .logo { height: 4.2vh; }
+    .stamp { font-size: 1.6vh; color: var(--mid); letter-spacing: .08em;
+      text-transform: uppercase; text-align: right; line-height: 1.5; }
+    .stamp strong { color: var(--light); font-weight: 500; }
+
+    .desks { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 2.4vw; min-height: 0; }
+    .desk { background: var(--panel); border: 1px solid var(--border); border-radius: 1.2vh;
+      padding: 2.2vh 2vw; display: flex; flex-direction: column; min-height: 0; }
+    .desk h2 { font-size: 2.6vh; font-weight: 500; color: var(--white); letter-spacing: .02em;
+      display: flex; align-items: baseline; gap: 1vw; margin-bottom: 1.4vh; }
+    .desk h2 .ccy { font-size: 1.6vh; color: var(--accent); letter-spacing: .12em;
+      text-transform: uppercase; font-weight: 400; }
+
+    .scaler { flex: 1; min-height: 0; overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; transform-origin: top left; }
+    th { text-align: left; font-size: 1.5vh; font-weight: 500; color: var(--mid);
+      text-transform: uppercase; letter-spacing: .1em; padding: 0 0 1.2vh;
+      border-bottom: 1px solid var(--border); white-space: nowrap; }
+    td { padding: 1.35vh 0; border-bottom: 1px solid var(--border); font-size: 2.3vh;
+      color: var(--light); white-space: nowrap; }
+    th.num, td.num { text-align: right; font-family: var(--mono);
+      font-variant-numeric: tabular-nums; }
+    td.num { color: var(--white); }
+    tr.total td { border-bottom: none; border-top: 2px solid var(--accent);
+      padding-top: 1.6vh; font-weight: 500; }
+    tr.total td:first-child { color: var(--accent); text-transform: uppercase;
+      letter-spacing: .1em; font-size: 1.7vh; }
+    td.empty { color: var(--mid); font-size: 1.9vh; padding: 3vh 0; }
+
+    .err { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+      background: var(--bg); color: var(--mid); font-size: 2.4vh; text-align: center;
+      padding: 4vw; line-height: 1.6; }
+    .err.show { display: flex; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <img src="/logo.svg" alt="Saragossa" class="logo">
+    <div class="stamp">Contract · <strong id="asof">—</strong><br><span id="updated"></span></div>
+  </div>
+  <div class="desks" id="desks"></div>
+</div>
+<div class="err" id="err"></div>
+<script src="/contract-screen.js"></script>
+</body>
+</html>
