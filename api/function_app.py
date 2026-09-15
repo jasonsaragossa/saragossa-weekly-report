@@ -812,17 +812,29 @@ def one_to_one(req: func.HttpRequest) -> func.HttpResponse:
                     "next_job", "bd_existing", "bd_new", "meetings_last_outcome",
                     "meetings_this_plan", "mbr_progress", "priority_resourcing",
                     "priority_bd", "support_needed")
-            upsert_one_to_one(uid, wk.isoformat(),
-                              {k: (body or {}).get(k) for k in keep})
+            from shared.ai_readiness import latest_score
+            payload = {k: (body or {}).get(k) for k in keep}
+            # The AI Readiness score is captured on the FIRST save and kept, so
+            # the record shows the score that was discussed rather than drifting
+            # every time someone corrects a typo. A failed fetch stores nothing,
+            # leaving a later save free to capture it.
+            existing = get_one_to_one(uid, wk.isoformat()) or {}
+            payload["ai_readiness"] = existing.get("ai_readiness") or latest_score(uid)
+            upsert_one_to_one(uid, wk.isoformat(), payload)
             return func.HttpResponse(json.dumps({"ok": True}),
                                      mimetype="application/json", status_code=200)
 
         from datetime import timedelta as _td
+        from shared.ai_readiness import for_display, latest_score
         derived = build_one_to_one(uid, wk)
         saved = get_one_to_one(uid, wk.isoformat())
         prev = get_one_to_one(uid, (wk - _td(days=7)).isoformat())
+        # Saved records show the score as it was; an unsaved one shows today's.
+        frozen = (saved or {}).get("ai_readiness")
+        ai = for_display(frozen, live=False) if frozen else for_display(latest_score(uid), live=True)
         return func.HttpResponse(json.dumps({
             "ok": True, "is_lead": is_lead,
+            "ai_readiness": ai,
             "person": {"uid": uid, "name": person.get("fullname", "")},
             "people": [{"uid": p["systemuserid"], "name": p.get("fullname", "")} for p in people],
             "input_rows": [{"key": k, "label": l} for k, l in INPUT_ROWS],
@@ -975,8 +987,16 @@ def mbr(req: func.HttpRequest) -> func.HttpResponse:
                                      mimetype="application/json", status_code=400)
 
         if req.method == "POST":
+            from shared.ai_readiness import month_score
             payload = {k: (body or {}).get(k) for k in
                        ("positives", "improve", "aspirations", "support", "actions", "commentary")}
+            existing = get_mbr(uid, year, month) or {}
+            # Carry over what a save must not lose: the Claude prompts already
+            # generated for this month (or every save would bill another call),
+            # and the AI Readiness score, captured on the first save and kept.
+            if existing.get("prompt_cache"):
+                payload["prompt_cache"] = existing["prompt_cache"]
+            payload["ai_readiness"] = existing.get("ai_readiness") or month_score(uid, year, month)
             upsert_mbr(uid, year, month, payload, (body or {}).get("status") or "draft")
             return func.HttpResponse(json.dumps({"ok": True}),
                                      mimetype="application/json", status_code=200)
@@ -985,11 +1005,20 @@ def mbr(req: func.HttpRequest) -> func.HttpResponse:
         from shared.mbr_prompts import generate_prompts, pick_flagged
         from shared.mbr_registry import DEFAULT_TARGETS
 
+        from shared.ai_readiness import for_display, month_score
+
         data    = build_mbr_metrics(uid, year, month)
         targets = {**DEFAULT_TARGETS, **(get_mbr_targets(uid).get(uid) or {})}
         saved   = get_mbr(uid, year, month)
         ly, lm  = previous_month(year, month)
         last    = get_mbr(uid, ly, lm)
+
+        # This month's score: as saved, or live until it is. Last month's comes
+        # only from its own saved MBR — nothing is fetched for the past.
+        frozen = (saved or {}).get("ai_readiness")
+        ai = (for_display(frozen, live=False) if frozen
+              else for_display(month_score(uid, year, month), live=True))
+        ai_prev = for_display((last or {}).get("ai_readiness"), live=False)
 
         flagged = pick_flagged(data["metrics"], targets)
         # Reuse the prompts already generated for this month unless the flagged
@@ -1021,6 +1050,7 @@ def mbr(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(json.dumps({
             "ok": True, "person": {"uid": uid, "name": person.get("fullname", "")},
             **data, "targets": targets, "saved": saved,
+            "ai_readiness": ai, "ai_readiness_prev": ai_prev,
             "carried_actions": (last or {}).get("actions") or [],
             "flagged": [f["key"] for f in flagged],
             **{k: v for k, v in prompts.items()

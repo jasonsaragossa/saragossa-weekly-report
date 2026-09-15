@@ -149,6 +149,14 @@ function render(d) {
   const money = (v) => sym + Math.round(v || 0).toLocaleString("en-GB");
   const headline = `
     <section class="mbr-headline">
+      <div class="mbr-card mbr-card-ai">
+        <span class="mbr-card-label">AI Readiness — ${new Date(d.month + "-01T00:00:00").toLocaleDateString("en-GB", { month: "long" })} average</span>
+        <span class="mbr-card-value">${aiReadinessHtml(d.ai_readiness, { prev: d.ai_readiness_prev,
+          why: "no score for this month" })}</span>
+        <span class="mbr-card-sub dim">${d.ai_readiness_prev && d.ai_readiness_prev.score != null
+          ? `last month ${Math.round(d.ai_readiness_prev.score)}`
+          : "no saved score for last month"}</span>
+      </div>
       <div class="mbr-card">
         <span class="mbr-card-label">Perm Revenue — ${new Date().getFullYear() === Number(d.month.slice(0, 4)) ? "this year" : d.month.slice(0, 4)} to date</span>
         <span class="mbr-card-value">${money(ytd.revenue)}</span>
@@ -320,4 +328,26 @@ function showError(msg) {
 function esc(s) {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+// AI Readiness score as a pill: the number, its colour band, and whether it is
+// live (unsaved record) or the figure frozen when the record was first saved.
+function aiReadinessHtml(ai, opts) {
+  opts = opts || {};
+  if (!ai || ai.score == null) {
+    return `<span class="ai-pill ai-none" title="No AI Readiness score${opts.why ? " — " + esc(opts.why) : ""}">
+      <span class="ai-label">AI Readiness</span><span class="ai-score">—</span></span>`;
+  }
+  const when = ai.live
+    ? "live — captured when this is first saved"
+    : "as saved" + (ai.captured ? " " + new Date(ai.captured).toLocaleDateString("en-GB",
+        { day: "numeric", month: "short" }) : "");
+  const delta = opts.prev && opts.prev.score != null
+    ? ` <span class="ai-delta ${ai.score - opts.prev.score >= 0 ? "pos" : "neg"}">${
+        ai.score - opts.prev.score >= 0 ? "+" : ""}${Math.round((ai.score - opts.prev.score) * 10) / 10}</span>`
+    : "";
+  return `<span class="ai-pill ai-${esc(ai.band || "none")}" title="0–100, higher is better. ${esc(when)}">
+    <span class="ai-label">AI Readiness</span>
+    <span class="ai-score">${Math.round(ai.score)}</span>${delta}
+    <span class="ai-when">${ai.live ? "live" : "saved"}</span></span>`;
 }

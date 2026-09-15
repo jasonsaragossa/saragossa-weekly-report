@@ -1550,3 +1550,26 @@ select.oto-in { color-scheme: var(--scheme); }
 .screen-link-note { font-size: 10px; color: var(--mid); margin-left: 4px; }
 .screen-link-url { flex: 1; min-width: 320px; font-family: var(--mono); font-size: 11px; }
 .screen-link a.clear-btn { text-decoration: none; }
+
+/* ── AI Readiness score pill (121s and MBRs) ─────────────────────────────── */
+.ai-pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 4px 10px 4px 12px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface);
+  font-size: 11px; white-space: nowrap;
+}
+.ai-label { color: var(--mid); text-transform: uppercase; letter-spacing: .08em; font-size: 10px; }
+.ai-score { font-family: var(--mono); font-size: 15px; font-weight: 500; color: var(--white); }
+.ai-when  { font-size: 9px; color: var(--mid); text-transform: uppercase; letter-spacing: .08em; }
+.ai-delta { font-family: var(--mono); font-size: 11px; }
+.ai-delta.pos { color: var(--ok); }
+.ai-delta.neg { color: var(--warn); }
+/* The band lives on the score itself, the app's own thresholds: <50, 50–74, ≥75 */
+.ai-red   .ai-score { color: var(--warn); }
+.ai-amber .ai-score { color: #d9b24b; }
+.ai-green .ai-score { color: var(--ok); }
+.ai-none  .ai-score { color: var(--mid); }
+.oto-quarter .ai-pill { margin-left: 6px; }
+.mbr-card-ai .mbr-card-value { display: block; margin: 4px 0 2px; }
+.mbr-card-ai .ai-pill { font-size: 12px; padding: 6px 12px 6px 14px; }
+.mbr-card-ai .ai-score { font-size: 22px; }

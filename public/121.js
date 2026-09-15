@@ -109,6 +109,29 @@ async function load() {
 
 const S = (v) => esc(v || "");
 
+// AI Readiness score as a pill: the number, its colour band, and whether it is
+// live (unsaved record) or the figure frozen when the record was first saved.
+function aiReadinessHtml(ai, opts) {
+  opts = opts || {};
+  if (!ai || ai.score == null) {
+    return `<span class="ai-pill ai-none" title="No AI Readiness score${opts.why ? " — " + esc(opts.why) : ""}">
+      <span class="ai-label">AI Readiness</span><span class="ai-score">—</span></span>`;
+  }
+  const when = ai.live
+    ? "live — captured when this is first saved"
+    : "as saved" + (ai.captured ? " " + new Date(ai.captured).toLocaleDateString("en-GB",
+        { day: "numeric", month: "short" }) : "");
+  const delta = opts.prev && opts.prev.score != null
+    ? ` <span class="ai-delta ${ai.score - opts.prev.score >= 0 ? "pos" : "neg"}">${
+        ai.score - opts.prev.score >= 0 ? "+" : ""}${Math.round((ai.score - opts.prev.score) * 10) / 10}</span>`
+    : "";
+  return `<span class="ai-pill ai-${esc(ai.band || "none")}" title="0–100, higher is better. ${esc(when)}">
+    <span class="ai-label">AI Readiness</span>
+    <span class="ai-score">${Math.round(ai.score)}</span>${delta}
+    <span class="ai-when">${ai.live ? "live" : "saved"}</span></span>`;
+}
+
+
 function rowsTable(head, rows, empty) {
   return `<div class="table-wrap"><table><thead><tr>${head.map(h =>
     `<th${h.num ? ' class="num"' : ""}>${h.label}</th>`).join("")}</tr></thead>
@@ -242,6 +265,7 @@ function render(d) {
         }).join("")}
       </div>
       <button class="oto-nav" data-week="${esc(q.next || "")}" title="Later weeks">›</button>
+      ${aiReadinessHtml(d.ai_readiness, { why: "nothing captured for this person yet" })}
       <span class="oto-q-count">${(q.weeks || []).filter(w => done.has(w)).length} of ${(q.weeks || []).length} completed</span>
     </section>`;
 
