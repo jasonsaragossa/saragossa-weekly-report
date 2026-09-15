@@ -164,13 +164,16 @@ def contract_screen(req: func.HttpRequest) -> func.HttpResponse:
             for m in members:
                 if str(m["uid"]).endswith("__hist"):
                     continue
+                # Everyone on the desk is shown, zeros included — a new starter
+                # belongs on the wall with the team. Directors are not, and
+                # the house accounts are not people.
+                if "director" in (m.get("role") or "").lower():
+                    continue
+                if (m.get("name") or "").lower().startswith("saragossa house"):
+                    continue
                 wnf = m.get("wnf") or 0
                 ytd = m.get("margin_ytd") or 0
                 l12 = m.get("contract_last12m") or 0
-                # Support staff sit in these territories too; a row of zeros
-                # on a wall screen is noise rather than information.
-                if not (wnf or ytd or l12):
-                    continue
                 rows.append({"name": m.get("name"), "wnf": round(wnf, 2),
                              "ytd": round(ytd, 2), "l12": round(l12, 2)})
             rows.sort(key=lambda r: -r["ytd"])
@@ -1202,6 +1205,30 @@ def promotion_data(req: func.HttpRequest) -> func.HttpResponse:
     except Exception:
         logging.exception("promotion-data error")
         return _server_error()
+
+
+# ── /api/screen-links (GET) — the wall-screen URLs, for the admin page ────────
+# The key lives only in app settings; this is the one place it is handed out,
+# and only to an admin, so a screen can be set up without anyone digging in
+# the Azure portal.
+
+@app.route(route="screen-links", methods=["GET"])
+def screen_links(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_admin(req)
+    if err:
+        return err
+    key = os.environ.get("SCREEN_KEY") or ""
+    base = (os.environ.get("PUBLIC_BASE_URL") or "https://weeklyreport.saragossa.io").rstrip("/")
+    if not key:
+        return func.HttpResponse(json.dumps({"ok": False, "error": "SCREEN_KEY is not set"}),
+                                 mimetype="application/json", status_code=200)
+    from urllib.parse import quote
+    q = quote(key, safe="")
+    return func.HttpResponse(json.dumps({"ok": True, "links": [
+        {"label": "Contract UK",  "note": "GBP",  "url": f"{base}/contract-screen?desk=uk&key={q}"},
+        {"label": "Contract USA", "note": "USD",  "url": f"{base}/contract-screen?desk=usa&key={q}"},
+        {"label": "Both desks",   "note": "side by side", "url": f"{base}/contract-screen?key={q}"},
+    ]}), mimetype="application/json", status_code=200)
 
 
 # ── /api/commission-sync (POST) — pull the workbooks from SharePoint ──────────

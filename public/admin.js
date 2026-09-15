@@ -296,7 +296,7 @@ function contractEntryMonths() {
 }
 
 function buildContractEntrySection() {
-  return buildLedgerSection({
+  const section = buildLedgerSection({
     territories: CONTRACT_ENTRY_TERRITORIES,
     dataKey:     "contract_entries",
     endpoint:    "/api/contract-entries",
@@ -310,6 +310,37 @@ function buildContractEntrySection() {
       "Analytics figures stay perm-only — the ledger feeds the weekly report contract columns alone.",
     footnote: "Saved figures reach the weekly report's contract columns on its next load.",
   });
+  section.appendChild(buildScreenLinks());
+  return section;
+}
+
+// The wall-screen URLs for OneUp. Fetched on demand: the key is only ever
+// handed to an admin, and only here.
+function buildScreenLinks() {
+  const box = document.createElement("div");
+  box.className = "screen-links";
+  box.innerHTML = `<h3 class="hpb-subheading">Wall screens</h3>
+    <p class="settings-desc">Paste one of these into OneUp. Each shows WNF, Actual YTD Billing and
+      Actual Last 12M for that desk, in its own currency, refreshing itself every five minutes.
+      The link carries its key, so treat it like a password — anyone holding it can see the figures.</p>
+    <div class="screen-links-list"><span class="settings-desc">Loading…</span></div>`;
+  const list = box.querySelector(".screen-links-list");
+  fetch("/api/screen-links").then(r => r.json()).then(d => {
+    if (!d.ok) { list.innerHTML = `<span class="import-warn">${esc(d.error || "unavailable")}</span>`; return; }
+    list.innerHTML = d.links.map(l => `
+      <div class="screen-link">
+        <span class="screen-link-label">${esc(l.label)} <span class="screen-link-note">${esc(l.note)}</span></span>
+        <input class="contract-input screen-link-url" readonly value="${esc(l.url)}">
+        <button class="save-btn screen-link-copy" data-url="${esc(l.url)}">Copy</button>
+        <a class="clear-btn" href="${esc(l.url)}" target="_blank" rel="noopener">Open</a>
+      </div>`).join("");
+    list.querySelectorAll(".screen-link-copy").forEach(b => b.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(b.dataset.url); b.textContent = "Copied ✓"; }
+      catch (_) { b.previousElementSibling.select(); b.textContent = "Select & copy"; }
+      setTimeout(() => { b.textContent = "Copy"; }, 2000);
+    }));
+  }).catch(() => { list.innerHTML = `<span class="import-warn">Could not load the links.</span>`; });
+  return box;
 }
 
 function buildSolutionEntrySection() {

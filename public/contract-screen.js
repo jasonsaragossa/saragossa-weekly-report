@@ -8,7 +8,10 @@
  */
 (function () {
   var REFRESH_MS = 5 * 60 * 1000;
-  var key = new URLSearchParams(location.search).get("key") || "";
+  var params = new URLSearchParams(location.search);
+  var key = params.get("key") || "";
+  // ?desk=uk or ?desk=usa shows one desk full-width; nothing shows both.
+  var only = { uk: "Contract UK", usa: "Contract USA" }[(params.get("desk") || "").toLowerCase()];
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -62,7 +65,10 @@
   }
 
   function render(data) {
-    document.getElementById("desks").innerHTML = data.desks.map(desk).join("");
+    var desks = only ? data.desks.filter(function (d) { return d.label === only; }) : data.desks;
+    var el = document.getElementById("desks");
+    el.classList.toggle("single", desks.length === 1);
+    el.innerHTML = desks.map(desk).join("");
     var asOf = new Date(data.as_of + "T00:00:00");
     document.getElementById("asof").textContent =
       asOf.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });

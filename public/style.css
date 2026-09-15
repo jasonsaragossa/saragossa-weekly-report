@@ -1541,3 +1541,12 @@ select.oto-in { color-scheme: var(--scheme); }
 
 /* "+ Add row" under the 121's editable tables */
 .oto-add { margin-top: 8px; }
+
+/* Wall-screen links on the Contract Entry tab */
+.screen-links { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--border); }
+.screen-links-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.screen-link { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.screen-link-label { min-width: 130px; font-size: 12px; color: var(--white); }
+.screen-link-note { font-size: 10px; color: var(--mid); margin-left: 4px; }
+.screen-link-url { flex: 1; min-width: 320px; font-family: var(--mono); font-size: 11px; }
+.screen-link a.clear-btn { text-decoration: none; }
