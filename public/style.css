@@ -1573,3 +1573,14 @@ select.oto-in { color-scheme: var(--scheme); }
 .mbr-card-ai .mbr-card-value { display: block; margin: 4px 0 2px; }
 .mbr-card-ai .ai-pill { font-size: 12px; padding: 6px 12px 6px 14px; }
 .mbr-card-ai .ai-score { font-size: 22px; }
+
+/* ── Contract USA 1:1 ────────────────────────────────────────────────────── */
+.oto-two { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(260px, 1fr); gap: 18px; align-items: start; }
+.oto-cards { display: grid; gap: 10px; }
+.oto-cards .mbr-card { padding: 12px 14px; }
+.oto-num { text-align: right; font-family: var(--mono); }
+.oto-kind { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--mid);
+  border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px; white-space: nowrap; }
+.oto-kind.nb { color: var(--accent); border-color: var(--accent); }
+.oto-drill[data-fig] { cursor: pointer; border-bottom: 1px dotted var(--accent); }
+@media (max-width: 900px) { .oto-two { grid-template-columns: 1fr; } }

@@ -90,7 +90,9 @@ async function load() {
   const uid = document.getElementById("oto-person").value;
   const week = document.getElementById("oto-week").value;
   try {
-    const qs = (uid ? `uid=${encodeURIComponent(uid)}&` : "") + `week=${encodeURIComponent(week)}`;
+    const qs = (uid ? `uid=${encodeURIComponent(uid)}&` : "")
+      + (currentTemplate ? `template=${encodeURIComponent(currentTemplate)}&` : "")
+      + `week=${encodeURIComponent(week)}`;
     const resp = await fetch(`/api/one-to-one?${qs}`);
     if (resp.status === 401) { window.location.href = "/.auth/login/aad"; return; }
     const d = await resp.json();
@@ -147,7 +149,8 @@ const EDIT_TABLES = {};
 
 function editRow(name, r, cols, i) {
   return `<tr data-row="${name}">
-    ${cols.map(c => c.fixed
+    ${cols.map(c => c.render ? `<td>${c.render(i, r)}</td>`
+      : c.fixed
       ? `<td class="oto-fixed">${S(r[c.key])}</td>`
       : `<td><textarea rows="1" class="oto-in" data-name="${name}" data-key="${c.key}"
            data-idx="${i}">${S(r[c.key])}</textarea></td>`).join("")}
@@ -183,7 +186,30 @@ function addRow(btn) {
   if (first) first.focus();
 }
 
-function render(d) {
+// A quarter's worth of 1:1s on one strip — click a week to open it. Shared
+// by every template.
+function quarterStrip(d) {
+  const q = d.quarter || { weeks: [], completed: [] };
+  const done = new Set(q.completed || []);
+  return `
+    <section class="oto-quarter">
+      <button class="oto-nav" data-week="${esc(q.prev || "")}" title="Earlier weeks">‹</button>
+      <span class="oto-q-label">${esc(q.label || "")}</span>
+      <div class="oto-weeks">
+        ${(q.weeks || []).map(w => {
+          const dt = new Date(w + "T00:00:00");
+          const cls = [w === d.week_start ? "current" : "", done.has(w) ? "done" : ""].join(" ").trim();
+          return `<button class="oto-week ${cls}" data-week="${w}"
+            title="${done.has(w) ? "1:1 saved" : "not yet completed"}">${dt.getDate()}/${dt.getMonth() + 1}</button>`;
+        }).join("")}
+      </div>
+      <button class="oto-nav" data-week="${esc(q.next || "")}" title="Later weeks">›</button>
+      ${aiReadinessHtml(d.ai_readiness, { why: "nothing captured for this person yet" })}
+      <span class="oto-q-count">${(q.weeks || []).filter(w => done.has(w)).length} of ${(q.weeks || []).length} completed</span>
+    </section>`;
+}
+
+function renderPerm(d) {
   const saved = d.saved || {};
   const lw = d.last_week, mo = d.month;
 
@@ -249,25 +275,7 @@ function render(d) {
         data-idx="${i}">${S((saved.mbr_progress || [])[i]?.progress)}</textarea></td>
     </tr>`).join("");
 
-  // A quarter's worth of 1:1s on one strip — click a week to open it
-  const q = d.quarter || { weeks: [], completed: [] };
-  const done = new Set(q.completed || []);
-  const strip = `
-    <section class="oto-quarter">
-      <button class="oto-nav" data-week="${esc(q.prev || "")}" title="Earlier weeks">‹</button>
-      <span class="oto-q-label">${esc(q.label || "")}</span>
-      <div class="oto-weeks">
-        ${(q.weeks || []).map(w => {
-          const dt = new Date(w + "T00:00:00");
-          const cls = [w === d.week_start ? "current" : "", done.has(w) ? "done" : ""].join(" ").trim();
-          return `<button class="oto-week ${cls}" data-week="${w}"
-            title="${done.has(w) ? "1:1 saved" : "not yet completed"}">${dt.getDate()}/${dt.getMonth() + 1}</button>`;
-        }).join("")}
-      </div>
-      <button class="oto-nav" data-week="${esc(q.next || "")}" title="Later weeks">›</button>
-      ${aiReadinessHtml(d.ai_readiness, { why: "nothing captured for this person yet" })}
-      <span class="oto-q-count">${(q.weeks || []).filter(w => done.has(w)).length} of ${(q.weeks || []).length} completed</span>
-    </section>`;
+  const strip = quarterStrip(d);
 
   document.getElementById("oto-content").innerHTML = strip + `
     <section class="mbr-section">
@@ -350,20 +358,21 @@ function render(d) {
       <span class="mbr-saved-note" id="oto-saved"></span>
     </div>`;
 
-  document.getElementById("oto-save").addEventListener("click", save);
-  document.querySelectorAll(".oto-week, .oto-nav").forEach(b => b.addEventListener("click", () => {
-    if (!b.dataset.week) return;
-    document.getElementById("oto-week").value = b.dataset.week;
-    load();
-  }));
-  wireAutoGrow(document.getElementById("oto-content"));
-  document.querySelectorAll(".oto-drill").forEach(el => el.addEventListener("click", () =>
+  wireCommon();
+  document.querySelectorAll(".oto-drill[data-key]").forEach(el => el.addEventListener("click", () =>
     showDetail(el.dataset.label, el.dataset.period,
                ((data.detail || {})[el.dataset.period] || {})[el.dataset.key] || [])));
 }
 
 // Every key input drills down to the records behind the count
-function showDetail(label, period, rows) {
+function showModal(title, html) {
+  const overlay = otoModal();
+  overlay.querySelector("#oto-modal-title").textContent = title;
+  overlay.querySelector("#oto-modal-body").innerHTML = html;
+  overlay.style.display = "flex";
+}
+
+function otoModal() {
   let overlay = document.getElementById("oto-modal");
   if (!overlay) {
     overlay = document.createElement("div");
@@ -382,6 +391,11 @@ function showDetail(label, period, rows) {
     overlay.querySelector("#oto-modal-close").addEventListener("click",
       () => { overlay.style.display = "none"; });
   }
+  return overlay;
+}
+
+function showDetail(label, period, rows) {
+  const overlay = otoModal();
   const when = period === "last_week" ? "last week" : "month to date";
   overlay.querySelector("#oto-modal-title").textContent = `${label} — ${when} (${rows.length})`;
   overlay.querySelector("#oto-modal-body").innerHTML = rows.length ? `
@@ -422,12 +436,13 @@ function collect(name) {
   return Object.keys(byIdx).sort((a, b) => a - b).map(i => byIdx[i]);
 }
 
-async function save() {
+async function savePerm() {
   const btn = document.getElementById("oto-save");
   btn.disabled = true; btn.textContent = "Saving…";
   const payload = {
     uid: document.getElementById("oto-person").value,
     week: document.getElementById("oto-week").value,
+    template: currentTemplate,
     carried_review: collect("carried_review"),
     live_job_notes: collect("live_job_notes"),
     bd_existing: collect("bd_existing").filter(r => r.action || r.outcome),
@@ -463,4 +478,245 @@ function showError(msg) {
 function esc(s) {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+// ── Templates ────────────────────────────────────────────────────────────────
+// Which questions a team gets is decided server-side (shared/oto_templates.py);
+// the page just renders the kind it is handed. Someone who can see more than
+// one template — an admin — gets a switch in the toolbar.
+
+let currentTemplate = "";
+
+function templateSwitch(d) {
+  const host = document.getElementById("oto-template-host");
+  if (!host) return;
+  currentTemplate = d.template.id;
+  if ((d.templates || []).length < 2) { host.innerHTML = ""; return; }
+  host.innerHTML = `<label class="mbr-ctl">Team <select id="oto-template">${
+    d.templates.map(t => `<option value="${esc(t.id)}"${t.id === d.template.id ? " selected" : ""}>${esc(t.name)}</option>`).join("")
+  }</select></label>`;
+  document.getElementById("oto-template").addEventListener("change", (e) => {
+    currentTemplate = e.target.value;
+    // A different team means a different roster — rebuild the person list.
+    document.getElementById("oto-person").innerHTML = "";
+    load();
+  });
+}
+
+function render(d) {
+  templateSwitch(d);
+  if (d.template && d.template.kind === "contract") renderContract(d);
+  else renderPerm(d);
+}
+
+function wireCommon() {
+  document.getElementById("oto-save").addEventListener("click", save);
+  document.querySelectorAll(".oto-week, .oto-nav").forEach(b => b.addEventListener("click", () => {
+    if (!b.dataset.week) return;
+    document.getElementById("oto-week").value = b.dataset.week;
+    load();
+  }));
+  // wireAutoGrow also binds the "+ Add row" buttons.
+  wireAutoGrow(document.getElementById("oto-content"));
+}
+
+function save() {
+  return (data && data.template && data.template.kind === "contract") ? saveContract() : savePerm();
+}
+
+// ── Contract USA ─────────────────────────────────────────────────────────────
+// Jim Jeffers' desk (Sep 2026). Measured on contractors rather than deals:
+// placements and the weekly margin they added, starters and finishers with
+// attrition, current WNFI, then the judgement calls — committed business,
+// placement chances, blocked roles and this week's client meetings.
+
+const usd = (n) => "$" + Math.round(n || 0).toLocaleString("en-GB");
+const num = (n) => (n == null ? "—" : (Number.isInteger(n) ? n : n.toFixed(2)));
+const pct = (n) => (n == null ? "—" : n + "%");
+
+function contractDrill(f, period) {
+  const rows = f["detail_" + period] || [];
+  return rows.length
+    ? `<span class="oto-drill" data-fig="${esc(f.key)}" data-period="${period}">${
+        f.money ? usd(f[period]) : num(f[period])}</span>`
+    : (f.money ? usd(f[period]) : num(f[period]));
+}
+
+function showContractDetail(f, period) {
+  const rows = f["detail_" + period] || [];
+  const body = rows.map(r => `<tr>
+      <td>${esc(r.client)}</td><td>${esc(r.role)}</td>
+      <td class="num">${esc(r.start)}</td><td class="num">${esc(r.end)}</td>
+      <td class="num">${usd(r.wnfi)}</td><td class="num dim">${r.share}</td></tr>`).join("");
+  showModal(`${f.label} — ${period === "week" ? "this week" : "this month"}`,
+    `<div class="table-wrap"><table>
+      <thead><tr><th>Client</th><th>Role</th><th class="num">Start</th><th class="num">End</th>
+        <th class="num">WNFI (share)</th><th class="num">Split</th></tr></thead>
+      <tbody>${body}</tbody></table></div>`);
+}
+
+function renderContract(d) {
+  const saved = d.saved || {};
+  const byId = (name) => Object.fromEntries((saved[name] || []).map(r => [r.id, r]));
+  const committed = byId("committed"), chances = byId("chances_week"), plans = byId("meeting_plans");
+
+  const figRows = d.figures.map(f => `<tr>
+      <td>${esc(f.label)}${f.note ? `<span class="oto-meta">${esc(f.note)}</span>` : ""}</td>
+      <td class="num"><strong>${contractDrill(f, "week")}</strong></td>
+      <td class="num dim">${contractDrill(f, "month")}</td>
+    </tr>`).join("");
+
+  const a = d.attrition || {};
+  const jobs = d.live_jobs || [];
+  const jobRow = (j, i, extra) => `<tr data-row="${extra.name}">
+      <td>${esc(j.client)}</td>
+      <td>${esc(j.job)}<span class="oto-meta">${j.cvs_out} CVs out</span>
+        <input type="hidden" class="oto-in" data-name="${extra.name}" data-key="id" data-idx="${i}" value="${esc(j.id)}"></td>
+      ${extra.cells(i, j)}
+    </tr>`;
+  const ta = (name, key, i, val, ph) =>
+    `<textarea rows="1" class="oto-in" data-name="${name}" data-key="${key}" data-idx="${i}"
+       placeholder="${esc(ph || "")}">${S(val)}</textarea>`;
+  const nin = (name, key, i, val, w) =>
+    `<input type="number" class="oto-in oto-num" data-name="${name}" data-key="${key}" data-idx="${i}"
+       value="${S(val)}" min="0" style="width:${w || 64}px">`;
+
+  const committedRows = jobs.map((j, i) => jobRow(j, i, { name: "committed",
+    cells: (i) => `<td>${ta("committed", "note", i, (committed[j.id] || {}).note, "What is committed, and where it stands")}</td>` }));
+  const chanceRows = jobs.map((j, i) => jobRow(j, i, { name: "chances_week",
+    cells: (i) => {
+      const c = chances[j.id] || {};
+      return `<td class="num">${nin("chances_week", "week", i, c.week)}</td>
+        <td class="num">${nin("chances_week", "month", i, c.month)}</td>
+        <td class="num">${nin("chances_week", "pct", i, c.pct, 58)}<span class="dim"> %</span></td>
+        <td>${ta("chances_week", "note", i, c.note, "Why, and what needs to happen")}</td>`;
+    } }));
+
+  const jobOptions = (sel) => `<option value="">— pick a role —</option>` + jobs.map(j =>
+    `<option value="${esc(j.id)}"${j.id === sel ? " selected" : ""}>${esc(j.client)} — ${esc(j.job)}</option>`).join("");
+  // Registered so "+ Add role" can build a matching row later.
+  EDIT_TABLES["blocks"] = [
+    { key: "role_id", render: (i, r) => `<select class="oto-in" data-name="blocks" data-key="role_id"
+        data-idx="${i}">${jobOptions((r || {}).role_id)}</select>` },
+    { key: "block", render: (i, r) => ta("blocks", "block", i, (r || {}).block, "What is blocking it") },
+    { key: "steps", render: (i, r) => ta("blocks", "steps", i, (r || {}).steps, "Steps taken so far") },
+  ];
+  const blockRows = ((saved.blocks && saved.blocks.length) ? saved.blocks : [{}])
+    .map((r, i) => editRow("blocks", r, EDIT_TABLES["blocks"], i)).join("");
+
+  const meetingRows = (d.meetings || []).map((m, i) => `<tr>
+      <td>${esc(m.contact || "")}<span class="oto-meta">${esc(m.job_title || "")}</span></td>
+      <td>${esc(m.client || "")}</td>
+      <td>${esc(m.subject || "")}<span class="oto-meta">${esc(m.when || "")}</span></td>
+      <td><span class="oto-kind ${m.kind === "New business" ? "nb" : ""}">${esc(m.kind)}</span></td>
+      <td>${ta("meeting_plans", "plan", i, (plans[m.id] || {}).plan, "Actions / expectations")}
+        <input type="hidden" class="oto-in" data-name="meeting_plans" data-key="id" data-idx="${i}" value="${esc(m.id)}"></td>
+    </tr>`).join("");
+
+  const carried = d.carried_actions || [];
+  const carriedRows = carried.map((a, i) => `<tr>
+      <td class="oto-fixed">${S(a.action)}</td>
+      <td class="oto-fixed dim">${S(a.owner)}</td>
+    </tr>`).join("");
+
+  document.getElementById("oto-content").innerHTML = quarterStrip(d) + `
+    <section class="mbr-section">
+      <h2>Key figures</h2>
+      <div class="oto-two">
+        <div>
+          ${rowsTable([{label:""}, {label:"This week", num:true}, {label:esc(d.month_label), num:true}], figRows, "")}
+          <p class="mbr-note">Click a figure to see the contractors behind it. Placements and WNFI are split-credited; starters and finishers count whole, and include anyone due to start or finish later this month.</p>
+        </div>
+        <div class="oto-cards">
+          <div class="mbr-card"><span class="mbr-card-label">Current WNFI</span>
+            <span class="mbr-card-value">${usd(d.current_wnfi)}</span>
+            <span class="mbr-card-sub dim">${(d.live_contracts || []).length} live contractors, your share per week</span></div>
+          <div class="mbr-card"><span class="mbr-card-label">Attrition — ${esc(d.month_label)}</span>
+            <span class="mbr-card-value">${pct(a.month)}</span>
+            <span class="mbr-card-sub dim">${a.month_finishers} finished of ${a.month_base} live at the start</span></div>
+          <div class="mbr-card"><span class="mbr-card-label">Attrition — rolling 12 months</span>
+            <span class="mbr-card-value">${pct(a.rolling_12m)}</span>
+            <span class="mbr-card-sub dim">${a.rolling_finishers} finished of ${a.rolling_base} live a year ago</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="mbr-section">
+      <h2>Committed business being worked this week</h2>
+      ${rowsTable([{label:"Client"}, {label:"Role"}, {label:"What is committed"}], committedRows,
+        "No live vacancies — nothing to commit against.")}
+    </section>
+
+    <section class="mbr-section">
+      <h2>Placement chances</h2>
+      ${rowsTable([{label:"Client"}, {label:"Role"}, {label:"This week", num:true}, {label:"This month", num:true},
+        {label:"Confidence", num:true}, {label:"Notes"}], chanceRows, "No live vacancies.")}
+      <h3 class="perf-col-title" style="margin-top:14px">Other placement predictions</h3>
+      <textarea rows="1" class="oto-in" id="f-chances_other" placeholder="Anything not tied to a live role above">${S(saved.chances_other)}</textarea>
+    </section>
+
+    <section class="mbr-section">
+      <h2>Roles with potential blocks</h2>
+      ${rowsTable([{label:"Role"}, {label:"The block"}, {label:"Steps taken so far"}], blockRows, "")}
+      ${addRowButton("blocks", "Add role")}
+    </section>
+
+    <section class="mbr-section">
+      <h2>Client meetings scheduled this week</h2>
+      ${rowsTable([{label:"Who"}, {label:"Client"}, {label:"Meeting"}, {label:"Type"}, {label:"Actions / expectations"}],
+        meetingRows, "No client meetings in Mercury for this week.")}
+    </section>
+
+    <section class="mbr-section">
+      <h2>Last week's actions</h2>
+      ${rowsTable([{label:"Action"}, {label:"Owner"}], carriedRows, "No actions carried forward.")}
+    </section>
+
+    <section class="mbr-section">
+      <h2>Actions from this 1:1</h2>
+      ${rowsTable([{label:"Action"}, {label:"Owner"}],
+        editRows("actions", saved.actions, [{key:"action"}, {key:"owner"}]), "")}
+      ${addRowButton("actions", "Add action")}
+      <p class="mbr-note">These carry forward to next week.</p>
+    </section>
+
+    <div class="mbr-savebar">
+      <button class="save-btn" id="oto-save">Save 1:1</button>
+      <span class="mbr-saved-note" id="oto-saved"></span>
+    </div>`;
+
+  wireCommon();
+  const figs = Object.fromEntries(d.figures.map(f => [f.key, f]));
+  document.querySelectorAll(".oto-drill[data-fig]").forEach(el => el.addEventListener("click", () =>
+    showContractDetail(figs[el.dataset.fig], el.dataset.period)));
+}
+
+async function saveContract() {
+  const btn = document.getElementById("oto-save");
+  btn.disabled = true; btn.textContent = "Saving…";
+  const payload = {
+    uid: document.getElementById("oto-person").value,
+    week: document.getElementById("oto-week").value,
+    template: currentTemplate,
+    committed: collect("committed").filter(r => r.note),
+    chances_week: collect("chances_week").filter(r => r.week || r.month || r.pct || r.note),
+    chances_other: document.getElementById("f-chances_other").value,
+    blocks: collect("blocks").filter(r => r.role_id || r.block || r.steps),
+    meeting_plans: collect("meeting_plans").filter(r => r.plan),
+    actions: collect("actions").filter(r => r.action),
+  };
+  try {
+    const resp = await fetch("/api/one-to-one", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const d = await resp.json();
+    if (!d.ok) throw new Error(d.error || "unknown error");
+    document.getElementById("oto-saved").textContent =
+      "Saved " + new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+    load();
+  } catch (e) {
+    alert("Could not save: " + e.message);
+  }
+  btn.disabled = false; btn.textContent = "Save 1:1";
 }

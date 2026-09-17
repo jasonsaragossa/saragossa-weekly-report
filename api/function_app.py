@@ -747,31 +747,25 @@ def feedback(req: func.HttpRequest) -> func.HttpResponse:
 
 
 # ── Weekly 1:1 (pilot — Team Snoz) ────────────────────────────────────────────
-# Consultants see their own; the team lead sees the team. Limited to one team
-# while it is a pilot, so the roster is a constant rather than a settings screen.
+# ── /api/one-to-one — weekly 1:1s ─────────────────────────────────────────────
+# Which team gets which questions, and who may see whom, lives in
+# shared/oto_templates.py. This endpoint resolves the caller's templates,
+# builds the derived half for the chosen one, and stores the typed half.
 
-ONE_TO_ONE_TEAM = "Team Snoz"
-ONE_TO_ONE_LEADS = {"harrysnozwell@saragossa.io", "jason@saragossa.io"}
+# Sees every template and every person. Kept explicit rather than tied to the
+# general admin rule (any Director), which would put Harry's team's 1:1s in
+# front of every director in the business.
+ONE_TO_ONE_ADMINS = {"jason@saragossa.io"}
 
-
-def _one_to_one_people(email: str):
-    """(people, is_lead) — the pilot team, or just yourself if you're in it."""
-    from shared.dataverse import odata_get_all, odata_str
-    teams = odata_get_all("teams", params={
-        "$select": "teamid", "$filter": f"name eq '{odata_str(ONE_TO_ONE_TEAM)}'"})
-    if not teams:
-        return [], False
-    members = [m for m in odata_get_all(
-        f"teams({teams[0]['teamid']})/teammembership_association",
-        params={"$select": "systemuserid,fullname,internalemailaddress,isdisabled"})
-        if not m.get("isdisabled")]
-    members.sort(key=lambda m: m.get("fullname") or "")
-    lead = (email or "").lower() in ONE_TO_ONE_LEADS
-    if lead:
-        return members, True
-    me = [m for m in members
-          if (m.get("internalemailaddress") or "").lower() == (email or "").lower()]
-    return me, False
+# What each template's save keeps — the typed half, nothing derived.
+_OTO_KEEP = {
+    "perm": ("actions", "live_job_notes", "resourcing_priority", "next_placement",
+             "next_job", "bd_existing", "bd_new", "meetings_last_outcome",
+             "meetings_this_plan", "mbr_progress", "priority_resourcing",
+             "priority_bd", "support_needed"),
+    "contract": ("actions", "committed", "chances_week", "chances_month",
+                 "chances_other", "blocks", "meeting_plans"),
+}
 
 
 @app.route(route="one-to-one", methods=["GET", "POST"])
@@ -782,16 +776,23 @@ def one_to_one(req: func.HttpRequest) -> func.HttpResponse:
     from shared.dataverse import (get_one_to_one, upsert_one_to_one, list_one_to_one_weeks,
                                   get_latest_mbr_actions, is_guid)
     from shared.oneonone import build_one_to_one, week_start, quarter_weeks, INPUT_ROWS
+    from shared.oneonone_contract import build_contract_one_to_one
+    from shared.oto_templates import templates_for
     try:
         body = req.get_json() if req.method == "POST" else {}
     except ValueError:
         body = {}
     try:
-        people, is_lead = _one_to_one_people(email)
-        if not people:
+        is_admin_user = (email or "").lower() in ONE_TO_ONE_ADMINS
+        templates = templates_for(email, is_admin_user)
+        if not templates:
             return func.HttpResponse(
-                json.dumps({"ok": False, "error": "The 1:1 pilot is limited to Team Snoz."}),
+                json.dumps({"ok": False, "error": "You are not on a team that uses 1:1s yet."}),
                 mimetype="application/json", status_code=403)
+
+        wanted = (req.params.get("template") or (body or {}).get("template") or "").strip()
+        tpl = next((t for t in templates if t["id"] == wanted), None) or templates[0]
+        people, is_lead = tpl["people"], tpl["is_lead"]
 
         uid = (req.params.get("uid") or (body or {}).get("uid")
                or people[0]["systemuserid"]).strip()
@@ -800,20 +801,17 @@ def one_to_one(req: func.HttpRequest) -> func.HttpResponse:
             return func.HttpResponse(json.dumps({"ok": False, "error": "forbidden"}),
                                      mimetype="application/json", status_code=403)
 
-        raw_week = (req.params.get("week") or (body or {}).get("week") or "").strip()
+        raw = req.params.get("week") or (body or {}).get("week")
         try:
-            wk = week_start(date.fromisoformat(raw_week)) if raw_week else week_start(date.today())
+            wk = week_start(date.fromisoformat(raw)) if raw else week_start(date.today())
         except ValueError:
             return func.HttpResponse(json.dumps({"ok": False, "error": "bad week"}),
                                      mimetype="application/json", status_code=400)
 
         if req.method == "POST":
-            keep = ("actions", "live_job_notes", "resourcing_priority", "next_placement",
-                    "next_job", "bd_existing", "bd_new", "meetings_last_outcome",
-                    "meetings_this_plan", "mbr_progress", "priority_resourcing",
-                    "priority_bd", "support_needed")
             from shared.ai_readiness import latest_score
-            payload = {k: (body or {}).get(k) for k in keep}
+            payload = {k: (body or {}).get(k) for k in _OTO_KEEP[tpl["kind"]]}
+            payload["template"] = tpl["id"]
             # The AI Readiness score is captured on the FIRST save and kept, so
             # the record shows the score that was discussed rather than drifting
             # every time someone corrects a typo. A failed fetch stores nothing,
@@ -826,14 +824,18 @@ def one_to_one(req: func.HttpRequest) -> func.HttpResponse:
 
         from datetime import timedelta as _td
         from shared.ai_readiness import for_display, latest_score
-        derived = build_one_to_one(uid, wk)
+        derived = (build_contract_one_to_one(uid, wk) if tpl["kind"] == "contract"
+                   else build_one_to_one(uid, wk))
         saved = get_one_to_one(uid, wk.isoformat())
         prev = get_one_to_one(uid, (wk - _td(days=7)).isoformat())
         # Saved records show the score as it was; an unsaved one shows today's.
         frozen = (saved or {}).get("ai_readiness")
         ai = for_display(frozen, live=False) if frozen else for_display(latest_score(uid), live=True)
         return func.HttpResponse(json.dumps({
-            "ok": True, "is_lead": is_lead,
+            "ok": True, "is_lead": is_lead, "is_admin": is_admin_user,
+            "template": {"id": tpl["id"], "name": tpl["name"], "kind": tpl["kind"]},
+            # Every template this person can see, so the page can offer a switch
+            "templates": [{"id": t["id"], "name": t["name"], "kind": t["kind"]} for t in templates],
             "ai_readiness": ai,
             "person": {"uid": uid, "name": person.get("fullname", "")},
             "people": [{"uid": p["systemuserid"], "name": p.get("fullname", "")} for p in people],
