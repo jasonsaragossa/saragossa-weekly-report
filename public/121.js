@@ -582,7 +582,7 @@ function renderContract(d) {
        value="${S(val)}" min="0" style="width:${w || 64}px">`;
 
   const committedRows = jobs.map((j, i) => jobRow(j, i, { name: "committed",
-    cells: (i) => `<td>${ta("committed", "note", i, (committed[j.id] || {}).note, "What is committed, and where it stands")}</td>` }));
+    cells: (i) => `<td>${ta("committed", "note", i, (committed[j.id] || {}).note, "What is committed, and where it stands")}</td>` })).join("");
   const chanceRows = jobs.map((j, i) => jobRow(j, i, { name: "chances_week",
     cells: (i) => {
       const c = chances[j.id] || {};
@@ -590,7 +590,7 @@ function renderContract(d) {
         <td class="num">${nin("chances_week", "month", i, c.month)}</td>
         <td class="num">${nin("chances_week", "pct", i, c.pct, 58)}<span class="dim"> %</span></td>
         <td>${ta("chances_week", "note", i, c.note, "Why, and what needs to happen")}</td>`;
-    } }));
+    } })).join("");
 
   const jobOptions = (sel) => `<option value="">— pick a role —</option>` + jobs.map(j =>
     `<option value="${esc(j.id)}"${j.id === sel ? " selected" : ""}>${esc(j.client)} — ${esc(j.job)}</option>`).join("");
@@ -636,7 +636,7 @@ function renderContract(d) {
             <span class="mbr-card-sub dim">${a.month_finishers} finished of ${a.month_base} live at the start</span></div>
           <div class="mbr-card"><span class="mbr-card-label">Attrition — rolling 12 months</span>
             <span class="mbr-card-value">${pct(a.rolling_12m)}</span>
-            <span class="mbr-card-sub dim">${a.rolling_finishers} finished of ${a.rolling_base} live a year ago</span></div>
+            <span class="mbr-card-sub dim">${a.rolling_finishers} finished of ${a.rolling_base} live at any point in the year</span></div>
         </div>
       </div>
     </section>

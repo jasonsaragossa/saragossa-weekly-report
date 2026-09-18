@@ -13,8 +13,11 @@ people, so they count whole.
   WNFI added              their weekly margin, split-credited, in USD
   Starters in month       start date in the month, not cancelled
   Finishers in month      effective end in the month, started, no extension
-  Attrition               finishers ÷ contractors live at the start of the
-                          period — for the month and for the rolling 12 months
+  Attrition               month: finishers ÷ contractors live at the start
+                          rolling 12m: finishers ÷ every contractor live at
+                          ANY point in the year (Jason, Sep 2026) — a year-old
+                          snapshot would miss everyone who both started and
+                          finished inside it, most of a contract desk's churn
   Current WNFI            the weekly report's WNF figure for the person
   Client meetings         appointments this week, new business vs process
 """
@@ -156,14 +159,28 @@ def build_contract_one_to_one(uid: str, week: date = None) -> dict:
         return round(sum((p.get("recruit_trueweeklygrossprofit") or 0) * split_factor(p, uid)
                          for p in rows), 2)
 
-    def attrition(finishers, base):
-        return round(len(finishers) / len(base) * 100, 1) if base else None
+    def attrition(finishers, base_count):
+        return round(len(finishers) / base_count * 100, 1) if base_count else None
+
+    def live_during(start, end):
+        """Distinct contractors on the books at any point in [start, end).
+        A contract and its extension are one contractor."""
+        roots = set()
+        for p in contracts:
+            if _cancelled(p):
+                continue
+            s, e = _d(p.get("crimson_startdate")), _effective_end(p)
+            if s and e and s < end and e >= start:
+                roots.add(p.get("_mercury_parentplacementid_value") if _is_extension(p)
+                          else p["crimson_placementid"])
+        return len(roots)
 
     placed_w, placed_m = created_in(week, next_week), created_in(m_start, m_end)
     start_w, start_m = starters_in(week, next_week), starters_in(m_start, m_end)
     fin_w, fin_m = finishers_in(week, next_week), finishers_in(m_start, m_end)
     fin_12 = finishers_in(r12_start, m_end)
-    base_m, base_12 = live_at(m_start), live_at(r12_start)
+    base_m = len(live_at(m_start))
+    base_12 = live_during(r12_start, m_end)
 
     # USD is the desk's currency; the live-contract WNF helper handles the FX.
     to_usd = _build_fx_tables(r["fx"])[1] if r["fx"] else TO_USD
@@ -199,10 +216,11 @@ def build_contract_one_to_one(uid: str, week: date = None) -> dict:
         ],
         "attrition": {
             "month": attrition(fin_m, base_m), "month_finishers": len(fin_m),
-            "month_base": len(base_m),
+            "month_base": base_m,
             "rolling_12m": attrition(fin_12, base_12), "rolling_finishers": len(fin_12),
-            "rolling_base": len(base_12),
-            "definition": "finishers without extension ÷ contractors live at the start of the period",
+            "rolling_base": base_12,
+            "definition": ("month: finishers without extension ÷ live at the start of the month; "
+                           "rolling 12m: ÷ every contractor live at any point in the year"),
         },
         "current_wnfi": current_wnfi,
         "live_contracts": rows(live_at(today + timedelta(days=1))),

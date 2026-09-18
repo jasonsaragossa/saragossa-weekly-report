@@ -99,9 +99,28 @@ def test_attrition_is_finishers_over_those_live_at_the_start():
     # Live at 1 Sep: finisher, extended, live  → 3; one finished → 33.3%
     assert a["month_base"] == 3 and a["month_finishers"] == 1
     assert a["month"] == pytest.approx(33.3, abs=0.1)
-    # Live at 1 Sep 2025: finisher, extended, old-finisher → 3; two finished since
-    assert a["rolling_base"] == 3 and a["rolling_finishers"] == 2
-    assert a["rolling_12m"] == pytest.approx(66.7, abs=0.1)
+    # Rolling year: everyone live at ANY point Sep 25–Sep 26 — finisher,
+    # extended (+ its extension, one contractor), live, old-finisher,
+    # new-month → 5; two finished
+    assert a["rolling_finishers"] == 2
+    assert a["rolling_base"] == 5
+    assert a["rolling_12m"] == pytest.approx(40.0, abs=0.1)
+
+
+def test_rolling_attrition_is_not_inflated_by_turnover_inside_the_year(monkeypatch):
+    """
+    A desk with one contractor a year ago that has since placed and finished
+    six more is not at 600% attrition: all seven were live during the year,
+    six left → 85.7%. It can never exceed 100%.
+    """
+    churn = [P("anchor", "2025-01-01", "2025-01-06", "2027-01-01")]
+    for i in range(6):
+        churn.append(P(f"c{i}", f"2025-{10 + i // 3:02d}-01", f"2025-{10 + i // 3:02d}-06",
+                       f"2026-0{1 + i:d}-20"))
+    monkeypatch.setattr(C, "_contracts", lambda uid, since: churn)
+    a = C.build_contract_one_to_one(ME, WEEK)["attrition"]
+    assert a["rolling_finishers"] == 6 and a["rolling_base"] == 7
+    assert a["rolling_12m"] == pytest.approx(85.7, abs=0.1)
 
 
 def test_no_base_means_no_rate_rather_than_a_crash(monkeypatch):
