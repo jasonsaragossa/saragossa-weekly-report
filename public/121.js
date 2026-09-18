@@ -569,7 +569,8 @@ function renderContract(d) {
   const a = d.attrition || {};
   const jobs = d.live_jobs || [];
   const jobRow = (j, i, extra) => `<tr data-row="${extra.name}">
-      <td>${esc(j.client)}</td>
+      <td>${esc(j.client)}${j.client_via_contact
+        ? `<span class="oto-meta" title="The vacancy has a contact but no client account in Mercury — company taken from the contact">via contact · fix in Mercury</span>` : ""}</td>
       <td>${esc(j.job)}<span class="oto-meta">${j.grade ? "Grade " + esc(j.grade) + " · " : ""}${j.cvs_out} CVs out</span>
         <input type="hidden" class="oto-in" data-name="${extra.name}" data-key="id" data-idx="${i}" value="${esc(j.id)}"></td>
       ${extra.cells(i, j)}

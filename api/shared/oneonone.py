@@ -245,18 +245,41 @@ def _live_jobs(uid: str, grades: tuple = None) -> list:
             f"_mercury_vacancytype_value eq '{VACANCY_GRADES[g]}'" for g in grades) + ")"
     rows = odata_get_all("crimson_vacancies", params={
         "$select": ("crimson_vacancyid,crimson_jobtitle,crimson_name,statuscode,"
-                    "mercury_priority,createdon,_mercury_vacancytype_value"),
+                    "mercury_priority,createdon,_mercury_vacancytype_value,"
+                    "_crimson_clientcontact_value"),
         "$filter": filt,
         "$expand": "crimson_clientid($select=name)",
     })
+    # A vacancy can be saved with a client contact but no client account (one
+    # live one is, as of Sep 2026). The contact's company is the next best
+    # thing — shown flagged, so the record gets fixed rather than hidden.
+    orphaned = [v for v in rows if not (v.get("crimson_clientid") or {}).get("name")
+                and v.get("_crimson_clientcontact_value")]
+    via_contact = {}
+    if orphaned:
+        ids = " or ".join(f"contactid eq '{v['_crimson_clientcontact_value']}'" for v in orphaned)
+        for c in odata_get_all("contacts", params={
+                "$select": "contactid", "$filter": ids,
+                "$expand": "parentcustomerid_account($select=name)"}):
+            name = (c.get("parentcustomerid_account") or {}).get("name")
+            if name:
+                via_contact[c["contactid"]] = name
     # Newest job first (Jason, Sept 2026). The Mercury priority field is unset
     # across the board, so ordering by it would be arbitrary; it's still shown
     # on the row for the jobs where someone has set it.
     live = [v for v in rows if v.get("statuscode") not in CLOSED_VACANCY_STATUS]
     live.sort(key=lambda v: v.get("createdon") or "", reverse=True)
     cvs = _live_cvs_by_job(uid, [v["crimson_vacancyid"] for v in live])
+    def client_of(v):
+        name = (v.get("crimson_clientid") or {}).get("name")
+        if name:
+            return name, False
+        fallback = via_contact.get(v.get("_crimson_clientcontact_value"))
+        return (fallback or "(no client on vacancy)"), bool(fallback)
+
     return [{
-        "client":   (v.get("crimson_clientid") or {}).get("name") or "(client)",
+        "client":   client_of(v)[0],
+        "client_via_contact": client_of(v)[1],
         "job":      v.get("crimson_jobtitle") or v.get("crimson_name") or "",
         "priority": PRIORITY_LABEL.get(v.get("mercury_priority"), "—"),
         "grade":    _GRADE_BY_ID.get(v.get("_mercury_vacancytype_value"), ""),
