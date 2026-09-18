@@ -113,7 +113,7 @@ def build_contract_one_to_one(uid: str, week: date = None) -> dict:
             "live":      pool.submit(get_live_contract_placements, today.isoformat()),
             "fx":        pool.submit(get_fx_rates),
             "meetings":  pool.submit(_activities, "appointments", "scheduledstart", uid, week, next_week),
-            "jobs":      pool.submit(_live_jobs, uid),
+            "jobs":      pool.submit(_live_jobs, uid, ("A", "B", "C", "O")),   # graded roles only
         }
         r = {}
         for k, v in f.items():

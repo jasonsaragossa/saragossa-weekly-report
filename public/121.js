@@ -570,7 +570,7 @@ function renderContract(d) {
   const jobs = d.live_jobs || [];
   const jobRow = (j, i, extra) => `<tr data-row="${extra.name}">
       <td>${esc(j.client)}</td>
-      <td>${esc(j.job)}<span class="oto-meta">${j.cvs_out} CVs out</span>
+      <td>${esc(j.job)}<span class="oto-meta">${j.grade ? "Grade " + esc(j.grade) + " · " : ""}${j.cvs_out} CVs out</span>
         <input type="hidden" class="oto-in" data-name="${extra.name}" data-key="id" data-idx="${i}" value="${esc(j.id)}"></td>
       ${extra.cells(i, j)}
     </tr>`;
@@ -593,7 +593,7 @@ function renderContract(d) {
     } })).join("");
 
   const jobOptions = (sel) => `<option value="">— pick a role —</option>` + jobs.map(j =>
-    `<option value="${esc(j.id)}"${j.id === sel ? " selected" : ""}>${esc(j.client)} — ${esc(j.job)}</option>`).join("");
+    `<option value="${esc(j.id)}"${j.id === sel ? " selected" : ""}>${esc(j.client)} — ${esc(j.job)}${j.grade ? " (" + esc(j.grade) + ")" : ""}</option>`).join("");
   // Registered so "+ Add role" can build a matching row later.
   EDIT_TABLES["blocks"] = [
     { key: "role_id", render: (i, r) => `<select class="oto-in" data-name="blocks" data-key="role_id"

@@ -221,13 +221,32 @@ def _live_cvs_by_job(uid: str, vacancy_ids: list) -> dict:
     return out
 
 
-def _live_jobs(uid: str) -> list:
-    """Any active vacancy where this person is the delivery owner (Jason, Sept 2026)."""
+# Vacancy grades, held on the vacancy as a "type". The contract desk works
+# only its graded roles: Grade F alone outnumbers A+B+C on that desk nearly
+# three to one, and would swamp every list built from live vacancies.
+VACANCY_GRADES = {
+    "A": "6973f0fc-9a50-ee11-be6f-0022481b503e",
+    "B": "6b73f0fc-9a50-ee11-be6f-0022481b503e",
+    "C": "6d73f0fc-9a50-ee11-be6f-0022481b503e",
+    "F": "758d799d-96c6-ee11-9079-002248c7244c",
+    "P": "ee8d799d-96c6-ee11-9079-002248c7244c",
+    "O": "14edf4cb-038a-ef11-8a69-7c1e5264b0c2",
+}
+
+
+def _live_jobs(uid: str, grades: tuple = None) -> list:
+    """
+    Any active vacancy where this person is the delivery owner (Jason, Sept
+    2026). `grades` restricts to those vacancy grades, e.g. ("A", "B", "C", "O").
+    """
+    filt = f"_crimson_deliveryownerid_value eq '{odata_str(uid)}' and statecode eq 0"
+    if grades:
+        filt += " and (" + " or ".join(
+            f"_mercury_vacancytype_value eq '{VACANCY_GRADES[g]}'" for g in grades) + ")"
     rows = odata_get_all("crimson_vacancies", params={
         "$select": ("crimson_vacancyid,crimson_jobtitle,crimson_name,statuscode,"
-                    "mercury_priority,createdon"),
-        "$filter": (f"_crimson_deliveryownerid_value eq '{odata_str(uid)}'"
-                    f" and statecode eq 0"),
+                    "mercury_priority,createdon,_mercury_vacancytype_value"),
+        "$filter": filt,
         "$expand": "crimson_clientid($select=name)",
     })
     # Newest job first (Jason, Sept 2026). The Mercury priority field is unset
@@ -240,9 +259,13 @@ def _live_jobs(uid: str) -> list:
         "client":   (v.get("crimson_clientid") or {}).get("name") or "(client)",
         "job":      v.get("crimson_jobtitle") or v.get("crimson_name") or "",
         "priority": PRIORITY_LABEL.get(v.get("mercury_priority"), "—"),
+        "grade":    _GRADE_BY_ID.get(v.get("_mercury_vacancytype_value"), ""),
         "cvs_out":  cvs.get(v["crimson_vacancyid"], 0),
         "id":       v["crimson_vacancyid"],
     } for v in live]
+
+
+_GRADE_BY_ID = {v: k for k, v in VACANCY_GRADES.items()}
 
 
 def _count(rows, purposes):

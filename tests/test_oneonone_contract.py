@@ -57,7 +57,10 @@ def fake_sources(monkeypatch):
     monkeypatch.setattr(C, "get_live_contract_placements", lambda today: [])
     monkeypatch.setattr(C, "get_fx_rates", lambda: None)
     monkeypatch.setattr(C, "_activities", lambda *a, **k: [])
-    monkeypatch.setattr(C, "_live_jobs", lambda uid: [])
+    # The desk works only its graded roles — record what the build asks for.
+    asked = {}
+    monkeypatch.setattr(C, "_live_jobs", lambda uid, grades=None: asked.__setitem__("grades", grades) or [])
+    monkeypatch.setattr(C, "_asked_grades", asked, raising=False)
     monkeypatch.setattr(C, "_company_names", lambda acts: {})
     monkeypatch.setattr(C.date, "today", classmethod(lambda cls: date(2026, 9, 17))) \
         if False else None
@@ -128,3 +131,9 @@ def test_no_base_means_no_rate_rather_than_a_crash(monkeypatch):
     d = C.build_contract_one_to_one(ME, WEEK)
     assert d["attrition"]["month"] is None
     assert all(f["week"] == 0 and f["month"] == 0 for f in d["figures"])
+
+
+def test_only_graded_a_b_c_o_vacancies_are_used():
+    """Grade F alone outnumbers A+B+C on the desk nearly three to one."""
+    C.build_contract_one_to_one(ME, WEEK)
+    assert C._asked_grades["grades"] == ("A", "B", "C", "O")
