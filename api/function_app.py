@@ -1484,6 +1484,8 @@ def analytics_report(req: func.HttpRequest) -> func.HttpResponse:
         team_map         = get_team_membership_map()
         placements_this  = get_placements_full_year(year)
         placements_last  = get_placements_full_year(year - 1)
+        # Deals already done with a start next year — what is gathering for it.
+        placements_next  = get_placements_full_year(year + 1)
         created_this     = get_placements_created_in_year(year)
         created_last     = get_placements_created_in_year(year - 1)
         budgets          = get_budgets()
@@ -1518,6 +1520,7 @@ def analytics_report(req: func.HttpRequest) -> func.HttpResponse:
             bob_titles=bob_titles,
             created_this=created_this, created_last=created_last,
             solution_entries=get_solution_entries(),
+            placements_next=placements_next,
         )
         # For the Contract Entry ledger grid only — the analytics figures
         # themselves are perm-only (the ledger feeds just the weekly report).

@@ -845,6 +845,7 @@ def build_admin_report(
     created_this: list = None,
     created_last: list = None,
     solution_entries: dict = None,
+    placements_next: list = None,
 ) -> dict:
     """
     Builds the admin analytics report: monthly breakdown per consultant,
@@ -928,9 +929,11 @@ def build_admin_report(
             # ── Current territory: placements from move_date onwards ──────────
             m_this_cur = compute_monthly_breakdown(uid, placements_this, ccy, year,     to_gbp, to_usd, after_date=move_date)
             m_last_cur = compute_monthly_breakdown(uid, placements_last, ccy, year - 1, to_gbp, to_usd, after_date=move_date)
+            m_next_cur = compute_monthly_breakdown(uid, placements_next or [], ccy, year + 1, to_gbp, to_usd, after_date=move_date)
             tot_this_cur = sum(m_this_cur.values())
             tot_last_cur = sum(m_last_cur.values())
-            if (is_active or tot_this_cur > 0 or tot_last_cur > 0
+            tot_next_cur = sum(m_next_cur.values())
+            if (is_active or tot_this_cur > 0 or tot_last_cur > 0 or tot_next_cur > 0
                     or solution_year_total((solution_entries or {}).get(uid), year)):
                 by_territory[territory].append({
                     "uid":              uid,
@@ -942,13 +945,16 @@ def build_admin_report(
                     "sym":              "£" if ccy == "GBP" else "$",
                     "months":           m_this_cur,
                     "last_year_months": m_last_cur,
+                    "next_year_months": m_next_cur,
                     "total":            round(tot_this_cur, 2),
                     "last_year_total":  round(tot_last_cur, 2),
+                    "next_year_total":  round(tot_next_cur, 2),
                     "last_year_ytd":    compute_written_by_created(uid, placements_last, ccy, year - 1, last_ytd_cutoff, to_gbp, to_usd, after_date=move_date),
                     "note":             None,
                     "target":           round(float(ov["crbb7_target"]), 2) if ov.get("crbb7_target") is not None else None,
                     "placements":       _consultant_placement_details(uid, placements_this, ccy, year,     to_gbp, to_usd, after_date=move_date),
                     "last_placements":  _consultant_placement_details(uid, placements_last, ccy, year - 1, to_gbp, to_usd, after_date=move_date),
+                    "next_placements":  _consultant_placement_details(uid, placements_next or [], ccy, year + 1, to_gbp, to_usd, after_date=move_date),
                     **_written_fields(uid, territory, ccy, after_date=move_date),
                 })
 
@@ -971,26 +977,31 @@ def build_admin_report(
                     "sym":              prev_sym,
                     "months":           m_this_prev,
                     "last_year_months": m_last_prev,
+                    "next_year_months": {str(m): 0.0 for m in range(1, 13)},
                     "total":            round(tot_this_prev, 2),
                     "last_year_total":  round(tot_last_prev, 2),
+                    "next_year_total":  0.0,
                     "last_year_ytd":    compute_written_by_created(uid, placements_last, prev_ccy, year - 1, last_ytd_cutoff, to_gbp, to_usd, before_date=move_date),
                     "note":             f"now in {territory}",
                     "target":           round(float(ov["crbb7_target"]), 2) if ov.get("crbb7_target") is not None else None,
                     "placements":       _consultant_placement_details(uid, placements_this, prev_ccy, year,     to_gbp, to_usd, before_date=move_date),
                     "last_placements":  _consultant_placement_details(uid, placements_last, prev_ccy, year - 1, to_gbp, to_usd, before_date=move_date),
+                    "next_placements":  [],
                     **_written_fields(uid, prev_territory, prev_ccy, before_date=move_date),
                 })
         else:
             # ── No move — use all placements ─────────────────────────────────
             months_this = compute_monthly_breakdown(uid, placements_this, ccy, year,     to_gbp, to_usd)
             months_last = compute_monthly_breakdown(uid, placements_last, ccy, year - 1, to_gbp, to_usd)
+            months_next = compute_monthly_breakdown(uid, placements_next or [], ccy, year + 1, to_gbp, to_usd)
             total_this  = sum(months_this.values())
             total_last  = sum(months_last.values())
+            total_next  = sum(months_next.values())
 
             # A leaver is dropped once their placements are out of the window —
             # but not while they still carry Deploy & Consult revenue, or the
             # territory's Solution Revenue silently loses it.
-            if (not is_active and total_this == 0 and total_last == 0
+            if (not is_active and total_this == 0 and total_last == 0 and total_next == 0
                     and not solution_year_total((solution_entries or {}).get(uid), year)):
                 continue
 
@@ -1004,13 +1015,16 @@ def build_admin_report(
                 "sym":              "£" if ccy == "GBP" else "$",
                 "months":           months_this,
                 "last_year_months": months_last,
+                "next_year_months": months_next,
                 "total":            round(total_this, 2),
                 "last_year_total":  round(total_last, 2),
+                "next_year_total":  round(total_next, 2),
                 "last_year_ytd":    compute_written_by_created(uid, placements_last, ccy, year - 1, last_ytd_cutoff, to_gbp, to_usd),
                 "note":             None,
                 "target":           round(float(ov["crbb7_target"]), 2) if ov.get("crbb7_target") is not None else None,
                 "placements":       _consultant_placement_details(uid, placements_this, ccy, year,     to_gbp, to_usd),
                 "last_placements":  _consultant_placement_details(uid, placements_last, ccy, year - 1, to_gbp, to_usd),
+                "next_placements":  _consultant_placement_details(uid, placements_next or [], ccy, year + 1, to_gbp, to_usd),
                 **_written_fields(uid, territory, ccy),
             })
 
@@ -1023,7 +1037,9 @@ def build_admin_report(
         # Territory-level monthly totals (this year and last year)
         t_months      = {str(m): 0.0 for m in range(1, 13)}
         t_last_months = {str(m): 0.0 for m in range(1, 13)}
+        t_next_months = {str(m): 0.0 for m in range(1, 13)}
         t_last        = 0.0
+        t_next        = 0.0
         t_last_ytd    = 0.0
         t_w_months      = {str(m): 0.0 for m in range(1, 13)}
         t_w_counts      = {str(m): 0.0 for m in range(1, 13)}
@@ -1034,6 +1050,8 @@ def build_admin_report(
                 t_months[m_str] = round(t_months[m_str] + v, 2)
             for m_str, v in member.get("last_year_months", {}).items():
                 t_last_months[m_str] = round(t_last_months[m_str] + v, 2)
+            for m_str, v in member.get("next_year_months", {}).items():
+                t_next_months[m_str] = round(t_next_months[m_str] + v, 2)
             for m_str, v in member.get("written_months", {}).items():
                 t_w_months[m_str] = round(t_w_months[m_str] + v, 2)
             for m_str, v in member.get("written_counts", {}).items():
@@ -1043,6 +1061,7 @@ def build_admin_report(
             for m_str, v in member.get("written_last_counts", {}).items():
                 t_w_last_counts[m_str] = round(t_w_last_counts[m_str] + v, 1)
             t_last     += member.get("last_year_total", 0)
+            t_next     += member.get("next_year_total", 0)
             t_last_ytd += member.get("last_year_ytd", 0)
         t_total = sum(t_months.values())
 
@@ -1067,6 +1086,8 @@ def build_admin_report(
             "sym":                      sym,
             "territory_months":         t_months,
             "territory_last_year_months": t_last_months,
+            "territory_next_year_months": t_next_months,
+            "territory_next_year":      round(t_next, 2),
             "territory_total":          round(t_total, 2),
             "territory_last_year":      round(t_last, 2),
             "territory_last_year_ytd":  round(t_last_ytd, 2),
@@ -1179,6 +1200,8 @@ def build_admin_report(
     grand_gbp_last_ytd     = 0.0
     grand_monthly_gbp      = {str(m): 0.0 for m in range(1, 13)}
     grand_monthly_last_gbp = {str(m): 0.0 for m in range(1, 13)}
+    grand_gbp_next         = 0.0
+    grand_monthly_next_gbp = {str(m): 0.0 for m in range(1, 13)}
     grand_budget_monthly   = {str(m): 0.0 for m in range(1, 13)}
     grand_budget_total     = 0.0
     for t, tdata in report.items():
@@ -1190,6 +1213,9 @@ def build_admin_report(
             grand_monthly_gbp[m_str] = round(grand_monthly_gbp[m_str] + v * factor, 2)
         for m_str, v in tdata["territory_last_year_months"].items():
             grand_monthly_last_gbp[m_str] = round(grand_monthly_last_gbp[m_str] + v * factor, 2)
+        grand_gbp_next += tdata.get("territory_next_year", 0.0) * factor
+        for m_str, v in tdata.get("territory_next_year_months", {}).items():
+            grand_monthly_next_gbp[m_str] = round(grand_monthly_next_gbp[m_str] + v * factor, 2)
         budget_mths = tdata.get("budget", {}).get("months", {})
         for m_str, v in budget_mths.items():
             grand_budget_monthly[m_str] = round(grand_budget_monthly[m_str] + v * factor, 2)
@@ -1221,6 +1247,9 @@ def build_admin_report(
         "grand_total_last_ytd_gbp": round(grand_gbp_last_ytd, 2),
         "grand_monthly_gbp":       grand_monthly_gbp,
         "grand_monthly_last_gbp":  grand_monthly_last_gbp,
+        # Next year: tracked territories only — "Other" is not broken out for it
+        "grand_total_next_gbp":    round(grand_gbp_next, 2),
+        "grand_monthly_next_gbp":  grand_monthly_next_gbp,
         "grand_budget_monthly_gbp": grand_budget_monthly,
         "grand_budget_total_gbp":   grand_budget_total,
         "retained": {

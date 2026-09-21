@@ -1164,12 +1164,14 @@ function buildBreakdownTabs() {
 
   // Year + basis toggles
   let showLastYear = false;
+  let showNextYear = false;
   let showWritten  = false;
   const toggleBar = document.createElement("div");
   toggleBar.className = "breakdown-toggle";
   toggleBar.innerHTML = `
-    <button class="year-toggle-btn active" data-year="this">${currentYear}</button>
     <button class="year-toggle-btn" data-year="last">${currentYear - 1}</button>
+    <button class="year-toggle-btn active" data-year="this">${currentYear}</button>
+    <button class="year-toggle-btn" data-year="next" title="Placements already made with a start date next year">${currentYear + 1}</button>
     <span class="breakdown-toggle-gap"></span>
     <button class="year-toggle-btn active" data-mode="actuals" title="By placement start date">Actuals</button>
     <button class="year-toggle-btn" data-mode="written" title="By the month the placement was created">Written</button>
@@ -1228,12 +1230,15 @@ function buildBreakdownTabs() {
 
   // Toggle handlers — re-render all panels
   function renderPanels() {
+    // Next year rides the "this year" path with this year as its comparison,
+    // via a remapped view of the data — see nextYearView().
+    const view = showNextYear ? nextYearView() : reportData;
     panelsEl.querySelectorAll(".panel").forEach(panel => {
       if (panel.dataset.territory === "__overall__") {
         panel.innerHTML = "";
-        panel.appendChild(buildOverallTable(showLastYear, showWritten));
+        panel.appendChild(buildOverallTable(showLastYear, showWritten, view, showNextYear));
       } else {
-        const tdata = reportData.territories[panel.dataset.territory];
+        const tdata = view.territories[panel.dataset.territory];
         if (!tdata) return;
         panel.innerHTML = "";
         if (showWritten && !PERM_TERRITORIES.includes(panel.dataset.territory)) {
@@ -1245,14 +1250,24 @@ function buildBreakdownTabs() {
           panel.appendChild(note);
           return;
         }
-        panel.appendChild(buildMonthlyTable(tdata, showLastYear, showWritten));
+        panel.appendChild(buildMonthlyTable(tdata, showLastYear, showWritten, showNextYear));
       }
     });
   }
   toggleBar.querySelectorAll("[data-year]").forEach(btn => {
     btn.addEventListener("click", () => {
       showLastYear = btn.dataset.year === "last";
+      showNextYear = btn.dataset.year === "next";
       toggleBar.querySelectorAll("[data-year]").forEach(b => b.classList.toggle("active", b === btn));
+      // Nothing can have been written in a year that has not started.
+      const writtenBtn = toggleBar.querySelector('[data-mode="written"]');
+      writtenBtn.disabled = showNextYear;
+      writtenBtn.title = showNextYear ? "Written is by creation date — nothing is created in a future year"
+                                      : "By the month the placement was created";
+      if (showNextYear && showWritten) {
+        showWritten = false;
+        toggleBar.querySelectorAll("[data-mode]").forEach(b => b.classList.toggle("active", b.dataset.mode === "actuals"));
+      }
       renderPanels();
     });
   });
@@ -1272,10 +1287,46 @@ function buildBreakdownTabs() {
 
 // ── Overall Table (all territories combined) ──────────────────────────────────
 
-function buildOverallTable(showLastYear = false, showWritten = false) {
+// A view of reportData in which next year's placements sit where this year's
+// do, and this year's sit where last year's do — so the breakdown's existing
+// this/last rendering shows next year against this year without a third copy
+// of every ternary. Written fields are left alone: Written is never shown
+// for next year.
+function nextYearView() {
+  const terrs = {};
+  for (const [name, td] of Object.entries(reportData.territories || {})) {
+    const remapMember = m => ({
+      ...m,
+      months: m.next_year_months || {}, total: m.next_year_total || 0,
+      placements: m.next_placements || [],
+      last_year_months: m.months || {}, last_year_total: m.total || 0,
+      last_placements: m.placements || [],
+    });
+    terrs[name] = {
+      ...td,
+      members: (td.members || []).map(remapMember),
+      groups: (td.groups || []).map(g => ({ ...g, members: (g.members || []).map(remapMember) })),
+      territory_months: td.territory_next_year_months || {},
+      territory_total: td.territory_next_year || 0,
+      territory_last_year_months: td.territory_months || {},
+      territory_last_year: td.territory_total || 0,
+    };
+  }
+  return {
+    ...reportData,
+    territories: terrs,
+    grand_monthly_gbp: reportData.grand_monthly_next_gbp || {},
+    grand_total_gbp: reportData.grand_total_next_gbp || 0,
+    grand_monthly_last_gbp: reportData.grand_monthly_gbp || {},
+    grand_total_last_gbp: reportData.grand_total_gbp || 0,
+  };
+}
+
+function buildOverallTable(showLastYear = false, showWritten = false, data = reportData, isNext = false) {
   const TERRS = showWritten ? PERM_TERRITORIES : TERRITORY_ORDER;
-  const compareLabel = showLastYear ? `${currentYear}` : `${currentYear - 1}`;
-  const yoyLabel     = showLastYear ? "vs This Year" : "YoY";
+  const reportData = data;   // shadow: everything below reads the chosen view
+  const compareLabel = isNext ? `${currentYear}` : showLastYear ? `${currentYear}` : `${currentYear - 1}`;
+  const yoyLabel     = (isNext || showLastYear) ? "vs This Year" : "YoY";
   const usdToGbp     = reportData.usd_to_gbp || 0.79;
 
   // ── Summary totals bar ────────────────────────────────────────────────────
@@ -1543,7 +1594,7 @@ function buildOverallTable(showLastYear = false, showWritten = false) {
         ? (isLast ? member.written_last_placements : member.written_placements)
         : (isLast ? member.last_placements : member.placements);
       const pls = (src || []).filter(p => p.month === month);
-      showPlacementModal(member.name, month, isLast ? currentYear - 1 : currentYear, pls, member.sym || tSym, isWritten ? "written" : "");
+      showPlacementModal(member.name, month, (isNext ? currentYear + 1 : isLast ? currentYear - 1 : currentYear) - (isNext && isLast ? 1 : 0), pls, member.sym || tSym, isWritten ? "written" : "");
     });
   });
 
@@ -1556,7 +1607,7 @@ function buildOverallTable(showLastYear = false, showWritten = false) {
 
 // ── Monthly Table ─────────────────────────────────────────────────────────────
 
-function buildMonthlyTable(tdata, showLastYear = false, showWritten = false) {
+function buildMonthlyTable(tdata, showLastYear = false, showWritten = false, isNext = false) {
   const sym    = tdata.sym;
   const groups = tdata.type === "teams"
     ? tdata.groups
@@ -1593,8 +1644,8 @@ function buildMonthlyTable(tdata, showLastYear = false, showWritten = false) {
     ? ((showLastYear ? tdata.territory_written_total : tdata.territory_written_last_total) || 0)
     : (showLastYear ? tdata.territory_total : tdata.territory_last_year);
   const territoryCountTotal = (showLastYear ? tdata.territory_written_last_count_total : tdata.territory_written_count_total) || 0;
-  const compareLabel    = showLastYear ? `${currentYear}` : `${currentYear - 1}`;
-  const yoyLabel        = showLastYear ? "vs This Year" : "YoY";
+  const compareLabel    = (isNext || showLastYear) ? `${currentYear}` : `${currentYear - 1}`;
+  const yoyLabel        = (isNext || showLastYear) ? "vs This Year" : "YoY";
 
   const monthHeaders = MONTH_ABBR.map(m => `<th class="num">${m}</th>`).join("");
 
@@ -1720,7 +1771,7 @@ function buildMonthlyTable(tdata, showLastYear = false, showWritten = false) {
         ? (isLast ? member.written_last_placements : member.written_placements)
         : (isLast ? member.last_placements : member.placements);
       const pls = (src || []).filter(p => p.month === month);
-      showPlacementModal(member.name, month, isLast ? currentYear - 1 : currentYear, pls, member.sym || sym, isWritten ? "written" : "");
+      showPlacementModal(member.name, month, (isNext ? currentYear + 1 : isLast ? currentYear - 1 : currentYear) - (isNext && isLast ? 1 : 0), pls, member.sym || sym, isWritten ? "written" : "");
     });
   });
 
