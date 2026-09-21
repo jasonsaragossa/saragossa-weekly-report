@@ -8,6 +8,11 @@ const TERRITORY_ORDER = [
   "Bristol", "London", "Chicago", "New York",
   "London Contract", "Chicago Contract", "Cameron Scott",
 ];
+// "Written" is a perm measure — placements created in the month, perm fees.
+// The contract desks' written figures are their contract deals, so mixing
+// them into a Written view double-counts a different kind of business
+// (Jason, Sep 2026). Written mode uses this list instead.
+const PERM_TERRITORIES = TERRITORY_ORDER.filter(t => !t.endsWith("Contract"));
 
 const MONTH_ABBR = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -1231,6 +1236,15 @@ function buildBreakdownTabs() {
         const tdata = reportData.territories[panel.dataset.territory];
         if (!tdata) return;
         panel.innerHTML = "";
+        if (showWritten && !PERM_TERRITORIES.includes(panel.dataset.territory)) {
+          const note = document.createElement("p");
+          note.className = "settings-desc";
+          note.style.padding = "18px 4px";
+          note.textContent = "Written is a perm measure — the contract desks are not part of it. "
+            + "Their figures are on the Contract Entry tab and the weekly report's contract columns.";
+          panel.appendChild(note);
+          return;
+        }
         panel.appendChild(buildMonthlyTable(tdata, showLastYear, showWritten));
       }
     });
@@ -1259,6 +1273,7 @@ function buildBreakdownTabs() {
 // ── Overall Table (all territories combined) ──────────────────────────────────
 
 function buildOverallTable(showLastYear = false, showWritten = false) {
+  const TERRS = showWritten ? PERM_TERRITORIES : TERRITORY_ORDER;
   const compareLabel = showLastYear ? `${currentYear}` : `${currentYear - 1}`;
   const yoyLabel     = showLastYear ? "vs This Year" : "YoY";
   const usdToGbp     = reportData.usd_to_gbp || 0.79;
@@ -1283,8 +1298,8 @@ function buildOverallTable(showLastYear = false, showWritten = false) {
     return { total, compare };
   }
 
-  const gbp = sumTerritories(GBP_TERRITORIES);
-  const usd = sumTerritories(USD_TERRITORIES);
+  const gbp = sumTerritories(GBP_TERRITORIES.filter(t => TERRS.includes(t)));
+  const usd = sumTerritories(USD_TERRITORIES.filter(t => TERRS.includes(t)));
 
   function summaryBlock(label, sym, { total, compare }) {
     const yoy    = compare > 0 ? (total - compare) / compare * 100 : null;
@@ -1324,7 +1339,7 @@ function buildOverallTable(showLastYear = false, showWritten = false) {
 
   // Build overall member lookup for click handlers
   const overallMemberLookup = {};
-  for (const territory of TERRITORY_ORDER) {
+  for (const territory of TERRS) {
     const td2 = reportData.territories[territory];
     if (!td2) continue;
     const mbs = td2.type === "teams" ? td2.groups.flatMap(g => g.members) : (td2.members || []);
@@ -1338,7 +1353,7 @@ function buildOverallTable(showLastYear = false, showWritten = false) {
   if (showWritten) {
     grandMonthly = {}; grandCounts = {};
     for (let mm = 1; mm <= 12; mm++) { grandMonthly[String(mm)] = 0; grandCounts[String(mm)] = 0; }
-    for (const t of TERRITORY_ORDER) {
+    for (const t of TERRS) {
       const td = reportData.territories[t];
       if (!td) continue;
       const f  = USD_TERRITORIES.includes(t) ? usdToGbp : 1;
@@ -1388,7 +1403,7 @@ function buildOverallTable(showLastYear = false, showWritten = false) {
     </thead>
     <tbody>${grandTotalRow}`;
 
-  for (const territory of TERRITORY_ORDER) {
+  for (const territory of TERRS) {
     const tdata = reportData.territories[territory];
     if (!tdata) continue;
 
