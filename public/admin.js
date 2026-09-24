@@ -724,6 +724,58 @@ function buildLedgerSection(opts) {
 
 // ── Territory Summary ─────────────────────────────────────────────────────────
 
+// Jason's commentary for the board email — what has happened since the last
+// board meeting. Saved against the month the report covers, and dropped into
+// the email as its own section above the P&L. Empty means the section is
+// simply left out, so an unwritten month never ships a blank heading.
+function buildBoardNote() {
+  const box = document.createElement("div");
+  box.className = "board-note";
+  box.innerHTML = `
+    <h3 class="hpb-subheading">Board commentary <span class="board-note-period"></span></h3>
+    <p class="settings-desc">Your own words on the period — what has moved since the last board
+      meeting. It goes into the board email above the figures. Blank lines start a new paragraph.</p>
+    <textarea class="oto-in board-note-body" rows="6"
+      placeholder="e.g. AI progress this month — what shipped, what it changed, what is next"></textarea>
+    <div class="board-note-bar">
+      <button class="save-btn board-note-save">Save commentary</button>
+      <span class="mbr-saved-note board-note-status"></span>
+    </div>`;
+  const ta = box.querySelector(".board-note-body");
+  const btn = box.querySelector(".board-note-save");
+  const status = box.querySelector(".board-note-status");
+  const period = box.querySelector(".board-note-period");
+
+  fetch("/api/board-note").then(r => r.json()).then(d => {
+    if (!d.ok) return;
+    ta.value = d.body || "";
+    period.textContent = "— " + d.period_label;
+    // A row can exist with an empty body — that's the reminder's own stamp,
+    // not something anyone wrote.
+    if (d.updated_on && (d.body || "").trim()) {
+      status.textContent = "Last saved " + new Date(d.updated_on).toLocaleDateString("en-GB",
+        { day: "numeric", month: "short", year: "numeric" });
+    }
+  }).catch(() => { status.textContent = "Could not load."; });
+
+  btn.addEventListener("click", async () => {
+    btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      const resp = await fetch("/api/board-note", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: ta.value }),
+      });
+      const d = await resp.json();
+      if (!d.ok) throw new Error(d.error || "unknown error");
+      status.textContent = "Saved ✓";
+    } catch (e) {
+      status.textContent = "Could not save: " + e.message;
+    }
+    btn.disabled = false; btn.textContent = "Save commentary";
+  });
+  return box;
+}
+
 function buildSummarySection() {
   const section = document.createElement("div");
   section.id = "summary-section";
@@ -771,6 +823,7 @@ function buildSummarySection() {
   schedBtn.addEventListener("click", showBoardSchedule);
   h.appendChild(schedBtn);
   section.appendChild(h);
+  section.appendChild(buildBoardNote());
 
   const wrap = document.createElement("div");
   wrap.className = "table-wrap";

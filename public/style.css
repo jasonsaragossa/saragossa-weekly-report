@@ -1584,3 +1584,11 @@ select.oto-in { color-scheme: var(--scheme); }
 .oto-kind.nb { color: var(--accent); border-color: var(--accent); }
 .oto-drill[data-fig] { cursor: pointer; border-bottom: 1px dotted var(--accent); }
 @media (max-width: 900px) { .oto-two { grid-template-columns: 1fr; } }
+
+/* Board commentary editor (Analytics → Summary) */
+.board-note { margin: 0 0 22px; padding: 14px 16px; border: 1px solid var(--border);
+  border-radius: 6px; background: var(--tint); }
+.board-note .settings-desc { margin: 4px 0 10px; }
+.board-note-period { color: var(--mid); font-weight: 400; text-transform: none; letter-spacing: 0; }
+.board-note-body { width: 100%; min-height: 110px; font-family: var(--font); font-size: 12px; }
+.board-note-bar { display: flex; align-items: center; gap: 12px; margin-top: 10px; }

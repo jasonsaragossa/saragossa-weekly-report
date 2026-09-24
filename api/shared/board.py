@@ -27,7 +27,7 @@ from shared.dataverse import (
     get_placements_full_year, get_placements_created_in_year, get_budgets,
     get_fx_rates, get_user_territory_map,
     get_cancelled_created_in_year, get_cancellations_by_status_change,
-    fetch_roi_summary, get_latest_forecast,
+    fetch_roi_summary, get_latest_forecast, get_board_note,
     get_first_placement_dates,
 )
 
@@ -217,6 +217,14 @@ def _sol_label(code):
     return _SOLUTION_LABELS.get((code or "").lower(), code or "?")
 
 
+def board_note_period(today: date = None) -> str:
+    """The period a board report sent on `today` covers — the previous full
+    month, "YYYY-MM". The key the commentary is stored against."""
+    today = today or date.today()
+    y, m = (today.year, today.month - 1) if today.month > 1 else (today.year - 1, 12)
+    return f"{y}-{m:02d}"
+
+
 def compose_board_email(build_admin_report_fn) -> tuple:
     """
     Gathers everything and returns (subject, text_fallback, html, inline_images)
@@ -248,6 +256,8 @@ def compose_board_email(build_admin_report_fn) -> tuple:
             "prev_cancel":     pool.submit(get_cancellations_by_status_change, py, pm),
             "curr_cancel":     pool.submit(get_cancellations_by_status_change, year, today.month),
             "forecast":        pool.submit(get_latest_forecast),
+            # Jason's own commentary for the month the report covers
+            "note":            pool.submit(get_board_note, f"{py}-{pm:02d}"),
             "roi":             pool.submit(fetch_roi_summary),
         }
         consultants     = futs["consultants"].result()
@@ -318,7 +328,7 @@ def compose_board_email(build_admin_report_fn) -> tuple:
     logo = fetch_logo()
     html = _render_html(today, py, pm, prev_stats, curr_stats,
                         prev_cancel, curr_cancel, regional, forecast, roi,
-                        logo_inline=logo is not None)
+                        logo_inline=logo is not None, note=r.get("note") or {})
     text = f"Board figures for {_MONTHS[pm - 1]} {py} — open in an HTML mail client."
     return subject, text, html, ({LOGO_CID: logo} if logo else None)
 
@@ -365,7 +375,7 @@ def _logo_html(inline: bool = True) -> str:
 
 
 def _render_html(today, py, pm, prev, curr, prev_cancel, curr_cancel,
-                 regional, forecast, roi, logo_inline=True):
+                 regional, forecast, roi, logo_inline=True, note=None):
     from html import escape
     prev_label = f"{_MONTHS[pm - 1]} {py}"
     curr_label = f"{_MONTHS[today.month - 1]} {today.year}"
@@ -473,6 +483,22 @@ def _render_html(today, py, pm, prev, curr, prev_cancel, curr_cancel,
                 f'padding-bottom:10px;border-bottom:1px solid #e5e0d5;margin-bottom:12px;">{title}</div>'
                 f'{inner}</td></tr>')
 
+    # ── Commentary ──
+    # Jason's own note on the period, written in Analytics. Paragraphs split on
+    # blank lines, single newlines kept as line breaks, so a list pasted in
+    # still reads as a list. Omitted entirely when nothing has been written.
+    body = ((note or {}).get("body") or "").strip()
+    note_html = ""
+    if body:
+        paras = []
+        for para in escape(body).split(chr(10) * 2):
+            para = para.strip()
+            if para:
+                paras.append(
+                    f'<p style="margin:0 0 10px;font-size:13px;line-height:1.55;'
+                    f'color:#3c4448;">{para.replace(chr(10), "<br>")}</p>')
+        note_html = "".join(paras)
+
     return f"""<!DOCTYPE html>
 <html><body style="margin:0;padding:0;background:#f2eee5;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f2eee5;">
@@ -486,6 +512,7 @@ def _render_html(today, py, pm, prev, curr, prev_cancel, curr_cancel,
         <div style="font-size:22px;font-weight:600;color:#101820;">Board figures — {prev_label}</div>
         <div style="font-size:12px;color:#8a8f94;margin-top:4px;">plus {curr_label} to date · generated {today.isoformat()}</div>
       </td></tr>
+      {section(f'Commentary — {prev_label}', note_html) if note_html else ''}
       {section(f'P&amp;L — deals &amp; perm revenue ({prev_label})', pnl_table)}
       {section('Notes', notes)}
       {section('Regional perm totals', reg_table)}

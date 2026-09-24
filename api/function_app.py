@@ -7,7 +7,7 @@ Routes:
   POST /api/settings      → upsert an override (admin only)
   DELETE /api/settings/{id} → remove an override (admin only)
 """
-import json, logging, os
+import json, logging, os, re
 from datetime import date, datetime, timezone
 
 import azure.functions as func
@@ -585,6 +585,44 @@ def commission_import_post(req: func.HttpRequest) -> func.HttpResponse:
                                  mimetype="application/json", status_code=200)
     except Exception:
         logging.exception("commission-import error")
+        return _server_error()
+
+
+# ── /api/board-note (GET/POST) — commentary for the board email ───────────────
+# What has happened since the last board meeting, in Jason's words. Keyed by
+# the month the board report covers, which is the previous full month.
+
+def _board_note_period(today: date = None) -> str:
+    from shared.board import board_note_period
+    return board_note_period(today)
+
+
+@app.route(route="board-note", methods=["GET", "POST"])
+def board_note(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_admin(req)
+    if err:
+        return err
+    from shared.dataverse import get_board_note, upsert_board_note
+    try:
+        body = req.get_json() if req.method == "POST" else {}
+    except ValueError:
+        body = {}
+    try:
+        period = ((body or {}).get("period") or req.params.get("period")
+                  or _board_note_period())
+        if not re.fullmatch(r"\d{4}-\d{2}", period):
+            return _bad_request("period must be YYYY-MM")
+        if req.method == "POST":
+            upsert_board_note(period, (body or {}).get("body") or "", email)
+        note = get_board_note(period)
+        y, m = int(period[:4]), int(period[5:])
+        return func.HttpResponse(json.dumps({
+            "ok": True, "period": period,
+            "period_label": f"{date(y, m, 1):%B %Y}",
+            **note,
+        }), mimetype="application/json", status_code=200)
+    except Exception:
+        logging.exception("board-note error")
         return _server_error()
 
 

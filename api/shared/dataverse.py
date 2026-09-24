@@ -1303,6 +1303,45 @@ def graph_send_mail(sender: str, recipients: list, subject: str, body_text: str,
         raise RuntimeError(f"Graph sendMail {resp.status_code}: {resp.text[:500]}")
 
 
+# ── Board commentary (crbb7_boardnote) ────────────────────────────────────────
+# Jason's own note on what has happened since the last board meeting — written
+# in Analytics, and dropped into the board email as its own section. One row
+# per period, the period being the month the board report covers ("2026-09").
+
+def get_board_note(period: str) -> dict:
+    """{"body", "updated_by", "updated_on"} for a period, or {} if unwritten."""
+    try:
+        rows = odata_get_all("crbb7_boardnotes", params={
+            "$select": "crbb7_boardnoteid,crbb7_body,crbb7_updated_by,crbb7_updated_on",
+            "$filter": f"crbb7_period eq '{odata_str(period)}'",
+        })
+    except Exception:
+        logging.warning("Could not read crbb7_boardnote")
+        return {}
+    if not rows:
+        return {}
+    r = rows[0]
+    return {"id": r.get("crbb7_boardnoteid"), "body": r.get("crbb7_body") or "",
+            "updated_by": r.get("crbb7_updated_by") or "",
+            "updated_on": r.get("crbb7_updated_on") or ""}
+
+
+def upsert_board_note(period: str, body: str, email: str) -> None:
+    from datetime import datetime as _dt, timezone as _tz
+    existing = get_board_note(period)
+    payload = {
+        "crbb7_period":     period,
+        "crbb7_body":       body or "",
+        "crbb7_updated_by": email or "",
+        "crbb7_updated_on": _dt.now(_tz.utc).isoformat(timespec="seconds"),
+        "crbb7_name":       f"Board note {period}"[:99],
+    }
+    if existing.get("id"):
+        odata_patch(f"crbb7_boardnotes({existing['id']})", payload)
+    else:
+        odata_post("crbb7_boardnotes", payload)
+
+
 # ── Board report schedule (crbb7_boardschedule) ───────────────────────────────
 # One row per planned send. The GitHub Actions cron fires anything due; the
 # Analytics page creates and cancels them. Times are stored in UTC.
