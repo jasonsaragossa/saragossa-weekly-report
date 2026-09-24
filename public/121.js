@@ -14,9 +14,11 @@ let data = null;
     if (info?.clientPrincipal) document.getElementById("admin-link").style.display = "inline";
   } catch (_) {}
 
-  const d = new Date();
-  const monday = new Date(d.setDate(d.getDate() - ((d.getDay() + 6) % 7)));
-  document.getElementById("oto-week").value = monday.toISOString().slice(0, 10);
+  // The week is left empty so the FIRST load asks the server for it: which
+  // week a 1:1 opens on is a property of the template (the contract desk
+  // meets on a Monday and talks about the week just gone), and only the
+  // server knows which template this is. Pre-filling it here is what used to
+  // override that and land everyone on the current week.
   document.getElementById("oto-week").addEventListener("change", load);
   document.getElementById("oto-person").addEventListener("change", load);
   document.getElementById("feedback-open").addEventListener("click", showFeedback);
@@ -92,12 +94,15 @@ async function load() {
   try {
     const qs = (uid ? `uid=${encodeURIComponent(uid)}&` : "")
       + (currentTemplate ? `template=${encodeURIComponent(currentTemplate)}&` : "")
-      + `week=${encodeURIComponent(week)}`;
+      + (week ? `week=${encodeURIComponent(week)}` : "");
     const resp = await fetch(`/api/one-to-one?${qs}`);
     if (resp.status === 401) { window.location.href = "/.auth/login/aad"; return; }
     const d = await resp.json();
     if (!d.ok) return showError(d.error || "unknown error");
     data = d;
+    // Show the week the server settled on, so the picker and the figures can
+    // never disagree about which week this 1:1 is.
+    if (d.week_start) document.getElementById("oto-week").value = d.week_start;
     const sel = document.getElementById("oto-person");
     if (!sel.options.length) {
       sel.innerHTML = d.people.map(p =>

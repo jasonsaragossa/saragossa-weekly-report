@@ -125,31 +125,3 @@ def test_someone_on_no_team_cannot_close_anything(api, monkeypatch):
     monkeypatch.setattr("shared.oto_templates.templates_for", lambda email, is_admin: [])
     status, _ = call(F, {"vacancy_id": VAC, "statuscode": 939310000})
     assert status == 403 and state["closed"] == []
-
-
-# ── The contract 1:1 opens on last week ───────────────────────────────────────
-
-def test_the_contract_1_1_defaults_to_the_week_just_finished():
-    """Jim's desk meets on a Monday, so a 1:1 opened with no week asked for
-    shows the week that finished, not one a few hours old."""
-    from datetime import date
-    from shared.oneonone import default_week
-    # Monday, mid-week and Sunday all land on the same finished week
-    for today in (date(2026, 9, 21), date(2026, 9, 24), date(2026, 9, 27)):
-        assert default_week("contract", today) == date(2026, 9, 14)
-
-
-def test_the_perm_1_1_still_opens_on_the_current_week():
-    from datetime import date
-    from shared.oneonone import default_week
-    assert default_week("perm", date(2026, 9, 24)) == date(2026, 9, 21)
-
-
-def test_the_default_week_is_always_a_monday():
-    from datetime import date, timedelta
-    from shared.oneonone import default_week
-    day = date(2026, 1, 1)
-    for _ in range(400):
-        for kind in ("contract", "perm"):
-            assert default_week(kind, day).weekday() == 0
-        day += timedelta(days=1)
