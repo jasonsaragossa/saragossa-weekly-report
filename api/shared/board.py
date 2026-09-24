@@ -217,6 +217,74 @@ def _sol_label(code):
     return _SOLUTION_LABELS.get((code or "").lower(), code or "?")
 
 
+# The commentary is written in three parts, and renders in this order. Adding
+# a fourth is a line here plus a box on the Analytics page — nothing else.
+NOTE_SECTIONS = (
+    ("new_developments", "New AI Developments"),
+    ("general_news",     "General AI News"),
+    ("concerns",         "Concerns / Issues"),
+)
+
+
+def parse_note(body: str) -> dict:
+    """
+    Stored body → {key: text}. The store holds JSON, but a body written before
+    the split into sections is plain text — keep it rather than lose it, under
+    the first heading.
+    """
+    import json
+    raw = (body or "").strip()
+    if not raw:
+        return {k: "" for k, _ in NOTE_SECTIONS}
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            return {k: str(data.get(k) or "").strip() for k, _ in NOTE_SECTIONS}
+    except ValueError:
+        pass
+    first = NOTE_SECTIONS[0][0]
+    return {k: (raw if k == first else "") for k, _ in NOTE_SECTIONS}
+
+
+def serialise_note(sections: dict) -> str:
+    """{key: text} → the string to store. All-blank stores as "" so that
+    'nothing written' stays a simple emptiness check for the reminder."""
+    import json
+    clean = {k: str((sections or {}).get(k) or "").strip() for k, _ in NOTE_SECTIONS}
+    return json.dumps(clean) if any(clean.values()) else ""
+
+
+def commentary_html(note: dict) -> str:
+    """
+    The commentary block for the board email, or "" when nothing is written.
+
+    Each section becomes a bold heading with its text under it. Paragraphs
+    split on blank lines and single newlines become line breaks, so a list
+    pasted in still reads as a list. A heading with nothing under it is
+    dropped rather than left standing empty.
+    """
+    from html import escape
+
+    def paragraphs(text):
+        out = []
+        for para in escape((text or "").strip()).split(chr(10) * 2):
+            para = para.strip()
+            if para:
+                out.append(f'<p style="margin:0 0 10px;font-size:13px;line-height:1.55;'
+                           f'color:#3c4448;">{para.replace(chr(10), "<br>")}</p>')
+        return "".join(out)
+
+    written = parse_note((note or {}).get("body"))
+    blocks = []
+    for key, label in NOTE_SECTIONS:
+        inner = paragraphs(written.get(key))
+        if inner:
+            blocks.append(f'<div style="margin:0 0 16px;">'
+                          f'<div style="font-size:13px;font-weight:600;color:#101820;'
+                          f'margin:0 0 6px;">{label}</div>{inner}</div>')
+    return "".join(blocks)
+
+
 def board_note_period(today: date = None) -> str:
     """The period a board report sent on `today` covers — the previous full
     month, "YYYY-MM". The key the commentary is stored against."""
@@ -483,21 +551,7 @@ def _render_html(today, py, pm, prev, curr, prev_cancel, curr_cancel,
                 f'padding-bottom:10px;border-bottom:1px solid #e5e0d5;margin-bottom:12px;">{title}</div>'
                 f'{inner}</td></tr>')
 
-    # ── Commentary ──
-    # Jason's own note on the period, written in Analytics. Paragraphs split on
-    # blank lines, single newlines kept as line breaks, so a list pasted in
-    # still reads as a list. Omitted entirely when nothing has been written.
-    body = ((note or {}).get("body") or "").strip()
-    note_html = ""
-    if body:
-        paras = []
-        for para in escape(body).split(chr(10) * 2):
-            para = para.strip()
-            if para:
-                paras.append(
-                    f'<p style="margin:0 0 10px;font-size:13px;line-height:1.55;'
-                    f'color:#3c4448;">{para.replace(chr(10), "<br>")}</p>')
-        note_html = "".join(paras)
+    note_html = commentary_html(note)
 
     return f"""<!DOCTYPE html>
 <html><body style="margin:0;padding:0;background:#f2eee5;">

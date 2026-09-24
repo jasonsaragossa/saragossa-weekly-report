@@ -121,3 +121,85 @@ def test_only_the_named_author_may_touch_the_commentary(monkeypatch, who, allowe
         assert err is None and email == who
     else:
         assert err is not None and err.status_code == 403
+
+
+# ── Three sections ────────────────────────────────────────────────────────────
+
+from shared.board import NOTE_SECTIONS, parse_note, serialise_note  # noqa: E402
+
+KEYS = [k for k, _ in NOTE_SECTIONS]
+
+
+def test_the_three_sections_are_the_ones_asked_for():
+    assert [lb for _, lb in NOTE_SECTIONS] == [
+        "New AI Developments", "General AI News", "Concerns / Issues"]
+
+
+def test_sections_survive_a_round_trip():
+    written = {"new_developments": "Shipped the MBR module.",
+               "general_news": "Opus 5 landed.", "concerns": "Graph consent is slow."}
+    assert parse_note(serialise_note(written)) == written
+
+
+def test_partly_filled_keeps_the_blanks_blank():
+    out = parse_note(serialise_note({"concerns": "Only this one."}))
+    assert out["concerns"] == "Only this one."
+    assert out["new_developments"] == "" and out["general_news"] == ""
+
+
+def test_all_blank_stores_as_empty_so_the_reminder_still_fires():
+    assert serialise_note({k: "  " for k in KEYS}) == ""
+    assert serialise_note({}) == ""
+
+
+def test_a_note_written_before_the_split_is_kept_not_lost():
+    """Free text from the single-box version lands under the first heading."""
+    out = parse_note("Wrote this when there was one box.")
+    assert out["new_developments"] == "Wrote this when there was one box."
+    assert out["general_news"] == "" and out["concerns"] == ""
+
+
+def test_unknown_keys_are_dropped_rather_than_stored():
+    stored = serialise_note({"new_developments": "kept", "sneaky": "dropped"})
+    assert "sneaky" not in stored
+    assert set(parse_note(stored)) == set(KEYS)
+
+
+# ── How it renders in the email ───────────────────────────────────────────────
+
+from shared.board import commentary_html  # noqa: E402
+
+
+def note_of(**sections):
+    return {"body": serialise_note(sections)}
+
+
+def test_each_written_section_gets_its_heading():
+    h = commentary_html(note_of(new_developments="Shipped the MBR module.",
+                                general_news="Opus 5 landed.",
+                                concerns="Graph consent is slow."))
+    for _, label in NOTE_SECTIONS:
+        assert label in h
+    assert h.index("New AI Developments") < h.index("General AI News") < h.index("Concerns / Issues")
+
+
+def test_an_empty_section_leaves_no_heading_behind():
+    h = commentary_html(note_of(new_developments="Only this."))
+    assert "New AI Developments" in h
+    assert "General AI News" not in h and "Concerns / Issues" not in h
+
+
+def test_nothing_written_renders_nothing():
+    assert commentary_html(note_of()) == ""
+    assert commentary_html({}) == "" and commentary_html(None) == ""
+    assert commentary_html({"body": ""}) == ""
+
+
+def test_blank_lines_make_paragraphs_and_single_newlines_make_breaks():
+    h = commentary_html(note_of(general_news="One.\n\nTwo.\nStill two."))
+    assert h.count("<p ") == 2 and "<br>" in h
+
+
+def test_angle_brackets_are_escaped_not_rendered():
+    h = commentary_html(note_of(concerns="<script>alert(1)</script> & co"))
+    assert "<script>" not in h and "&lt;script&gt;" in h and "&amp;" in h

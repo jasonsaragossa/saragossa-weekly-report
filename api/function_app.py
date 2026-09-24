@@ -620,6 +620,7 @@ def board_note(req: func.HttpRequest) -> func.HttpResponse:
     email, err = _require_board_note_author(req)
     if err:
         return err
+    from shared.board import NOTE_SECTIONS, parse_note, serialise_note
     from shared.dataverse import get_board_note, upsert_board_note
     try:
         body = req.get_json() if req.method == "POST" else {}
@@ -631,12 +632,21 @@ def board_note(req: func.HttpRequest) -> func.HttpResponse:
         if not re.fullmatch(r"\d{4}-\d{2}", period):
             return _bad_request("period must be YYYY-MM")
         if req.method == "POST":
-            upsert_board_note(period, (body or {}).get("body") or "", email)
+            # "sections" is what the page sends; "body" is the older single-box
+            # shape, still accepted so an old tab left open can't wipe a note.
+            sent = (body or {}).get("sections")
+            if sent is None:
+                sent = parse_note((body or {}).get("body") or "")
+            if not isinstance(sent, dict):
+                return _bad_request("sections must be an object")
+            upsert_board_note(period, serialise_note(sent), email)
         note = get_board_note(period)
         y, m = int(period[:4]), int(period[5:])
         return func.HttpResponse(json.dumps({
             "ok": True, "period": period,
             "period_label": f"{date(y, m, 1):%B %Y}",
+            "sections": parse_note(note.get("body")),
+            "labels": [{"key": k, "label": lb} for k, lb in NOTE_SECTIONS],
             **note,
         }), mimetype="application/json", status_code=200)
     except Exception:

@@ -1590,5 +1590,9 @@ select.oto-in { color-scheme: var(--scheme); }
   border-radius: 6px; background: var(--tint); }
 .board-note .settings-desc { margin: 4px 0 10px; }
 .board-note-period { color: var(--mid); font-weight: 400; text-transform: none; letter-spacing: 0; }
-.board-note-body { width: 100%; min-height: 110px; font-family: var(--font); font-size: 12px; }
+.board-note-body { width: 100%; min-height: 92px; font-family: var(--font); font-size: 12px; }
+.board-note-fields { display: grid; gap: 14px; }
+.board-note-field { display: flex; flex-direction: column; gap: 5px; }
+.board-note-label { font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--mid); }
 .board-note-bar { display: flex; align-items: center; gap: 12px; margin-top: 10px; }

@@ -728,23 +728,32 @@ function buildLedgerSection(opts) {
 // board meeting. Saved against the month the report covers, and dropped into
 // the email as its own section above the P&L. Empty means the section is
 // simply left out, so an unwritten month never ships a blank heading.
+// Placeholders per section — the headings themselves come from the API, so
+// adding a fourth section is a server-side change only.
+const BOARD_NOTE_HINTS = {
+  new_developments: "What shipped this month, and what it changed",
+  general_news:     "What is moving in the wider AI world that the board should know",
+  concerns:         "Risks, blockers, anything that needs a decision",
+};
+
 function buildBoardNote() {
   const box = document.createElement("div");
   box.className = "board-note";
   box.innerHTML = `
     <h3 class="hpb-subheading">Board commentary <span class="board-note-period"></span></h3>
     <p class="settings-desc">Your own words on the period — what has moved since the last board
-      meeting. It goes into the board email above the figures. Blank lines start a new paragraph.</p>
-    <textarea class="oto-in board-note-body" rows="6"
-      placeholder="e.g. AI progress this month — what shipped, what it changed, what is next"></textarea>
+      meeting. Each section becomes its own heading in the board email, above the figures;
+      anything left blank is left out. Blank lines start a new paragraph.</p>
+    <div class="board-note-fields"></div>
     <div class="board-note-bar">
       <button class="save-btn board-note-save">Save commentary</button>
       <span class="mbr-saved-note board-note-status"></span>
     </div>`;
-  const ta = box.querySelector(".board-note-body");
+  const fields = box.querySelector(".board-note-fields");
   const btn = box.querySelector(".board-note-save");
   const status = box.querySelector(".board-note-status");
   const period = box.querySelector(".board-note-period");
+  const boxes = {};
 
   // Restricted to its author — for everyone else the box isn't there at all,
   // rather than sitting on the page refusing to load.
@@ -753,11 +762,27 @@ function buildBoardNote() {
     return r.json();
   }).then(d => {
     if (!d || !d.ok) return;
-    ta.value = d.body || "";
     period.textContent = "— " + d.period_label;
+    (d.labels || []).forEach(({ key, label }) => {
+      const wrap = document.createElement("div");
+      wrap.className = "board-note-field";
+      const lab = document.createElement("label");
+      lab.className = "board-note-label";
+      lab.textContent = label;
+      const ta = document.createElement("textarea");
+      ta.className = "oto-in board-note-body";
+      ta.rows = 5;
+      ta.placeholder = BOARD_NOTE_HINTS[key] || "";
+      ta.value = (d.sections || {})[key] || "";
+      lab.htmlFor = ta.id = "board-note-" + key;
+      wrap.append(lab, ta);
+      fields.appendChild(wrap);
+      boxes[key] = ta;
+    });
     // A row can exist with an empty body — that's the reminder's own stamp,
     // not something anyone wrote.
-    if (d.updated_on && (d.body || "").trim()) {
+    const written = Object.values(d.sections || {}).some(v => (v || "").trim());
+    if (d.updated_on && written) {
       status.textContent = "Last saved " + new Date(d.updated_on).toLocaleDateString("en-GB",
         { day: "numeric", month: "short", year: "numeric" });
     }
@@ -766,9 +791,11 @@ function buildBoardNote() {
   btn.addEventListener("click", async () => {
     btn.disabled = true; btn.textContent = "Saving…";
     try {
+      const sections = {};
+      Object.entries(boxes).forEach(([k, ta]) => { sections[k] = ta.value; });
       const resp = await fetch("/api/board-note", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body: ta.value }),
+        body: JSON.stringify({ sections }),
       });
       const d = await resp.json();
       if (!d.ok) throw new Error(d.error || "unknown error");
