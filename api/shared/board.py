@@ -573,12 +573,12 @@ def _render_html(today, py, pm, prev, curr, prev_cancel, curr_cancel,
         <div style="font-size:22px;font-weight:600;color:#101820;">Board figures — {prev_label}</div>
         <div style="font-size:12px;color:#8a8f94;margin-top:4px;">plus {curr_label} to date · generated {today.isoformat()}</div>
       </td></tr>
-      {section(f'Commentary — {prev_label}', note_html) if note_html else ''}
       {section(f'P&amp;L — deals &amp; perm revenue ({prev_label})', pnl_table)}
       {section('Notes', notes)}
       {section('Regional perm totals', reg_table)}
       {section('Placement forecast', fc_html)}
       {section('Tech ROI', roi_html)}
+      {section(f'Commentary — {prev_label}', note_html) if note_html else ''}
       <tr><td style="padding:20px 32px 16px;"></td></tr>
       <tr><td style="padding:14px 32px;border-top:1px solid #e5e0d5;font-size:11px;color:#9aa0a6;">
         Saragossa &middot; Private &amp; confidential. Sent automatically by the Weekly Report.

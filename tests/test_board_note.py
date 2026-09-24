@@ -273,3 +273,13 @@ def test_the_commentary_is_read_for_the_month_the_report_covers(composable, monk
     B.compose_board_email(build)
     from datetime import date as _date
     assert asked == [B.board_note_period(_date.today())]
+
+
+def test_the_commentary_sits_below_the_figures(composable, monkeypatch):
+    """Jason reads the numbers first and the words after (2026-09-24)."""
+    B, build = composable
+    monkeypatch.setattr(B, "get_board_note", lambda period: {
+        "body": serialise_note({"new_developments": "Shipped the MBR module."})})
+    _, _, html, _ = B.compose_board_email(build)
+    assert html.index("P&amp;L") < html.index("Commentary")
+    assert html.index("Tech ROI") < html.index("Commentary")
