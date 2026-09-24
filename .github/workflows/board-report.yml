@@ -1,7 +1,12 @@
 name: Board figures email
 
 on:
-  workflow_dispatch: {}   # run on demand from the Actions tab
+  workflow_dispatch:      # run on demand from the Actions tab
+    inputs:
+      recipients:
+        description: "Send to these addresses instead of the board list (comma-separated)"
+        required: false
+        default: ""
 
 jobs:
   send:
@@ -21,7 +26,10 @@ jobs:
           DATAVERSE_CLIENT_ID:     ${{ secrets.DATAVERSE_CLIENT_ID }}
           DATAVERSE_CLIENT_SECRET: ${{ secrets.DATAVERSE_CLIENT_SECRET }}
           ALERT_SENDER:            ${{ secrets.ALERT_SENDER }}
-          BOARD_REPORT_RECIPIENTS: ${{ secrets.BOARD_REPORT_RECIPIENTS }}
+          # A preview run goes only to the addresses given; with none, the
+          # board list. Deliberately an override, so the default stays the
+          # real thing and a preview can never quietly become a real send.
+          BOARD_REPORT_RECIPIENTS: ${{ inputs.recipients || secrets.BOARD_REPORT_RECIPIENTS }}
           ROI_TRACKER_URL:         ${{ secrets.ROI_TRACKER_URL }}
           ROI_TRACKER_API_KEY:     ${{ secrets.ROI_TRACKER_API_KEY }}
         run: python board_report.py
