@@ -203,3 +203,73 @@ def test_blank_lines_make_paragraphs_and_single_newlines_make_breaks():
 def test_angle_brackets_are_escaped_not_rendered():
     h = commentary_html(note_of(concerns="<script>alert(1)</script> & co"))
     assert "<script>" not in h and "&lt;script&gt;" in h and "&amp;" in h
+
+
+# ── The whole email actually composes ─────────────────────────────────────────
+# This is the test that was missing: every piece of the commentary was covered
+# on its own, but nothing ever ran compose_board_email, so a bad reference to
+# the fetch results sat there until the first real send failed on it.
+
+NOTE_BODY = None  # set per-test
+
+
+@pytest.fixture
+def composable(monkeypatch):
+    """Stub every Dataverse call compose_board_email makes."""
+    from shared import board as B
+
+    empties = {
+        "get_all_territory_consultants": [], "get_overrides": [],
+        "get_team_membership_map": {}, "get_placements_full_year": [],
+        "get_placements_created_in_year": [], "get_budgets": [],
+        "get_fx_rates": None, "get_user_territory_map": {},
+        "get_cancelled_created_in_year": [], "get_cancellations_by_status_change": [],
+        "fetch_roi_summary": {}, "get_latest_forecast": {},
+        "get_first_placement_dates": {},
+    }
+    for name, value in empties.items():
+        monkeypatch.setattr(B, name, (lambda v: (lambda *a, **k: v))(value))
+    monkeypatch.setattr(B, "fetch_logo", lambda *a, **k: None)
+
+    def build_admin_report(*a, **k):
+        return {"consultants": [], "territories": {}, "usd_to_gbp": 0.79}
+    return B, build_admin_report
+
+
+def test_the_board_email_composes_with_commentary(composable, monkeypatch):
+    B, build = composable
+    monkeypatch.setattr(B, "get_board_note", lambda period: {
+        "body": serialise_note({"new_developments": "Shipped the MBR module.",
+                                "concerns": "Graph consent is slow."})})
+    subject, text, html, images = B.compose_board_email(build)
+    assert "Board figures" in subject
+    assert "New AI Developments" in html and "Shipped the MBR module." in html
+    assert "Concerns / Issues" in html and "General AI News" not in html
+
+
+def test_the_board_email_composes_without_commentary(composable, monkeypatch):
+    B, build = composable
+    monkeypatch.setattr(B, "get_board_note", lambda period: {})
+    _, _, html, _ = B.compose_board_email(build)
+    assert "Board figures" in html or "Commentary" not in html
+    assert "Commentary" not in html
+
+
+def test_a_broken_commentary_read_does_not_lose_the_pack(composable, monkeypatch):
+    """The figures matter more than the note — never fail the send over it."""
+    B, build = composable
+
+    def boom(period):
+        raise RuntimeError("Dataverse down")
+    monkeypatch.setattr(B, "get_board_note", boom)
+    subject, _, html, _ = B.compose_board_email(build)
+    assert "Board figures" in subject and "Commentary" not in html
+
+
+def test_the_commentary_is_read_for_the_month_the_report_covers(composable, monkeypatch):
+    B, build = composable
+    asked = []
+    monkeypatch.setattr(B, "get_board_note", lambda period: asked.append(period) or {})
+    B.compose_board_email(build)
+    from datetime import date as _date
+    assert asked == [B.board_note_period(_date.today())]

@@ -348,6 +348,13 @@ def compose_board_email(build_admin_report_fn) -> tuple:
             prev_cancel = curr_cancel = None  # fallback below
         forecast = futs["forecast"].result()
         roi      = futs["roi"].result()
+        # The commentary is the one part nobody else can reconstruct, but the
+        # figures still stand without it — never lose the pack over a note.
+        try:
+            note = futs["note"].result() or {}
+        except Exception:
+            logging.warning("Could not read the board commentary — sending without it")
+            note = {}
 
     created_prev = created_this if py == year else created_last
     started_prev = placements_this if py == year else placements_last
@@ -396,7 +403,7 @@ def compose_board_email(build_admin_report_fn) -> tuple:
     logo = fetch_logo()
     html = _render_html(today, py, pm, prev_stats, curr_stats,
                         prev_cancel, curr_cancel, regional, forecast, roi,
-                        logo_inline=logo is not None, note=r.get("note") or {})
+                        logo_inline=logo is not None, note=note)
     text = f"Board figures for {_MONTHS[pm - 1]} {py} — open in an HTML mail client."
     return subject, text, html, ({LOGO_CID: logo} if logo else None)
 
