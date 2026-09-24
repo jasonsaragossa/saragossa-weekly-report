@@ -746,8 +746,13 @@ function buildBoardNote() {
   const status = box.querySelector(".board-note-status");
   const period = box.querySelector(".board-note-period");
 
-  fetch("/api/board-note").then(r => r.json()).then(d => {
-    if (!d.ok) return;
+  // Restricted to its author — for everyone else the box isn't there at all,
+  // rather than sitting on the page refusing to load.
+  fetch("/api/board-note").then(r => {
+    if (r.status === 403) { box.remove(); return null; }
+    return r.json();
+  }).then(d => {
+    if (!d || !d.ok) return;
     ta.value = d.body || "";
     period.textContent = "— " + d.period_label;
     // A row can exist with an empty body — that's the reminder's own stamp,

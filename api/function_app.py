@@ -591,6 +591,24 @@ def commission_import_post(req: func.HttpRequest) -> func.HttpResponse:
 # ── /api/board-note (GET/POST) — commentary for the board email ───────────────
 # What has happened since the last board meeting, in Jason's words. Keyed by
 # the month the board report covers, which is the previous full month.
+#
+# Narrower than admin on purpose: admin is every Director plus the whole
+# Bristol Finance and Compliance team, ~22 people, any of whom could rewrite
+# or wipe the commentary with no record of who did. This is one person's voice
+# in the board pack, so the list is explicit (Jason, Sep 2026).
+
+BOARD_NOTE_AUTHORS = {"jason@saragossa.io"}
+
+
+def _require_board_note_author(req: func.HttpRequest):
+    email, err = require_auth(req)
+    if err:
+        return None, err
+    if (email or "").lower() not in BOARD_NOTE_AUTHORS:
+        return None, func.HttpResponse("Forbidden — board commentary is restricted",
+                                       status_code=403)
+    return email, None
+
 
 def _board_note_period(today: date = None) -> str:
     from shared.board import board_note_period
@@ -599,7 +617,7 @@ def _board_note_period(today: date = None) -> str:
 
 @app.route(route="board-note", methods=["GET", "POST"])
 def board_note(req: func.HttpRequest) -> func.HttpResponse:
-    email, err = require_admin(req)
+    email, err = _require_board_note_author(req)
     if err:
         return err
     from shared.dataverse import get_board_note, upsert_board_note

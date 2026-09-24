@@ -93,3 +93,31 @@ def test_only_sends_that_are_inside_the_horizon_are_nudged(monkeypatch, mailbox)
     out = S.run_due_schedules()
     assert out["reminded"] == 1 and out["sent"] == 0
     assert len(sent) == 1
+
+
+# ── Who may write the commentary ──────────────────────────────────────────────
+
+def _app(monkeypatch):
+    import function_app as F
+    return F
+
+
+@pytest.mark.parametrize("who,allowed", [
+    ("jason@saragossa.io", True),
+    ("Jason@Saragossa.io", True),        # the identity header's casing varies
+    ("becky@saragossa.io", False),       # Director + Finance: admin, but not here
+    ("erin@saragossa.io", False),        # Finance team by membership drift
+    ("stephen.herniman@saragossa.io", False),   # the always-allow list too
+    ("", False),
+])
+def test_only_the_named_author_may_touch_the_commentary(monkeypatch, who, allowed):
+    F = _app(monkeypatch)
+    monkeypatch.setattr(F, "require_auth", lambda req: (who, None))
+    # Nobody should reach the admin rule at all — it is far too wide for this.
+    monkeypatch.setattr(F, "require_admin",
+                        lambda req: pytest.fail("board-note must not use require_admin"))
+    email, err = F._require_board_note_author(object())
+    if allowed:
+        assert err is None and email == who
+    else:
+        assert err is not None and err.status_code == 403
