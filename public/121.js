@@ -542,13 +542,31 @@ function contractDrill(f, period) {
     : (f.money ? usd(f[period]) : num(f[period]));
 }
 
+// The contract 1:1 opens on the week just finished, because the meeting is
+// held on a Monday. Name the week by where it sits relative to today, so the
+// heading stays true when someone steps back through the weeks.
+let CONTRACT_WEEK_WORD = "This week";
+
+function weekWord(weekStart) {
+  if (!weekStart) return "This week";
+  const now = new Date();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  monday.setHours(0, 0, 0, 0);
+  const shown = new Date(weekStart + "T00:00:00");
+  const weeksBack = Math.round((monday - shown) / (7 * 86400000));
+  if (weeksBack === 0) return "This week";
+  if (weeksBack === 1) return "Last week";
+  return "w/c " + shown.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
 function showContractDetail(f, period) {
   const rows = f["detail_" + period] || [];
   const body = rows.map(r => `<tr>
       <td>${esc(r.client)}</td><td>${esc(r.role)}</td>
       <td class="num">${esc(r.start)}</td><td class="num">${esc(r.end)}</td>
       <td class="num">${usd(r.wnfi)}</td><td class="num dim">${r.share}</td></tr>`).join("");
-  showModal(`${f.label} — ${period === "week" ? "this week" : "this month"}`,
+  showModal(`${f.label} — ${period === "week" ? CONTRACT_WEEK_WORD.toLowerCase() : "this month"}`,
     `<div class="table-wrap"><table>
       <thead><tr><th>Client</th><th>Role</th><th class="num">Start</th><th class="num">End</th>
         <th class="num">WNFI (share)</th><th class="num">Split</th></tr></thead>
@@ -556,6 +574,7 @@ function showContractDetail(f, period) {
 }
 
 function renderContract(d) {
+  CONTRACT_WEEK_WORD = weekWord(d.week_start);
   const saved = d.saved || {};
   const byId = (name) => Object.fromEntries((saved[name] || []).map(r => [r.id, r]));
   const committed = byId("committed"), chances = byId("chances_week"), plans = byId("meeting_plans");
@@ -582,8 +601,20 @@ function renderContract(d) {
     `<input type="number" class="oto-in oto-num" data-name="${name}" data-key="${key}" data-idx="${i}"
        value="${S(val)}" min="0" style="width:${w || 64}px">`;
 
+  // Closing writes straight into Mercury, so the reason has to be chosen
+  // before the button does anything, and the click asks first.
+  const closeCell = (j) => `<td class="oto-close">
+      <select class="oto-in oto-close-reason" data-vid="${esc(j.id)}">
+        <option value="">Close as…</option>
+        ${(d.close_reasons || []).map(r =>
+          `<option value="${esc(r.code)}">${esc(r.label)}</option>`).join("")}
+      </select>
+      <button type="button" class="oto-close-btn" data-vid="${esc(j.id)}"
+        data-job="${esc(j.client)} — ${esc(j.job)}" disabled>Close job</button>
+    </td>`;
   const committedRows = jobs.map((j, i) => jobRow(j, i, { name: "committed",
-    cells: (i) => `<td>${ta("committed", "note", i, (committed[j.id] || {}).note, "What is committed, and where it stands")}</td>` })).join("");
+    cells: (i) => `<td>${ta("committed", "note", i, (committed[j.id] || {}).note, "What is committed, and where it stands")}</td>`
+      + closeCell(j) })).join("");
   const chanceRows = jobs.map((j, i) => jobRow(j, i, { name: "chances_week",
     cells: (i) => {
       const c = chances[j.id] || {};
@@ -625,7 +656,7 @@ function renderContract(d) {
       <h2>Key figures</h2>
       <div class="oto-two">
         <div>
-          ${rowsTable([{label:""}, {label:"This week", num:true}, {label:esc(d.month_label), num:true}], figRows, "")}
+          ${rowsTable([{label:""}, {label:CONTRACT_WEEK_WORD, num:true}, {label:esc(d.month_label), num:true}], figRows, "")}
           <p class="mbr-note">Click a figure to see the contractors behind it. Placements and WNFI are split-credited; starters and finishers count whole, and include anyone due to start or finish later this month.</p>
         </div>
         <div class="oto-cards">
@@ -644,8 +675,10 @@ function renderContract(d) {
 
     <section class="mbr-section">
       <h2>Committed business being worked this week</h2>
-      ${rowsTable([{label:"Client"}, {label:"Role"}, {label:"What is committed"}], committedRows,
-        "No live vacancies — nothing to commit against.")}
+      ${rowsTable([{label:"Client"}, {label:"Role"}, {label:"What is committed"}, {label:"Close"}],
+        committedRows, "No live vacancies — nothing to commit against.")}
+      <p class="mbr-note">Closing a job writes the reason straight into Mercury — it is not
+        part of Save, and it cannot be undone from here.</p>
     </section>
 
     <section class="mbr-section">
@@ -663,9 +696,9 @@ function renderContract(d) {
     </section>
 
     <section class="mbr-section">
-      <h2>Client meetings scheduled this week</h2>
+      <h2>Client meetings — ${esc(CONTRACT_WEEK_WORD.toLowerCase())}</h2>
       ${rowsTable([{label:"Who"}, {label:"Client"}, {label:"Meeting"}, {label:"Type"}, {label:"Actions / expectations"}],
-        meetingRows, "No client meetings in Mercury for this week.")}
+        meetingRows, "No client meetings in Mercury for that week.")}
     </section>
 
     <section class="mbr-section">
@@ -690,6 +723,42 @@ function renderContract(d) {
   const figs = Object.fromEntries(d.figures.map(f => [f.key, f]));
   document.querySelectorAll(".oto-drill[data-fig]").forEach(el => el.addEventListener("click", () =>
     showContractDetail(figs[el.dataset.fig], el.dataset.period)));
+  wireCloseJob();
+}
+
+// A job is closed in two deliberate steps: pick the reason, then confirm.
+// The button stays disabled until a reason is chosen, so there is no default
+// that could be applied by a stray click.
+function wireCloseJob() {
+  document.querySelectorAll(".oto-close-reason").forEach(sel => {
+    const btn = document.querySelector(`.oto-close-btn[data-vid="${sel.dataset.vid}"]`);
+    sel.addEventListener("change", () => { if (btn) btn.disabled = !sel.value; });
+  });
+  document.querySelectorAll(".oto-close-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const sel = document.querySelector(`.oto-close-reason[data-vid="${btn.dataset.vid}"]`);
+      if (!sel || !sel.value) return;
+      const reason = sel.options[sel.selectedIndex].textContent.trim();
+      if (!window.confirm(`Close "${btn.dataset.job}" in Mercury as "${reason}"?`)) return;
+      btn.disabled = true; btn.textContent = "Closing…";
+      try {
+        const resp = await fetch("/api/close-vacancy", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ vacancy_id: btn.dataset.vid, statuscode: Number(sel.value) }),
+        });
+        const r = await resp.json();
+        if (!r.ok) throw new Error(r.error || "unknown error");
+        const row = btn.closest("tr");
+        if (row) { row.classList.add("oto-closed"); }
+        btn.textContent = "Closed ✓";
+        sel.disabled = true;
+      } catch (e) {
+        btn.textContent = "Close job";
+        btn.disabled = false;
+        window.alert("Could not close it: " + e.message);
+      }
+    });
+  });
 }
 
 async function saveContract() {

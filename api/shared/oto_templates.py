@@ -29,6 +29,9 @@ TEMPLATES = {
         # Roster = a territory; the house account is not a person
         "territory": "Chicago Contract",
         "exclude_names": ("saragossa house",),
+        # Jim runs the 1:1s rather than sitting in one, so he is a lead but
+        # not on the roster (Jason, Sep 2026).
+        "exclude_emails": ("jim@saragossa.io",),
         # Jim runs the desk; Andrew is Jim's manager (Jason, Sep 2026)
         "leads":     {"jim@saragossa.io", "andrewt@saragossa.io"},
         # Each sub-team lead sees their own team only
@@ -63,8 +66,10 @@ def roster(template: dict) -> list:
             "$select": _SELECT,
             "$filter": f"_territoryid_value eq '{tid}' and isdisabled eq false"})
     skip = tuple(template.get("exclude_names") or ())
+    skip_email = {e.lower() for e in (template.get("exclude_emails") or ())}
     people = [p for p in people
-              if not (p.get("fullname") or "").lower().startswith(skip)]
+              if not (p.get("fullname") or "").lower().startswith(skip)
+              and (p.get("internalemailaddress") or "").lower() not in skip_email]
     people.sort(key=lambda m: m.get("fullname") or "")
     return people
 

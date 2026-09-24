@@ -1596,3 +1596,14 @@ select.oto-in { color-scheme: var(--scheme); }
 .board-note-label { font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
   color: var(--mid); }
 .board-note-bar { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+
+/* Closing a job from the 1:1 — deliberately two steps, and the closed row
+   stays visible (greyed) until the page is reloaded, so it is obvious what
+   just happened. */
+.oto-close { white-space: nowrap; }
+.oto-close select { margin-bottom: 4px; width: 100%; font-size: 11px; }
+.oto-close-btn { font-size: 11px; padding: 4px 9px; border-radius: 5px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--panel); color: var(--fg); }
+.oto-close-btn:disabled { opacity: .45; cursor: not-allowed; }
+.oto-close-btn:not(:disabled):hover { border-color: var(--accent); color: var(--accent); }
+tr.oto-closed { opacity: .45; text-decoration: line-through; }

@@ -64,6 +64,18 @@ def week_start(d: date) -> date:
     return d - timedelta(days=d.weekday())
 
 
+def default_week(kind: str, today: date = None) -> date:
+    """
+    The week a 1:1 opens on when none is asked for.
+
+    The contract desk meets on a Monday, so the week worth talking about is
+    the one that just finished rather than one a few hours old (Jason, Sep
+    2026). The perm template keeps the current week.
+    """
+    wk = week_start(today or date.today())
+    return wk - timedelta(days=7) if kind == "contract" else wk
+
+
 ROLLING_WEEKS = 13          # a rolling quarter, not a calendar one
 
 

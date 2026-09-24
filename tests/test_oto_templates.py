@@ -65,6 +65,7 @@ def test_the_admin_sees_every_template_and_everyone():
     assert [t["id"] for t in tpls] == ["snoz", "contract_usa"]
     assert all(t["is_lead"] for t in tpls)
     assert "Saragossa House Contract USA" not in names(tpls[1]["people"])
+    assert "Jim Jeffers" not in names(tpls[1]["people"])
 
 
 def test_jim_and_andrew_see_the_whole_contract_desk_and_nothing_else():
@@ -72,7 +73,7 @@ def test_jim_and_andrew_see_the_whole_contract_desk_and_nothing_else():
         tpls = T.templates_for(who, is_admin=False)
         assert [t["id"] for t in tpls] == ["contract_usa"], who
         assert tpls[0]["is_lead"]
-        assert len(tpls[0]["people"]) == 8          # everyone but the house account
+        assert len(tpls[0]["people"]) == 7   # not the house account, and not Jim
 
 
 def test_a_sub_team_lead_sees_only_their_own_team():
@@ -109,3 +110,16 @@ def test_the_contract_desk_cannot_see_harrys_team():
 
 def test_an_outsider_sees_nothing():
     assert T.templates_for("someone@saragossa.io", is_admin=False) == []
+
+
+def test_jim_runs_the_1_1s_rather_than_sitting_in_one():
+    """He leads the desk, so he sees everyone — but has no 1:1 of his own
+    (Jason, Sep 2026)."""
+    people, lead = T.visible_people("contract_usa", "jim@saragossa.io", is_admin=False)
+    assert lead
+    assert "Jim Jeffers" not in names(people)
+    # And nobody else can open one for him either
+    for who, admin in (("andrewt@saragossa.io", False), ("jason@saragossa.io", True),
+                       ("connor@saragossa.io", False)):
+        seen, _ = T.visible_people("contract_usa", who, is_admin=admin)
+        assert "Jim Jeffers" not in names(seen), who

@@ -142,10 +142,19 @@ def get_all_named_users() -> list[dict]:
     )
 
 
+# People who sit in a territory but are not a desk on the report — they run
+# the desk rather than bill against it. Kept as an explicit list because a
+# title rule would also drop the Regional Directors, who do bill.
+# NOTE: anything credited to someone here leaves the report with them, so only
+# add a name that carries no placements of their own (Jason, Sep 2026).
+REPORT_EXCLUDED_EMAILS = {"jim@saragossa.io"}   # Jim Jeffers, Contract Sales Director
+
+
 def get_all_territory_consultants() -> list[dict]:
     """
     Returns active AND inactive users in the 6 territories, with isdisabled flag.
     Also injects any unassigned house users defined in _UNASSIGNED_HOUSE_USERS.
+    Anyone in REPORT_EXCLUDED_EMAILS is left out entirely.
     """
     territory_filter = " or ".join(
         f"_territoryid_value eq '{tid}'" for tid in TERRITORY_IDS.values()
@@ -173,7 +182,8 @@ def get_all_territory_consultants() -> list[dict]:
         for u in house_users:
             u["_territoryid_value"] = TERRITORY_IDS[territory]
             results.append(u)
-    return results
+    return [u for u in results
+            if (u.get("internalemailaddress") or "").lower() not in REPORT_EXCLUDED_EMAILS]
 
 
 # Known report team names — must match Dataverse team names exactly
@@ -313,6 +323,43 @@ CANCEL_CODES = [
     975310000,  # Cancelled - Rebated
 ]
 CANCELLED_DIDNOTSTART = 143570009  # kept as alias used elsewhere
+
+# ── Closing a vacancy (crimson_vacancy) ───────────────────────────────────────
+# Closing = statecode 1 (Inactive) plus a statuscode saying why. These are
+# Mercury's own reasons, read off the live data, so a job closed from a 1:1
+# looks no different from one closed in Mercury itself.
+#
+# The two "Won" reasons (2, 143570000) are deliberately NOT offered here: a
+# win follows from a placement record, and marking a vacancy won without one
+# would show a win the placement figures never see (Jason, Sep 2026).
+VACANCY_CLOSE_REASONS = (
+    (143570001, "Lost - competitor placed"),
+    (143570002, "Lost - filled internally"),
+    (939310002, "Lost - project cancelled"),
+    (939310000, "Lost - other reason"),
+    (143570003, "Cancelled"),
+)
+VACANCY_CLOSE_CODES = {c for c, _ in VACANCY_CLOSE_REASONS}
+VACANCY_INACTIVE = 1
+
+
+def close_vacancy(vacancy_id: str, statuscode: int) -> None:
+    """Close a live vacancy with one of VACANCY_CLOSE_REASONS."""
+    if statuscode not in VACANCY_CLOSE_CODES:
+        raise ValueError(f"{statuscode} is not a closing reason")
+    odata_patch(f"crimson_vacancies({vacancy_id})",
+                {"statecode": VACANCY_INACTIVE, "statuscode": int(statuscode)})
+
+
+def get_vacancy(vacancy_id: str) -> dict:
+    """The one vacancy, or {} — used to check ownership before closing it."""
+    rows = odata_get_all("crimson_vacancies", params={
+        "$select": ("crimson_vacancyid,crimson_jobtitle,statecode,statuscode,"
+                    "_crimson_deliveryownerid_value"),
+        "$filter": f"crimson_vacancyid eq '{odata_str(vacancy_id)}'",
+        "$expand": "crimson_clientid($select=name)",
+    })
+    return rows[0] if rows else {}
 
 # "Cancelled - Rebated" is NOT a normal cancellation: the placement still
 # counts and the fee still credits in its start month — only the rebated

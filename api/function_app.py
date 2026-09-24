@@ -8,7 +8,7 @@ Routes:
   DELETE /api/settings/{id} → remove an override (admin only)
 """
 import json, logging, os, re
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import azure.functions as func
 
@@ -839,9 +839,10 @@ def one_to_one(req: func.HttpRequest) -> func.HttpResponse:
     email, err = require_auth(req)
     if err:
         return err
-    from shared.dataverse import (get_one_to_one, upsert_one_to_one, list_one_to_one_weeks,
-                                  get_latest_mbr_actions, is_guid)
-    from shared.oneonone import build_one_to_one, week_start, quarter_weeks, INPUT_ROWS
+    from shared.dataverse import (VACANCY_CLOSE_REASONS, get_one_to_one, upsert_one_to_one,
+                                  list_one_to_one_weeks, get_latest_mbr_actions, is_guid)
+    from shared.oneonone import (build_one_to_one, week_start, default_week,
+                                 quarter_weeks, INPUT_ROWS)
     from shared.oneonone_contract import build_contract_one_to_one
     from shared.oto_templates import templates_for
     try:
@@ -869,7 +870,7 @@ def one_to_one(req: func.HttpRequest) -> func.HttpResponse:
 
         raw = req.params.get("week") or (body or {}).get("week")
         try:
-            wk = week_start(date.fromisoformat(raw)) if raw else week_start(date.today())
+            wk = week_start(date.fromisoformat(raw)) if raw else default_week(tpl["kind"])
         except ValueError:
             return func.HttpResponse(json.dumps({"ok": False, "error": "bad week"}),
                                      mimetype="application/json", status_code=400)
@@ -906,6 +907,7 @@ def one_to_one(req: func.HttpRequest) -> func.HttpResponse:
             "person": {"uid": uid, "name": person.get("fullname", "")},
             "people": [{"uid": p["systemuserid"], "name": p.get("fullname", "")} for p in people],
             "input_rows": [{"key": k, "label": l} for k, l in INPUT_ROWS],
+            "close_reasons": [{"code": c, "label": lb} for c, lb in VACANCY_CLOSE_REASONS],
             **derived,
             "saved": saved,
             "carried_actions": (prev or {}).get("actions") or [],
@@ -914,6 +916,67 @@ def one_to_one(req: func.HttpRequest) -> func.HttpResponse:
         }), mimetype="application/json", status_code=200)
     except Exception:
         logging.exception("one-to-one error")
+        return _server_error()
+
+
+# ── /api/close-vacancy (POST) — close a job from the 1:1 ──────────────────────
+# Writes straight into Mercury, so the guard rails matter more than the code:
+#   * only a reason from VACANCY_CLOSE_REASONS, never an arbitrary statuscode;
+#   * only a vacancy whose delivery owner is someone whose 1:1 the caller may
+#     open — the same rule that decides what they can see;
+#   * only a vacancy that is still open, so a second click cannot overwrite
+#     the reason someone already recorded.
+
+@app.route(route="close-vacancy", methods=["POST"])
+def close_vacancy_route(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_auth(req)
+    if err:
+        return err
+    from shared.dataverse import (VACANCY_CLOSE_CODES, close_vacancy, get_vacancy,
+                                  is_guid)
+    from shared.oto_templates import templates_for
+    try:
+        body = req.get_json() or {}
+    except ValueError:
+        return _bad_request("expected JSON")
+    try:
+        vid = str(body.get("vacancy_id") or "").strip()
+        try:
+            reason = int(body.get("statuscode"))
+        except (TypeError, ValueError):
+            return _bad_request("statuscode must be a number")
+        if not is_guid(vid):
+            return _bad_request("bad vacancy_id")
+        if reason not in VACANCY_CLOSE_CODES:
+            return _bad_request("that is not a closing reason")
+
+        is_admin_user = (email or "").lower() in ONE_TO_ONE_ADMINS
+        mine = {p["systemuserid"] for t in templates_for(email, is_admin_user)
+                for p in t["people"]}
+        if not mine:
+            return func.HttpResponse(json.dumps({"ok": False, "error": "forbidden"}),
+                                     mimetype="application/json", status_code=403)
+
+        vac = get_vacancy(vid)
+        if not vac:
+            return func.HttpResponse(json.dumps({"ok": False, "error": "No such vacancy."}),
+                                     mimetype="application/json", status_code=404)
+        if vac.get("_crimson_deliveryownerid_value") not in mine:
+            logging.warning("%s tried to close a vacancy outside their teams", email)
+            return func.HttpResponse(json.dumps({"ok": False, "error": "forbidden"}),
+                                     mimetype="application/json", status_code=403)
+        if vac.get("statecode") != 0:
+            return func.HttpResponse(
+                json.dumps({"ok": False, "error": "That job is already closed."}),
+                mimetype="application/json", status_code=409)
+
+        close_vacancy(vid, reason)
+        logging.info("%s closed vacancy %s (%s) as %s",
+                     email, vid, vac.get("crimson_jobtitle"), reason)
+        return func.HttpResponse(json.dumps({"ok": True}),
+                                 mimetype="application/json", status_code=200)
+    except Exception:
+        logging.exception("close-vacancy error")
         return _server_error()
 
 
