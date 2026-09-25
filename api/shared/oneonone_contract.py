@@ -98,13 +98,15 @@ def build_contract_one_to_one(uid: str, week: date = None) -> dict:
     week = week_start(week or date.today())
     next_week = week + timedelta(days=7)
     today = date.today()
-    # Month = the calendar month the 1:1 sits in, anchored on the end of the
-    # week. Unlike the perm template it is NOT cut at today: a contractor due
-    # to finish on the 28th is a finisher this month, and a start booked for
-    # the 25th is a starter (Jason, Sep 2026). Placements are dated by
-    # creation, which cannot be in the future, so they come out the same.
-    anchor = week + timedelta(days=6)
-    m_start, m_end = _month_bounds(anchor)
+    # Month = the month the week BEGINS in. A week straddling a month end
+    # belongs to the month it started in: the 1:1 reviews what happened and
+    # plans from there, so the useful month column is the one that week was
+    # worked in, not the one it spills a day or two into (Jason, Sep 2026).
+    # Unlike the perm template it is NOT cut at today: a contractor due to
+    # finish on the 28th is a finisher this month, and a start booked for the
+    # 25th is a starter. Placements are dated by creation, which cannot be in
+    # the future, so they come out the same.
+    m_start, m_end = _month_bounds(week)
     r12_start = date(m_start.year - 1, m_start.month, 1)
 
     with ThreadPoolExecutor(max_workers=6) as pool:

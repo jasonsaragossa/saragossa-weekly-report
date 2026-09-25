@@ -137,3 +137,26 @@ def test_only_graded_a_b_c_o_vacancies_are_used():
     """Grade F alone outnumbers A+B+C on the desk nearly three to one."""
     C.build_contract_one_to_one(ME, WEEK)
     assert C._asked_grades["grades"] == ("A", "B", "C", "O")
+
+
+def test_a_week_straddling_a_month_end_belongs_to_the_month_it_started_in(monkeypatch):
+    """
+    28 Sep – 4 Oct is a September week: the 1:1 reviews the month that week was
+    worked in, not the two days it spills into October (Jason, Sep 2026).
+    """
+    d = C.build_contract_one_to_one(ME, date(2026, 9, 28))
+    assert d["month_label"] == "September"
+    # new-month (created 3 Sep) is in that month; a week-end anchor would have
+    # given October and lost it
+    assert fig(d, "placements")["month"] == pytest.approx(1 / 3 + 1.0, abs=0.01)
+
+
+def test_a_week_wholly_inside_a_month_is_unaffected():
+    d = C.build_contract_one_to_one(ME, WEEK)
+    assert d["month_label"] == "September"
+
+
+def test_the_month_follows_the_week_not_today(monkeypatch):
+    """Opening an older 1:1 shows that week's month, not the current one."""
+    d = C.build_contract_one_to_one(ME, date(2026, 3, 2))
+    assert d["month_label"] == "March"
