@@ -702,9 +702,13 @@ function renderContract(d) {
           <p class="mbr-note">Click a figure to see the contractors behind it. Placements and WNFI are split-credited; starters and finishers count whole, and include anyone due to start or finish later this month.</p>
         </div>
         <div class="oto-cards">
+          <div class="mbr-card"><span class="mbr-card-label">Runners out</span>
+            <span class="mbr-card-value">${(d.live_contracts || []).length
+              ? `<span class="oto-drill" id="oto-runners">${d.runners ?? 0}</span>` : (d.runners ?? 0)}</span>
+            <span class="mbr-card-sub dim">contractors on assignment today</span></div>
           <div class="mbr-card"><span class="mbr-card-label">Current WNFI</span>
             <span class="mbr-card-value">${usd(d.current_wnfi)}</span>
-            <span class="mbr-card-sub dim">${(d.live_contracts || []).length} live contractors, your share per week</span></div>
+            <span class="mbr-card-sub dim">your share per week, across your runners</span></div>
           <div class="mbr-card"><span class="mbr-card-label">Attrition — ${esc(d.month_label)}</span>
             <span class="mbr-card-value">${pct(a.month)}</span>
             <span class="mbr-card-sub dim">${a.month_finishers} finished of ${a.month_base} live at the start</span></div>
@@ -779,7 +783,22 @@ function renderContract(d) {
   const figs = Object.fromEntries(d.figures.map(f => [f.key, f]));
   document.querySelectorAll(".oto-drill[data-fig]").forEach(el => el.addEventListener("click", () =>
     showContractDetail(figs[el.dataset.fig], el.dataset.period)));
+  const runners = document.getElementById("oto-runners");
+  if (runners) runners.addEventListener("click", () => showRunners(d.live_contracts || []));
   wireCloseJob();
+}
+
+// Who is out right now — the records behind the Runners card.
+function showRunners(rows) {
+  const body = rows.map(r => `<tr>
+      <td>${esc(r.client)}</td><td>${esc(r.role)}</td>
+      <td class="num">${esc(fmtDate(r.start))}</td><td class="num">${esc(fmtDate(r.end))}</td>
+      <td class="num">${usd(r.wnfi)}</td></tr>`).join("");
+  showModal("Runners out — today",
+    `<div class="table-wrap"><table>
+      <thead><tr><th>Client</th><th>Role</th><th class="num">Start</th><th class="num">End</th>
+        <th class="num">WNFI (share)</th></tr></thead>
+      <tbody>${body}</tbody></table></div>`);
 }
 
 // A job is closed in two deliberate steps: pick the reason, then confirm.

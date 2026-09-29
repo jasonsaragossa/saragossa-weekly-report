@@ -161,3 +161,72 @@ def test_the_month_follows_the_week_not_today(monkeypatch):
     """Opening an older 1:1 shows that week's month, not the current one."""
     d = C.build_contract_one_to_one(ME, date(2026, 3, 2))
     assert d["month_label"] == "March"
+
+
+# ── Real-shaped extensions: no parent link ────────────────────────────────────
+# None of the 232 contract extensions in the year to Sep 2026 has its parent
+# link set in Mercury. The fixtures above do, which is how this was missed.
+# Codes follow the real pattern: original 004749/00/06, extension 004749/01/00.
+
+def real(pid, code, created, start, end, **kw):
+    p = P(pid, created, start, end, **kw)
+    p["crimson_placementidcode"] = code
+    p["_mercury_parentplacementid_value"] = None
+    p["crimson_extension"] = 1 if code.split("/")[1] != "00" else 0
+    return p
+
+
+REAL_DESK = [
+    # Original ends 18 Sep, extension picks up the next day — NOT a finisher
+    real("orig", "004749/00/06", "2026-03-01", "2026-03-09", "2026-09-18"),
+    real("ext", "004749/01/00", "2026-09-10", "2026-09-19", "2027-03-19"),
+    # Genuinely finished 17 Sep, never extended
+    real("done", "004801/00/02", "2026-02-01", "2026-02-09", "2026-09-17"),
+    # Two other live runners
+    real("r1", "004900/00/01", "2026-05-01", "2026-05-04", "2027-05-04"),
+    real("r2", "004901/00/01", "2026-06-01", "2026-06-08", "2027-06-08"),
+]
+
+
+@pytest.fixture
+def real_desk(monkeypatch):
+    monkeypatch.setattr(C, "_contracts", lambda uid, since: REAL_DESK)
+
+
+def test_an_extended_contract_is_not_a_finisher_without_a_parent_link(real_desk):
+    d = C.build_contract_one_to_one(ME, WEEK)
+    assert [r["role"] for r in fig(d, "finishers")["detail_week"]] == ["done"]
+    assert fig(d, "finishers")["month"] == 1
+
+
+def test_a_contract_and_its_extension_are_one_contractor_in_the_rolling_base(real_desk):
+    # orig+ext, done, r1, r2 → 4 contractors, not 5
+    assert C.build_contract_one_to_one(ME, WEEK)["attrition"]["rolling_base"] == 4
+
+
+def test_runners_are_contractors_out_today_counted_as_people(real_desk, monkeypatch):
+    """Today 29 Sep: ext, r1, r2 are out — orig and done have ended."""
+    monkeypatch.setattr(C, "date", _FixedDate)
+    assert C.build_contract_one_to_one(ME, WEEK)["runners"] == 3
+
+
+def test_runners_count_whole_not_split(monkeypatch):
+    """A runner is a person: AO-only (a third of the credit) still counts as 1."""
+    monkeypatch.setattr(C, "date", _FixedDate)
+    monkeypatch.setattr(C, "_contracts", lambda uid, since: [
+        real("ao", "005000/00/01", "2026-05-01", "2026-05-04", "2027-05-04", roles=("ao",))])
+    assert C.build_contract_one_to_one(ME, WEEK)["runners"] == 1
+
+
+def test_a_contract_overlapping_its_own_extension_is_still_one_runner(monkeypatch):
+    monkeypatch.setattr(C, "date", _FixedDate)
+    monkeypatch.setattr(C, "_contracts", lambda uid, since: [
+        real("o", "005100/00/01", "2026-01-01", "2026-01-05", "2026-10-31"),
+        real("e", "005100/01/00", "2026-09-01", "2026-09-28", "2027-03-31")])
+    assert C.build_contract_one_to_one(ME, WEEK)["runners"] == 1
+
+
+class _FixedDate(date):
+    @classmethod
+    def today(cls):
+        return date(2026, 9, 29)

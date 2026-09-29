@@ -128,3 +128,14 @@ def test_team_snoz_week_strip_is_exactly_as_it_was():
 def test_the_week_review_is_saved_from_both_boxes():
     assert 'week_consultant: document.getElementById("f-week_consultant").value' in JS
     assert 'week_manager: document.getElementById("f-week_manager").value' in JS
+
+
+def test_runners_card_is_on_the_contract_page_only():
+    assert "Runners out" in _body("renderContract")
+    assert "Runners out" not in _body("renderPerm")
+
+
+def test_runners_card_sits_in_key_figures():
+    body = _body("renderContract")
+    assert body.index("<h2>Key figures</h2>") < body.index("Runners out") \
+        < body.index("Committed business")

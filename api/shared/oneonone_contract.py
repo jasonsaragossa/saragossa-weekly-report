@@ -85,6 +85,16 @@ def _cancelled(p: dict) -> bool:
     return p.get("statuscode") in CANCEL_CODES
 
 
+def _contractor_key(p: dict) -> str:
+    """
+    One contractor across a contract and all its extensions. The first part of
+    the placement code is shared by both (004749/00/06 and 004749/01/00) and,
+    unlike the parent link, is always filled in.
+    """
+    code = (p.get("crimson_placementidcode") or "").split("/")[0].strip()
+    return code or p.get("_mercury_parentplacementid_value") or p["crimson_placementid"]
+
+
 def _row(p: dict, uid: str) -> dict:
     return {"client": (p.get("crimson_clientname") or {}).get("name") or "",
             "role": p.get("crimson_name") or "",
@@ -127,8 +137,19 @@ def build_contract_one_to_one(uid: str, week: date = None) -> dict:
                 r[k] = None
 
     contracts = r["contracts"]
-    extended = {p.get("_mercury_parentplacementid_value") for p in contracts if _is_extension(p)}
-    extended.discard(None)
+    # A contract is "extended" if the same contractor has a later record. This
+    # can't use the parent link: none of the 232 contract extensions in the
+    # year to Sep 2026 has it set, so every extended contractor was showing as
+    # a finisher. The placement code's first part is always there.
+    latest = {}
+    for p in contracts:
+        if _cancelled(p):
+            continue
+        k, s = _contractor_key(p), _d(p.get("crimson_startdate"))
+        if s and (k not in latest or s > latest[k]):
+            latest[k] = s
+    extended = {p["crimson_placementid"] for p in contracts
+                if (s := _d(p.get("crimson_startdate"))) and s < latest.get(_contractor_key(p), s)}
 
     def created_in(start, end):
         return [p for p in contracts if not _cancelled(p) and not _is_extension(p)
@@ -173,8 +194,7 @@ def build_contract_one_to_one(uid: str, week: date = None) -> dict:
                 continue
             s, e = _d(p.get("crimson_startdate")), _effective_end(p)
             if s and e and s < end and e >= start:
-                roots.add(p.get("_mercury_parentplacementid_value") if _is_extension(p)
-                          else p["crimson_placementid"])
+                roots.add(_contractor_key(p))
         return len(roots)
 
     placed_w, placed_m = created_in(week, next_week), created_in(m_start, m_end)
@@ -200,6 +220,7 @@ def build_contract_one_to_one(uid: str, week: date = None) -> dict:
         meetings.append(row)
 
     rows = lambda ps: [_row(p, uid) for p in ps]
+    live_now = live_at(today + timedelta(days=1))
     return {
         "week_start": week.isoformat(),
         "month_label": m_start.strftime("%B"),
@@ -225,7 +246,10 @@ def build_contract_one_to_one(uid: str, week: date = None) -> dict:
                            "rolling 12m: ÷ every contractor live at any point in the year"),
         },
         "current_wnfi": current_wnfi,
-        "live_contracts": rows(live_at(today + timedelta(days=1))),
+        "live_contracts": rows(live_now),
+        # Runners = contractors out on assignment today, counted as people:
+        # whole, not split, and a contract with its extension is one runner.
+        "runners": len({_contractor_key(p) for p in live_now}),
         "meetings": meetings,
         "live_jobs": r["jobs"],
     }
