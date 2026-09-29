@@ -50,6 +50,27 @@ def parse_date(s: str) -> date:
     return datetime.strptime(s[:10], "%Y-%m-%d").date()
 
 
+_CONSULTANT, _AO, _CRO, _CONRO = (
+    "_crimson_consultant_value", "_mercury_assignmentowner_value",
+    "_mercury_clientrelationshipowner_value", "_mercury_contractorrelationship_userid_value",
+)
+
+
+def placement_credit_slots(placement: dict) -> dict:
+    """Placement (deal) credit per owner field — the agreed ownership rule:
+    4-way (CONRO set): 0.25 each to Consultant, AO, CRO and CONRO.
+    3-way:             0.5 to the Consultant and 0.5 to the AO; the CRO gets none.
+    Money uses split_factor (a third each 3-way, a quarter each 4-way)."""
+    if placement.get(_CONRO):
+        return {_CONSULTANT: 0.25, _AO: 0.25, _CRO: 0.25, _CONRO: 0.25}
+    return {_CONSULTANT: 0.5, _AO: 0.5}
+
+
+def placement_credit(placement: dict, uid: str) -> float:
+    """This user's placement credit (0, 0.25, 0.5, 1, ...) — one share per role held."""
+    return sum(w for f, w in placement_credit_slots(placement).items() if placement.get(f) == uid)
+
+
 def split_factor(placement: dict, uid: str) -> float:
     """Returns this user's fraction of the placement (0, 1/3, 2/3, 1, 1/4, etc.)"""
     conro = placement.get("_mercury_contractorrelationship_userid_value")
@@ -516,8 +537,8 @@ def compute_written_months(
     """
     "Written" view — bucketed by the month the placement record was CREATED.
     Returns {"months": {"1": gp, ...}, "counts": {"1": n, ...}} where GP uses
-    the standard ownership split and the placement count credits 0.5 to the
-    Consultant and 0.5 to the AO. contract_mode looks at contract/temp records
+    the standard ownership split and the placement count uses
+    placement_credit (0.5 Consultant + 0.5 AO, or 0.25 each on a 4-way deal). contract_mode looks at contract/temp records
     only and excludes extensions (initial contracts, full-contract GP);
     otherwise permanent placements only.
     """
@@ -542,10 +563,9 @@ def compute_written_months(
         if before_date and d >= before_date:
             continue
         m_str = str(d.month)
-        count = (0.5 if p.get("_crimson_consultant_value") == uid else 0.0) \
-              + (0.5 if p.get("_mercury_assignmentowner_value") == uid else 0.0)
+        count = placement_credit(p, uid)
         if count > 0:
-            counts[m_str] = round(counts[m_str] + count, 1)
+            counts[m_str] = round(counts[m_str] + count, 2)
         factor = split_factor(p, uid)
         if factor > 0:
             gp  = p.get("recruit_truegrossprofit") or 0.0

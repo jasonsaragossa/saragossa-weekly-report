@@ -4,10 +4,10 @@ The derived half of a Contract USA 1:1 (Jim Jeffers' desk, Sep 2026).
 A contract desk is measured on contractors rather than deals: what was placed
 and how much weekly margin it added, who started, who finished and whether
 they were replaced, and what is live right now. Everything here comes from
-contract placements the person has a role on, credited by the same split rules
-the weekly report uses (0.5 for AO only, a third or a quarter share otherwise)
-where the figure is money or a placement count; starters and finishers are
-people, so they count whole.
+contract placements the person has a role on. Money (WNFI) is split a third
+each 3-way or a quarter each 4-way (split_factor); the placement count uses
+placement_credit (0.5 Consultant + 0.5 AO, or 0.25 each on a 4-way deal).
+Starters and finishers are people, so they count whole.
 
   Placements in month     placements CREATED in the month, split-credited
   WNFI added              their weekly margin, split-credited, in USD
@@ -25,7 +25,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 
 from shared.calc import (TO_USD, _build_fx_tables, _is_extension, compute_wnf,
-                         parse_date, split_factor)
+                         parse_date, placement_credit, split_factor)
 from shared.dataverse import (CANCEL_CODES, CONTRACT_TYPES, get_fx_rates,
                               get_live_contract_placements, odata_get_all, odata_str)
 from shared.mbr_registry import CLIENT_MEETING_PURPOSES
@@ -155,7 +155,7 @@ def build_contract_one_to_one(uid: str, week: date = None) -> dict:
                 and (e := _effective_end(p)) and e >= day]
 
     def split_count(rows):
-        return round(sum(split_factor(p, uid) for p in rows), 2)
+        return round(sum(placement_credit(p, uid) for p in rows), 2)
 
     def wnfi(rows):
         return round(sum((p.get("recruit_trueweeklygrossprofit") or 0) * split_factor(p, uid)

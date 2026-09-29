@@ -5,7 +5,8 @@ cancellations), regional perm totals, placement forecast, and Tech ROI.
 
 Counting rules (verified against the June 2026 board slide):
   * A placement credits 0.5 to the Consultant slot's bucket and 0.5 to the AO
-    slot's bucket, bucketed by the owner's territory (Consult and Deploy are
+    slot's bucket; on a 4-way (CONRO) deal each of the four owners' buckets
+    gets 0.25. Bucketed by the owner's territory (Consult and Deploy are
     real Mercury territories). Owners with no territory are excluded.
   * Retainer-candidate placements are excluded from the deal counts and shown
     on their own row.
@@ -18,7 +19,7 @@ import logging
 from datetime import date
 
 from shared.calc import (
-    _build_fx_tables, TO_GBP, TO_USD, split_factor, parse_date,
+    _build_fx_tables, TO_GBP, TO_USD, split_factor, placement_credit_slots, parse_date,
     _is_extension, _DEAL_CONTRACT_TYPE_CODES, _PERM_TYPE_CODE, rebate_of,
 )
 from shared.dataverse import (
@@ -48,7 +49,6 @@ PENDING_STATUS = 143570001
 _MONTHS = ["January", "February", "March", "April", "May", "June", "July",
            "August", "September", "October", "November", "December"]
 
-_OWNER_SLOTS = ("_crimson_consultant_value", "_mercury_assignmentowner_value")
 _ALL_OWNER_FIELDS = (
     "_mercury_clientrelationshipowner_value", "_crimson_consultant_value",
     "_mercury_assignmentowner_value", "_mercury_contractorrelationship_userid_value",
@@ -114,15 +114,16 @@ def _month_stats(created, started_perm, user_terr, to_gbp, y, m):
             stats["retainer_count"] += 1
             continue
 
-        # Placement counts: 0.5 to the Consultant slot, 0.5 to the AO slot.
+        # Placement counts: 0.5 Consultant + 0.5 AO, or 0.25 to each of the
+        # four owners on a 4-way (CONRO) deal — see calc.placement_credit_slots.
         # The Notes deal counts accumulate the SAME credits as the P&L table,
         # so the two can never disagree (territory-less owners count nowhere).
         credited = 0.0
-        for slot in _OWNER_SLOTS:
+        for slot, weight in placement_credit_slots(p).items():
             b = _bucket_for(user_terr.get(p.get(slot)))
             if b:
-                buckets[b][kind] += 0.5
-                credited += 0.5
+                buckets[b][kind] += weight
+                credited += weight
         stats[f"{kind}_deals"] += credited
         if credited and p.get("statuscode") == PENDING_STATUS:
             stats[f"{kind}_pending"] += 1

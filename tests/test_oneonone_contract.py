@@ -72,9 +72,10 @@ def fig(d, key):
 
 def test_placements_are_split_credited(monkeypatch):
     d = C.build_contract_one_to_one(ME, WEEK)
-    # AO-only = 1/3 of a three-way split; all three roles = 1.0
-    assert fig(d, "placements")["week"] == pytest.approx(1 / 3, abs=0.01)
-    assert fig(d, "placements")["month"] == pytest.approx(1 / 3 + 1.0, abs=0.01)
+    # Placement credit (not the money split): AO-only on a 3-way deal = 0.5;
+    # Consultant + AO + CRO = 0.5 + 0.5 + 0 = 1.0
+    assert fig(d, "placements")["week"] == pytest.approx(0.5, abs=0.01)
+    assert fig(d, "placements")["month"] == pytest.approx(0.5 + 1.0, abs=0.01)
 
 
 def test_wnfi_added_follows_the_same_split():
@@ -148,7 +149,7 @@ def test_a_week_straddling_a_month_end_belongs_to_the_month_it_started_in(monkey
     assert d["month_label"] == "September"
     # new-month (created 3 Sep) is in that month; a week-end anchor would have
     # given October and lost it
-    assert fig(d, "placements")["month"] == pytest.approx(1 / 3 + 1.0, abs=0.01)
+    assert fig(d, "placements")["month"] == pytest.approx(0.5 + 1.0, abs=0.01)
 
 
 def test_a_week_wholly_inside_a_month_is_unaffected():

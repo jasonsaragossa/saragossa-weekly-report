@@ -9,8 +9,8 @@ import logging
 from datetime import date
 from concurrent.futures import ThreadPoolExecutor
 
-from shared.calc import (TO_GBP, TO_USD, _build_fx_tables, split_factor, parse_date,
-                         rebate_of)
+from shared.calc import (TO_GBP, TO_USD, _build_fx_tables, split_factor, placement_credit,
+                         parse_date, rebate_of)
 from shared.dataverse import (odata_get_all, odata_str, active_or_rebated_filter,
                               get_fx_rates, get_territory_name)
 from shared.mbr_registry import (BD_CALL_PURPOSES, BD_NO_PITCH_PURPOSE, BD_PITCH_PURPOSE,
@@ -151,10 +151,7 @@ def compute_month(uid: str, year: int, month: int, to_gbp: dict = None) -> dict:
         amount = (p.get("recruit_truegrossprofit") or 0.0) - rebate_of(p)[0]
         ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode")
         gp += amount * factor * fx.get(ccy, 1.0)
-        if p.get("_crimson_consultant_value") == uid:
-            deals += 0.5
-        if p.get("_mercury_assignmentowner_value") == uid:
-            deals += 0.5
+        deals += placement_credit(p, uid)
         if (p.get("_mercury_clientrelationshipowner_value") == uid
                 and "new business" in (p.get("crimson_specialinstructionsclient") or "").lower()):
             if p.get("_crimson_clientname_value"):
@@ -184,7 +181,7 @@ def compute_month(uid: str, year: int, month: int, to_gbp: dict = None) -> dict:
 
     return {
         "perm_gp":            round(gp, 2),
-        "deals":              round(deals, 1),
+        "deals":              round(deals, 2),
         "new_clients":        len(clients),
         "cvs_sent":           cvs,
         "interviews_first":   iv1,
@@ -231,10 +228,7 @@ def compute_ytd_headline(uid: str, year: int, month: int, to_gbp: dict = None) -
         # "To date" stops at the end of the month being reviewed
         if parse_date(p["crimson_startdate"]) < to_date_end:
             gp += value(p)
-            if p.get("_crimson_consultant_value") == uid:
-                deals += 0.5
-            if p.get("_mercury_assignmentowner_value") == uid:
-                deals += 0.5
+            deals += placement_credit(p, uid)
             if (p.get("_mercury_clientrelationshipowner_value") == uid
                     and "new business" in (p.get("crimson_specialinstructionsclient") or "").lower()
                     and p.get("_crimson_clientname_value")):
@@ -243,7 +237,7 @@ def compute_ytd_headline(uid: str, year: int, month: int, to_gbp: dict = None) -
     created_value = sum(value(p) for p in created
                         if p.get("_recruit_candidatecontact_value") != RETAINER_CONTACT)
 
-    return {"revenue": round(gp, 2), "deals": round(deals, 1), "new_clients": len(clients),
+    return {"revenue": round(gp, 2), "deals": round(deals, 2), "new_clients": len(clients),
             "written_starting": round(written_starting, 2),
             "created_value": round(created_value, 2),
             "created_count": len([p for p in created
