@@ -79,6 +79,52 @@ def test_the_ladder_lights_only_the_matched_rung():
     assert 'i < at ? "done" : i === at ? "now" : "todo"' in JS
 
 
+def _body(name):
+    """The source of one top-level function in 121.js, up to the next one."""
+    start = JS.index(f"function {name}(")
+    ends = [i for i in (JS.find("\nfunction ", start + 1),
+                        JS.find("\nasync function ", start + 1)) if i != -1]
+    return JS[start:min(ends)] if ends else JS[start:]
+
+
+def test_the_week_review_is_on_the_contract_page():
+    """It was once added to Team Snoz's page by mistake, and the contract
+    save then failed on the missing boxes. Placement, not presence."""
+    assert 'id="f-week_consultant"' in _body("renderContract")
+    assert 'id="f-week_manager"' in _body("renderContract")
+
+
+def test_team_snoz_does_not_get_the_week_review():
+    assert "f-week_consultant" not in _body("renderPerm")
+    assert "f-week_manager" not in _body("renderPerm")
+    assert "week_consultant" not in _body("savePerm")
+
+
+def test_the_week_review_sits_just_above_the_actions():
+    body = _body("renderContract")
+    assert body.index("How did ") < body.index("Actions from this 1:1")
+
+
+def test_every_field_the_contract_save_reads_is_on_the_contract_page():
+    """A save that reads a box the page never drew throws, and nothing saves."""
+    import re
+    save, page = _body("saveContract"), _body("renderContract")
+    for field in re.findall(r'getElementById\("(f-[a-z_]+)"\)', save):
+        assert f'id="{field}"' in page, field
+
+
+def test_the_week_strip_follows_the_desk_locale():
+    """The dates you see first. It was hand-built as day/month for everyone."""
+    assert "${dt.getDate()}/${dt.getMonth() + 1}</button>" not in JS
+    assert "${shortDay(dt)}</button>" in JS
+
+
+def test_team_snoz_week_strip_is_exactly_as_it_was():
+    """UK desk keeps 14/9 — the locale formatter would have padded it to 14/09."""
+    body = _body("shortDay")
+    assert "`${dt.getDate()}/${dt.getMonth() + 1}`" in body
+
+
 def test_the_week_review_is_saved_from_both_boxes():
     assert 'week_consultant: document.getElementById("f-week_consultant").value' in JS
     assert 'week_manager: document.getElementById("f-week_manager").value' in JS

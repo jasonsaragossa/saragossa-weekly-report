@@ -122,6 +122,15 @@ const S = (v) => esc(v || "");
 // helper is right on both pages.
 let OTO_LOCALE = "en-GB";
 
+// The week strip's compact day: 14/9 for the UK desk exactly as it always
+// was, 9/14 for the US one. Built by hand because the locale formatter pads
+// the UK form to 14/09.
+function shortDay(dt) {
+  return OTO_LOCALE === "en-US"
+    ? `${dt.getMonth() + 1}/${dt.getDate()}`
+    : `${dt.getDate()}/${dt.getMonth() + 1}`;
+}
+
 function fmtDate(iso, opts) {
   if (!iso) return "";
   const d = new Date(String(iso).slice(0, 10) + "T00:00:00");
@@ -139,7 +148,7 @@ function aiReadinessHtml(ai, opts) {
   }
   const when = ai.live
     ? "live — captured when this is first saved"
-    : "as saved" + (ai.captured ? " " + fmtDate(ai.captured, { day: "numeric", month: "short" }) : "");
+    : "as saved" + (ai.captured ? " " + new Date(ai.captured).toLocaleDateString(OTO_LOCALE, { day: "numeric", month: "short" }) : "");
   const delta = opts.prev && opts.prev.score != null
     ? ` <span class="ai-delta ${ai.score - opts.prev.score >= 0 ? "pos" : "neg"}">${
         ai.score - opts.prev.score >= 0 ? "+" : ""}${Math.round((ai.score - opts.prev.score) * 10) / 10}</span>`
@@ -217,7 +226,7 @@ function quarterStrip(d) {
           const dt = new Date(w + "T00:00:00");
           const cls = [w === d.week_start ? "current" : "", done.has(w) ? "done" : ""].join(" ").trim();
           return `<button class="oto-week ${cls}" data-week="${w}"
-            title="${done.has(w) ? "1:1 saved" : "not yet completed"}">${dt.getDate()}/${dt.getMonth() + 1}</button>`;
+            title="${done.has(w) ? "1:1 saved" : "not yet completed"}">${shortDay(dt)}</button>`;
         }).join("")}
       </div>
       <button class="oto-nav" data-week="${esc(q.next || "")}" title="Later weeks">›</button>
@@ -359,20 +368,6 @@ function renderPerm(d) {
         <textarea id="f-priority_bd" rows="3">${S(saved.priority_bd)}</textarea></label>
       <label class="mbr-field">What do you need from me to achieve your goals?
         <textarea id="f-support_needed" rows="2">${S(saved.support_needed)}</textarea></label>
-    </section>
-
-    <section class="mbr-section">
-      <h2>How did ${esc(CONTRACT_WEEK_WORD.toLowerCase())} go?</h2>
-      <div class="oto-two">
-        <label class="mbr-field">Consultant
-          <textarea rows="4" class="oto-in" id="f-week_consultant"
-            placeholder="In your own words — what went well, what didn't">${S(saved.week_consultant)}</textarea>
-        </label>
-        <label class="mbr-field">Manager
-          <textarea rows="4" class="oto-in" id="f-week_manager"
-            placeholder="Your read on the week, and what you want to see next">${S(saved.week_manager)}</textarea>
-        </label>
-      </div>
     </section>
 
     <section class="mbr-section">
@@ -751,6 +746,20 @@ function renderContract(d) {
     <section class="mbr-section">
       <h2>Last week's actions</h2>
       ${rowsTable([{label:"Action"}, {label:"Owner"}], carriedRows, "No actions carried forward.")}
+    </section>
+
+    <section class="mbr-section">
+      <h2>How did ${esc(CONTRACT_WEEK_WORD.toLowerCase())} go?</h2>
+      <div class="oto-two">
+        <label class="mbr-field">Consultant
+          <textarea rows="4" class="oto-in" id="f-week_consultant"
+            placeholder="In your own words — what went well, what didn't">${S(saved.week_consultant)}</textarea>
+        </label>
+        <label class="mbr-field">Manager
+          <textarea rows="4" class="oto-in" id="f-week_manager"
+            placeholder="Your read on the week, and what you want to see next">${S(saved.week_manager)}</textarea>
+        </label>
+      </div>
     </section>
 
     <section class="mbr-section">
