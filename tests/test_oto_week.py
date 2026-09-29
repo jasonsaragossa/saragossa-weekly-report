@@ -55,3 +55,30 @@ def test_the_first_load_asks_the_server_which_week():
 
 def test_the_picker_is_set_from_the_week_the_server_returned():
     assert 'if (d.week_start) document.getElementById("oto-week").value = d.week_start;' in JS
+
+
+# ── Dates, the ladder and the week review on the page ─────────────────────────
+
+def test_no_date_is_hard_coded_to_a_uk_locale_any_more():
+    """Every date on the page goes through the team's locale, so the US desk
+    reads 9/14/2026 rather than 14/09/2026."""
+    import re
+    # The only en-GB left should be the fallback default and the response read
+    leftovers = [ln.strip() for ln in JS.splitlines()
+                 if 'toLocaleDateString("en-GB"' in ln or 'toLocaleTimeString("en-GB"' in ln]
+    assert leftovers == []
+
+
+def test_the_page_takes_its_locale_from_the_template():
+    assert 'OTO_LOCALE = d.locale || "en-GB";' in JS
+    assert "function fmtDate(" in JS
+
+
+def test_the_ladder_lights_only_the_matched_rung():
+    assert 'const at = rungs.indexOf((d.person || {}).rung);' in JS
+    assert 'i < at ? "done" : i === at ? "now" : "todo"' in JS
+
+
+def test_the_week_review_is_saved_from_both_boxes():
+    assert 'week_consultant: document.getElementById("f-week_consultant").value' in JS
+    assert 'week_manager: document.getElementById("f-week_manager").value' in JS

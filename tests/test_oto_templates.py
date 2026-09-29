@@ -123,3 +123,40 @@ def test_jim_runs_the_1_1s_rather_than_sitting_in_one():
                        ("connor@saragossa.io", False)):
         seen, _ = T.visible_people("contract_usa", who, is_admin=admin)
         assert "Jim Jeffers" not in names(seen), who
+
+
+# ── Career ladder ─────────────────────────────────────────────────────────────
+
+def test_the_ladder_is_the_one_jason_gave():
+    assert T.CAREER_LADDER == ("Associate", "Consultant", "Senior Consultant",
+                               "Lead Consultant", "Principal Consultant", "EIC")
+
+
+def test_the_real_mercury_titles_on_the_desk_map_to_a_rung():
+    """The titles actually on the Chicago Contract desk, read 29 Sep 2026."""
+    assert T.rung("Associate Consultant") == "Associate"      # Lily, Cate
+    assert T.rung("Consultant") == "Consultant"               # Brandon, Austin
+    assert T.rung("Senior Consultant") == "Senior Consultant"  # Reid, Makenzie
+    assert T.rung("Principal Consultant") == "Principal Consultant"   # Michael B
+
+
+def test_a_title_that_is_not_on_the_ladder_gives_no_rung():
+    """Better an unlit strip than a guessed rung in a progression talk."""
+    assert T.rung("Team Lead - Contract") is None             # Connor
+    assert T.rung("Contract Sales Director") is None          # Jim
+    assert T.rung("") is None and T.rung(None) is None
+
+
+def test_matching_ignores_case_and_stray_spacing():
+    assert T.rung("  senior CONSULTANT ") == "Senior Consultant"
+
+
+def test_every_rung_is_reachable_from_some_title():
+    """A rung nothing can map to would sit permanently unlit."""
+    reachable = {T.rung(t) for t in T._TITLE_TO_RUNG}
+    assert reachable == set(T.CAREER_LADDER)
+
+
+def test_the_us_desk_gets_us_dates_and_the_uk_desk_uk_ones():
+    assert T.TEMPLATES["contract_usa"]["locale"] == "en-US"
+    assert T.TEMPLATES["snoz"]["locale"] == "en-GB"

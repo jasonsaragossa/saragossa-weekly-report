@@ -103,6 +103,7 @@ async function load() {
     // Show the week the server settled on, so the picker and the figures can
     // never disagree about which week this 1:1 is.
     if (d.week_start) document.getElementById("oto-week").value = d.week_start;
+    OTO_LOCALE = d.locale || "en-GB";
     const sel = document.getElementById("oto-person");
     if (!sel.options.length) {
       sel.innerHTML = d.people.map(p =>
@@ -116,6 +117,18 @@ async function load() {
 
 const S = (v) => esc(v || "");
 
+// Dates follow the team's own locale — the Contract USA desk reads 9/14/2026,
+// Team Snoz reads 14/09/2026. Set from the template on every load, so the same
+// helper is right on both pages.
+let OTO_LOCALE = "en-GB";
+
+function fmtDate(iso, opts) {
+  if (!iso) return "";
+  const d = new Date(String(iso).slice(0, 10) + "T00:00:00");
+  if (isNaN(d)) return String(iso);
+  return d.toLocaleDateString(OTO_LOCALE, opts || { day: "numeric", month: "short", year: "numeric" });
+}
+
 // AI Readiness score as a pill: the number, its colour band, and whether it is
 // live (unsaved record) or the figure frozen when the record was first saved.
 function aiReadinessHtml(ai, opts) {
@@ -126,8 +139,7 @@ function aiReadinessHtml(ai, opts) {
   }
   const when = ai.live
     ? "live — captured when this is first saved"
-    : "as saved" + (ai.captured ? " " + new Date(ai.captured).toLocaleDateString("en-GB",
-        { day: "numeric", month: "short" }) : "");
+    : "as saved" + (ai.captured ? " " + fmtDate(ai.captured, { day: "numeric", month: "short" }) : "");
   const delta = opts.prev && opts.prev.score != null
     ? ` <span class="ai-delta ${ai.score - opts.prev.score >= 0 ? "pos" : "neg"}">${
         ai.score - opts.prev.score >= 0 ? "+" : ""}${Math.round((ai.score - opts.prev.score) * 10) / 10}</span>`
@@ -241,8 +253,7 @@ function renderPerm(d) {
   // Meetings read like the live-jobs row: person, job title, company, subject
   // and date all at full size rather than tucked into small grey meta text.
   const dash = "<span class='dim'>—</span>";
-  const day = (w) => w ? new Date(w + "T00:00:00").toLocaleDateString("en-GB",
-    { weekday: "short", day: "numeric", month: "short" }) : dash;
+  const day = (w) => w ? fmtDate(w, { weekday: "short", day: "numeric", month: "short" }) : dash;
   const meetingCells = (m) => `
       <td>${esc(m.contact) || dash}${m.job_title ? `<div class="oto-sub">${esc(m.job_title)}</div>` : ""}</td>
       <td>${esc(m.client) || "<span class='dim'>no company on record</span>"}</td>
@@ -294,7 +305,7 @@ function renderPerm(d) {
       ${rowsTable([{label:"Input"}, {label:"Last week", num:true},
                    {label:`${esc(d.month_label || "Month")} so far`, num:true}], inputRows, "")}
       <p class="mbr-note">Pulled from Mercury — read only. ${esc(d.month_label || "Month")} so far runs
-        1&ndash;${d.month_to ? new Date(d.month_to + "T00:00:00").toLocaleDateString("en-GB",
+        1&ndash;${d.month_to ? fmtDate(d.month_to, 
           { day: "numeric", month: "short" }) : ""}.</p>
     </section>
 
@@ -348,6 +359,20 @@ function renderPerm(d) {
         <textarea id="f-priority_bd" rows="3">${S(saved.priority_bd)}</textarea></label>
       <label class="mbr-field">What do you need from me to achieve your goals?
         <textarea id="f-support_needed" rows="2">${S(saved.support_needed)}</textarea></label>
+    </section>
+
+    <section class="mbr-section">
+      <h2>How did ${esc(CONTRACT_WEEK_WORD.toLowerCase())} go?</h2>
+      <div class="oto-two">
+        <label class="mbr-field">Consultant
+          <textarea rows="4" class="oto-in" id="f-week_consultant"
+            placeholder="In your own words — what went well, what didn't">${S(saved.week_consultant)}</textarea>
+        </label>
+        <label class="mbr-field">Manager
+          <textarea rows="4" class="oto-in" id="f-week_manager"
+            placeholder="Your read on the week, and what you want to see next">${S(saved.week_manager)}</textarea>
+        </label>
+      </div>
     </section>
 
     <section class="mbr-section">
@@ -411,8 +436,7 @@ function showDetail(label, period, rows) {
           r.job_title ? `<div class="oto-sub">${esc(r.job_title)}</div>` : ""}</td>
         <td>${esc(r.client) || "<span class='dim'>—</span>"}</td>
         <td>${esc(r.subject) || "<span class='dim'>—</span>"}</td>
-        <td class="num dim">${r.when ? new Date(r.when + "T00:00:00").toLocaleDateString("en-GB",
-          { day: "numeric", month: "short" }) : "—"}</td>
+        <td class="num dim">${r.when ? fmtDate(r.when, { day: "numeric", month: "short" }) : "—"}</td>
       </tr>`).join("")}</tbody>
     </table></div>` : `<p class="mbr-empty">Nothing recorded.</p>`;
   overlay.style.display = "flex";
@@ -469,7 +493,7 @@ async function savePerm() {
     const d = await resp.json();
     if (!d.ok) throw new Error(d.error || "unknown error");
     document.getElementById("oto-saved").textContent =
-      "Saved " + new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+      "Saved " + new Date().toLocaleTimeString(OTO_LOCALE, { hour: "2-digit", minute: "2-digit" });
   } catch (e) {
     alert("Could not save: " + e.message);
   }
@@ -562,20 +586,38 @@ function weekWord(weekStart) {
   const weeksBack = Math.round((monday - shown) / (7 * 86400000));
   if (weeksBack === 0) return "This week";
   if (weeksBack === 1) return "Last week";
-  return "w/c " + shown.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  return "w/c " + shown.toLocaleDateString(OTO_LOCALE, { day: "numeric", month: "short" });
 }
 
 function showContractDetail(f, period) {
   const rows = f["detail_" + period] || [];
   const body = rows.map(r => `<tr>
       <td>${esc(r.client)}</td><td>${esc(r.role)}</td>
-      <td class="num">${esc(r.start)}</td><td class="num">${esc(r.end)}</td>
+      <td class="num">${esc(fmtDate(r.start))}</td><td class="num">${esc(fmtDate(r.end))}</td>
       <td class="num">${usd(r.wnfi)}</td><td class="num dim">${r.share}</td></tr>`).join("");
   showModal(`${f.label} — ${period === "week" ? CONTRACT_WEEK_WORD.toLowerCase() : "this month"}`,
     `<div class="table-wrap"><table>
       <thead><tr><th>Client</th><th>Role</th><th class="num">Start</th><th class="num">End</th>
         <th class="num">WNFI (share)</th><th class="num">Split</th></tr></thead>
       <tbody>${body}</tbody></table></div>`);
+}
+
+// The career ladder, with the person's current rung lit. A title Mercury
+// doesn't recognise leaves every rung unlit and says so, rather than guessing
+// — a wrong rung in a progression conversation is worse than none.
+function ladderStrip(d) {
+  const rungs = d.career_ladder || [];
+  if (!rungs.length) return "";
+  const at = rungs.indexOf((d.person || {}).rung);
+  const steps = rungs.map((r, i) => {
+    const cls = i < at ? "done" : i === at ? "now" : "todo";
+    return `<span class="oto-rung ${cls}"${i === at ? ' aria-current="step"' : ""}>${esc(r)}</span>`;
+  }).join('<span class="oto-rung-arrow" aria-hidden="true">›</span>');
+  const title = (d.person || {}).title || "";
+  const note = at === -1
+    ? `<span class="oto-rung-note">Mercury has this person as “${esc(title || "no title")}”, which isn't on the ladder.</span>`
+    : "";
+  return `<div class="oto-ladder" role="group" aria-label="Career ladder">${steps}${note}</div>`;
 }
 
 function renderContract(d) {
@@ -644,7 +686,7 @@ function renderContract(d) {
   const meetingRows = (d.meetings || []).map((m, i) => `<tr>
       <td>${esc(m.contact || "")}<span class="oto-meta">${esc(m.job_title || "")}</span></td>
       <td>${esc(m.client || "")}</td>
-      <td>${esc(m.subject || "")}<span class="oto-meta">${esc(m.when || "")}</span></td>
+      <td>${esc(m.subject || "")}<span class="oto-meta">${esc(fmtDate(m.when))}</span></td>
       <td><span class="oto-kind ${m.kind === "New business" ? "nb" : ""}">${esc(m.kind)}</span></td>
       <td>${ta("meeting_plans", "plan", i, (plans[m.id] || {}).plan, "Actions / expectations")}
         <input type="hidden" class="oto-in" data-name="meeting_plans" data-key="id" data-idx="${i}" value="${esc(m.id)}"></td>
@@ -656,7 +698,7 @@ function renderContract(d) {
       <td class="oto-fixed dim">${S(a.owner)}</td>
     </tr>`).join("");
 
-  document.getElementById("oto-content").innerHTML = quarterStrip(d) + `
+  document.getElementById("oto-content").innerHTML = quarterStrip(d) + ladderStrip(d) + `
     <section class="mbr-section">
       <h2>Key figures</h2>
       <div class="oto-two">
@@ -779,6 +821,8 @@ async function saveContract() {
     blocks: collect("blocks").filter(r => r.role_id || r.block || r.steps),
     meeting_plans: collect("meeting_plans").filter(r => r.plan),
     actions: collect("actions").filter(r => r.action),
+    week_consultant: document.getElementById("f-week_consultant").value,
+    week_manager: document.getElementById("f-week_manager").value,
   };
   try {
     const resp = await fetch("/api/one-to-one", {
@@ -788,7 +832,7 @@ async function saveContract() {
     const d = await resp.json();
     if (!d.ok) throw new Error(d.error || "unknown error");
     document.getElementById("oto-saved").textContent =
-      "Saved " + new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+      "Saved " + new Date().toLocaleTimeString(OTO_LOCALE, { hour: "2-digit", minute: "2-digit" });
     load();
   } catch (e) {
     alert("Could not save: " + e.message);

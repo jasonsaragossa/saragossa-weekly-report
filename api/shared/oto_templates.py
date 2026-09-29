@@ -18,6 +18,7 @@ TEMPLATES = {
     "snoz": {
         "name":      "Team Snoz",
         "kind":      "perm",
+        "locale":    "en-GB",
         # Roster = one Mercury team
         "team":      "Team Snoz",
         "leads":     {"harrysnozwell@saragossa.io"},
@@ -26,6 +27,8 @@ TEMPLATES = {
     "contract_usa": {
         "name":      "Contract USA",
         "kind":      "contract",
+        # A US desk reads US dates — 9/14/2026, not 14/09/2026 (Jason, Sep 2026)
+        "locale":    "en-US",
         # Roster = a territory; the house account is not a person
         "territory": "Chicago Contract",
         "exclude_names": ("saragossa house",),
@@ -43,7 +46,32 @@ TEMPLATES = {
     },
 }
 
-_SELECT = "systemuserid,fullname,internalemailaddress,isdisabled"
+_SELECT = "systemuserid,fullname,internalemailaddress,isdisabled,title"
+
+# The consultant career ladder, in order. Shown at the top of a 1:1 with the
+# person's current rung highlighted, so progression is in front of both of
+# them every week (Jason, Sep 2026).
+CAREER_LADDER = ("Associate", "Consultant", "Senior Consultant",
+                 "Lead Consultant", "Principal Consultant", "EIC")
+
+# Mercury job titles that mean a rung but aren't spelled like one. Anything
+# not on the ladder and not here leaves the strip unhighlighted rather than
+# guessing — a wrong rung in a progression conversation is worse than none.
+_TITLE_TO_RUNG = {
+    "associate consultant": "Associate",
+    "associate":            "Associate",
+    "consultant":           "Consultant",
+    "senior consultant":    "Senior Consultant",
+    "lead consultant":      "Lead Consultant",
+    "principal consultant": "Principal Consultant",
+    "eic":                  "EIC",
+    "expert in charge":     "EIC",
+}
+
+
+def rung(title: str) -> str | None:
+    """Which rung of the ladder a Mercury job title is, or None."""
+    return _TITLE_TO_RUNG.get((title or "").strip().lower())
 
 
 def _team_members(team_name: str) -> list:
@@ -104,5 +132,6 @@ def templates_for(email: str, is_admin: bool) -> list:
         people, is_lead = visible_people(tid, email, is_admin)
         if people:
             out.append({"id": tid, "name": t["name"], "kind": t["kind"],
+                        "locale": t.get("locale") or "en-GB",
                         "people": people, "is_lead": is_lead})
     return out

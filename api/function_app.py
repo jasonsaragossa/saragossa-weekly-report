@@ -830,7 +830,9 @@ _OTO_KEEP = {
              "meetings_this_plan", "mbr_progress", "priority_resourcing",
              "priority_bd", "support_needed"),
     "contract": ("actions", "committed", "chances_week", "chances_month",
-                 "chances_other", "blocks", "meeting_plans"),
+                 "chances_other", "blocks", "meeting_plans",
+                 # How did the week go — both sides answer, in their own box
+                 "week_consultant", "week_manager"),
 }
 
 
@@ -844,7 +846,7 @@ def one_to_one(req: func.HttpRequest) -> func.HttpResponse:
     from shared.oneonone import (build_one_to_one, week_start, default_week,
                                  quarter_weeks, INPUT_ROWS)
     from shared.oneonone_contract import build_contract_one_to_one
-    from shared.oto_templates import templates_for
+    from shared.oto_templates import CAREER_LADDER, rung, templates_for
     try:
         body = req.get_json() if req.method == "POST" else {}
     except ValueError:
@@ -901,10 +903,16 @@ def one_to_one(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(json.dumps({
             "ok": True, "is_lead": is_lead, "is_admin": is_admin_user,
             "template": {"id": tpl["id"], "name": tpl["name"], "kind": tpl["kind"]},
+            # Dates are rendered in the team's own locale, so a US desk never
+            # has to read 09/14 as the 9th of the 14th month.
+            "locale": tpl.get("locale") or "en-GB",
             # Every template this person can see, so the page can offer a switch
             "templates": [{"id": t["id"], "name": t["name"], "kind": t["kind"]} for t in templates],
             "ai_readiness": ai,
-            "person": {"uid": uid, "name": person.get("fullname", "")},
+            "person": {"uid": uid, "name": person.get("fullname", ""),
+                       "title": person.get("title") or "",
+                       "rung": rung(person.get("title"))},
+            "career_ladder": list(CAREER_LADDER),
             "people": [{"uid": p["systemuserid"], "name": p.get("fullname", "")} for p in people],
             "input_rows": [{"key": k, "label": l} for k, l in INPUT_ROWS],
             "close_reasons": [{"code": c, "label": lb} for c, lb in VACANCY_CLOSE_REASONS],
