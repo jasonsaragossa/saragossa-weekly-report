@@ -79,20 +79,33 @@ def default_week(kind: str, today: date = None) -> date:
 ROLLING_WEEKS = 13          # a rolling quarter, not a calendar one
 
 
-def quarter_weeks(d: date, count: int = ROLLING_WEEKS) -> dict:
+def quarter_weeks(d: date, count: int = ROLLING_WEEKS, since: date = None) -> dict:
     """
     The rolling 13 weeks ending at `d` — so crossing into a new calendar quarter
     doesn't hide the weeks either side of it (Jason, Sept 2026). Nothing is ever
     deleted: older weeks stay in Dataverse and are reachable by paging back.
+
+    `since` is the week a team started 1:1s: nothing earlier is shown or
+    reachable, since those weeks can only ever be empty. `prev` is then None
+    once the strip reaches it.
     """
     end = week_start(d)
     weeks = [(end - timedelta(days=7 * i)).isoformat() for i in range(count - 1, -1, -1)]
+    if since:
+        weeks = [w for w in weeks if w >= since.isoformat()] or [end.isoformat()]
     first = date.fromisoformat(weeks[0])
     fmt = "%b %Y" if first.year != end.year else "%b"
+    label = (end.strftime("%b %Y") if first.month == end.month and first.year == end.year
+             else f"{first.strftime(fmt)} – {end.strftime('%b %Y')}")
+    prev = end - timedelta(days=7 * count)
+    if since and first <= since:
+        prev = None
+    elif since and prev < since:
+        prev = since
     return {
-        "label": f"{first.strftime(fmt)} – {end.strftime('%b %Y')}",
+        "label": label,
         "weeks": weeks,
-        "prev": (end - timedelta(days=7 * count)).isoformat(),
+        "prev": prev.isoformat() if prev else None,
         "next": (end + timedelta(days=7 * count)).isoformat(),
     }
 

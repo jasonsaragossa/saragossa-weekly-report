@@ -29,6 +29,9 @@ TEMPLATES = {
         "kind":      "contract",
         # A US desk reads US dates — 9/14/2026, not 14/09/2026 (Jason, Sep 2026)
         "locale":    "en-US",
+        # The first week the desk held 1:1s for. Earlier weeks can only ever
+        # be empty, so they are neither shown nor reachable (Jason, Sep 2026).
+        "start_week": "2026-09-21",
         # Roster = a territory; the house account is not a person
         "territory": "Chicago Contract",
         "exclude_names": ("saragossa house",),
@@ -133,5 +136,6 @@ def templates_for(email: str, is_admin: bool) -> list:
         if people:
             out.append({"id": tid, "name": t["name"], "kind": t["kind"],
                         "locale": t.get("locale") or "en-GB",
+                        "start_week": t.get("start_week"),
                         "people": people, "is_lead": is_lead})
     return out

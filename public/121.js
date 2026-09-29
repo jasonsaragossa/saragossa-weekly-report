@@ -219,7 +219,8 @@ function quarterStrip(d) {
   const done = new Set(q.completed || []);
   return `
     <section class="oto-quarter">
-      <button class="oto-nav" data-week="${esc(q.prev || "")}" title="Earlier weeks">‹</button>
+      <button class="oto-nav" data-week="${esc(q.prev || "")}"${q.prev ? ' title="Earlier weeks"'
+        : ' disabled title="1:1s started here"'}>‹</button>
       <span class="oto-q-label">${esc(q.label || "")}</span>
       <div class="oto-weeks">
         ${(q.weeks || []).map(w => {

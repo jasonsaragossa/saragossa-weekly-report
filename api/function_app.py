@@ -873,6 +873,11 @@ def one_to_one(req: func.HttpRequest) -> func.HttpResponse:
         raw = req.params.get("week") or (body or {}).get("week")
         try:
             wk = week_start(date.fromisoformat(raw)) if raw else default_week(tpl["kind"])
+            # Nothing before the week a team started 1:1s — a request for an
+            # earlier week lands on the first one instead.
+            since = date.fromisoformat(tpl["start_week"]) if tpl.get("start_week") else None
+            if since and wk < since:
+                wk = since
         except ValueError:
             return func.HttpResponse(json.dumps({"ok": False, "error": "bad week"}),
                                      mimetype="application/json", status_code=400)
@@ -920,7 +925,9 @@ def one_to_one(req: func.HttpRequest) -> func.HttpResponse:
             "saved": saved,
             "carried_actions": (prev or {}).get("actions") or [],
             "mbr_actions": get_latest_mbr_actions(uid),
-            "quarter": {**quarter_weeks(wk), "completed": sorted(list_one_to_one_weeks(uid))},
+            "quarter": {**quarter_weeks(wk, since=since),
+                        "completed": sorted(w for w in list_one_to_one_weeks(uid)
+                                            if not since or w >= since.isoformat())},
         }), mimetype="application/json", status_code=200)
     except Exception:
         logging.exception("one-to-one error")

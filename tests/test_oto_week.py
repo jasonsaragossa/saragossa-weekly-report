@@ -139,3 +139,50 @@ def test_runners_card_sits_in_key_figures():
     body = _body("renderContract")
     assert body.index("<h2>Key figures</h2>") < body.index("Runners out") \
         < body.index("Committed business")
+
+
+# ── Contract USA starts at w/c 21 Sep 2026 ────────────────────────────────────
+
+def test_the_strip_shows_nothing_before_the_start_week():
+    from datetime import date
+    from shared.oneonone import quarter_weeks
+    q = quarter_weeks(date(2026, 9, 21), since=date(2026, 9, 21))
+    assert q["weeks"] == ["2026-09-21"]
+    assert q["prev"] is None                      # nowhere earlier to go
+
+
+def test_the_strip_grows_week_by_week_from_the_start():
+    from datetime import date
+    from shared.oneonone import quarter_weeks
+    q = quarter_weeks(date(2026, 10, 12), since=date(2026, 9, 21))
+    assert q["weeks"] == ["2026-09-21", "2026-09-28", "2026-10-05", "2026-10-12"]
+    assert q["prev"] is None
+
+
+def test_once_the_desk_has_more_than_13_weeks_it_can_page_back_to_the_start():
+    from datetime import date
+    from shared.oneonone import quarter_weeks
+    q = quarter_weeks(date(2027, 1, 4), since=date(2026, 9, 21))
+    assert len(q["weeks"]) == 13 and q["weeks"][0] == "2026-10-12"
+    # Paging back lands on the page ending 5 Oct, which starts at 21 Sep and
+    # goes no further
+    back = quarter_weeks(date.fromisoformat(q["prev"]), since=date(2026, 9, 21))
+    assert back["weeks"] == ["2026-09-21", "2026-09-28", "2026-10-05"]
+    assert back["prev"] is None
+
+
+def test_team_snoz_keeps_its_full_history():
+    from datetime import date
+    from shared.oneonone import quarter_weeks
+    q = quarter_weeks(date(2026, 9, 21))
+    assert len(q["weeks"]) == 13 and q["prev"] == "2026-06-22"
+
+
+def test_contract_usa_starts_on_21_sep_and_snoz_has_no_start():
+    from shared.oto_templates import TEMPLATES
+    assert TEMPLATES["contract_usa"]["start_week"] == "2026-09-21"
+    assert "start_week" not in TEMPLATES["snoz"]
+
+
+def test_the_back_arrow_is_disabled_at_the_start():
+    assert "disabled title=\"1:1s started here\"" in _body("quarterStrip")

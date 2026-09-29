@@ -1347,6 +1347,8 @@ select.oto-in { color-scheme: var(--scheme); }
   color: var(--mid); font-size: 13px; line-height: 1; padding: 3px 8px; cursor: pointer;
 }
 .oto-nav:hover { color: var(--white); border-color: var(--mid); }
+.oto-nav:disabled { opacity: .3; cursor: default; }
+.oto-nav:disabled:hover { color: inherit; border-color: var(--border); }
 .oto-drill { cursor: pointer; border-bottom: 1px dotted var(--accent); }
 .oto-drill:hover { color: var(--accent); }
 /* Secondary line (job title) at the same size as the row, just dimmed */
