@@ -230,6 +230,11 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
             continue
         if not "new business" in (p.get("crimson_specialinstructionsclient") or "").lower():
             continue
+        # An extension carries its parent's "New Business" note, but it is the
+        # same win continuing, not a new one — the uplift was already paid on
+        # the original contract. Counting it paid the CRO twice (Jason, Sep 2026).
+        if _is_extension(p):
+            continue
         qualifies = _nb_qualifies(p, thresholds)
         factor = split_factor(p, uid)
         ccy    = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode")

@@ -428,6 +428,10 @@ def get_contract_placements(start_date: str, end_date: str) -> list[dict]:
                 "_crimson_consultant_value,"
                 "_mercury_assignmentowner_value,"
                 "_mercury_contractorrelationship_userid_value,"
+                # So an extension can be told apart from the contract it
+                # extends — only the original is new business
+                "crimson_extension,crimson_placementidcode,"
+                "_mercury_parentplacementid_value,"
                 f"crimson_name,{REBATE_FIELDS}"
             ),
             "$filter": (
