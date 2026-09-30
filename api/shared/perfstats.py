@@ -71,6 +71,13 @@ def _contract_placements(since: date) -> list:
     })
 
 
+def _is_internal(client_name: str) -> bool:
+    """Saragossa's own accounts — "Saragossa", "Saragossa Shortlists",
+    "Saragossa Test" (Sep 2026) and any added later under the same name."""
+    n = (client_name or "").strip().lower()
+    return n == "saragossa" or n.startswith("saragossa ")
+
+
 def _contractor_key(p: dict) -> str:
     """One contractor across a contract and its extensions — the first part of
     the placement code, which both share and which is always filled in (the
@@ -183,10 +190,13 @@ def build_performance_stats(today: date = None) -> dict:
         if cid:
             runners_at.setdefault(cid, {})[_contractor_key(p)] = p
     # Clients with exactly one runner — where a second placement is the
-    # opportunity (Jim, Sep 2026: "Clients w/ Multiple Potential").
+    # opportunity (Jim, Sep 2026: "Clients w/ Multiple Potential"). Saragossa's
+    # own accounts aren't a client to grow, so they are left off the list,
+    # though an internal runner still counts in the runner totals.
     single = sorted(({"client": (names.get(cid) or "(client)").strip(),
                       "role": next(iter(rs.values())).get("crimson_name") or ""}
-                     for cid, rs in runners_at.items() if len(rs) == 1),
+                     for cid, rs in runners_at.items()
+                     if len(rs) == 1 and not _is_internal(names.get(cid))),
                     key=lambda c: c["client"].lower())
     billed_12m = {p.get("_crimson_clientname_value") for p in placements
                   if p.get("_crimson_clientname_value")

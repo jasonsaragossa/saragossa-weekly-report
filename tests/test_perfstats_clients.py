@@ -73,3 +73,19 @@ def test_the_page_uses_the_new_headline():
               encoding="utf-8").read()
     assert "Clients w/ Multiple Potential" in js
     assert "clients_multi_runners" not in js
+
+
+def test_saragossas_own_accounts_are_not_a_client_to_grow(desk):
+    got = desk([run("s", "010/00/01", "saragossa", "Senior IT Support (SBIA)"),
+                run("t", "011/00/01", "saragossa shortlists", "Sourcer"),
+                run("a", "012/00/01", "acme", "DBA")])
+    assert got == [{"client": "Acme", "role": "DBA"}]
+
+
+def test_a_client_that_merely_contains_the_word_is_kept():
+    """Only Saragossa's own accounts go — not, say, "Saragossa-adjacent"
+    names that aren't ours or names that contain it later on."""
+    assert P._is_internal("Saragossa") and P._is_internal("Saragossa Test")
+    assert not P._is_internal("Zaragoza Capital")
+    assert not P._is_internal("Friends of Saragossa")
+    assert not P._is_internal(None)
