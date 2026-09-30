@@ -68,12 +68,18 @@ def default_week(kind: str, today: date = None) -> date:
     """
     The week a 1:1 opens on when none is asked for.
 
-    The contract desk meets on a Monday, so the week worth talking about is
-    the one that just finished rather than one a few hours old (Jason, Sep
-    2026). The perm template keeps the current week.
+    Every team meets on a Monday, and from Thursday the page rolls forward to
+    the NEXT Monday's 1:1, so it can be filled in before the meeting (Jason,
+    Sep 2026). Four days on from Thursday is that Monday; four days on from
+    Wednesday is still this week's Sunday.
+
+    Teams file that 1:1 under different weeks:
+      * perm (Team Snoz) under the week the meeting is in;
+      * contract (Contract USA) under the week before, which is the one it
+        reviews.
     """
-    wk = week_start(today or date.today())
-    return wk - timedelta(days=7) if kind == "contract" else wk
+    meeting = week_start((today or date.today()) + timedelta(days=4))
+    return meeting - timedelta(days=7) if kind == "contract" else meeting
 
 
 ROLLING_WEEKS = 13          # a rolling quarter, not a calendar one

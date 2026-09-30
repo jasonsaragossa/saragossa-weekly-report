@@ -1,5 +1,8 @@
 """Which week a 1:1 opens on, and that nothing quietly overrides it."""
 import io
+
+import pytest
+from datetime import date
 import os
 import sys
 
@@ -14,20 +17,45 @@ JS = io.open(os.path.join(os.path.dirname(__file__), "..", "public", "121.js"),
 
 # ── The contract 1:1 opens on last week ───────────────────────────────────────
 
-def test_the_contract_1_1_defaults_to_the_week_just_finished():
-    """Jim's desk meets on a Monday, so a 1:1 opened with no week asked for
-    shows the week that finished, not one a few hours old."""
-    from datetime import date
-    from shared.oneonone import default_week
-    # Monday, mid-week and Sunday all land on the same finished week
-    for today in (date(2026, 9, 21), date(2026, 9, 24), date(2026, 9, 27)):
-        assert default_week("contract", today) == date(2026, 9, 14)
+# From Thursday every 1:1 opens on the one for NEXT Monday's meeting. Week of
+# Mon 28 Sep 2026 → Sun 4 Oct; the next meeting after it is Mon 5 Oct.
+WEEK_OF_28_SEP = {
+    "Mon": date(2026, 9, 28), "Tue": date(2026, 9, 29), "Wed": date(2026, 9, 30),
+    "Thu": date(2026, 10, 1), "Fri": date(2026, 10, 2), "Sat": date(2026, 10, 3),
+    "Sun": date(2026, 10, 4),
+}
 
 
-def test_the_perm_1_1_still_opens_on_the_current_week():
-    from datetime import date
+@pytest.mark.parametrize("day,expected", [
+    ("Mon", "2026-09-21"), ("Tue", "2026-09-21"), ("Wed", "2026-09-21"),
+    ("Thu", "2026-09-28"), ("Fri", "2026-09-28"), ("Sat", "2026-09-28"),
+    ("Sun", "2026-09-28"),
+])
+def test_contract_usa_rolls_forward_on_thursday(day, expected):
+    """Mon–Wed: the week being reviewed. Thu on: this week, reviewed next Monday."""
     from shared.oneonone import default_week
-    assert default_week("perm", date(2026, 9, 24)) == date(2026, 9, 21)
+    assert default_week("contract", WEEK_OF_28_SEP[day]).isoformat() == expected
+
+
+@pytest.mark.parametrize("day,expected", [
+    ("Mon", "2026-09-28"), ("Tue", "2026-09-28"), ("Wed", "2026-09-28"),
+    ("Thu", "2026-10-05"), ("Fri", "2026-10-05"), ("Sat", "2026-10-05"),
+    ("Sun", "2026-10-05"),
+])
+def test_team_snoz_rolls_forward_on_thursday(day, expected):
+    """Snoz files a 1:1 under the week it happens in, so from Thursday it opens
+    on next week's."""
+    from shared.oneonone import default_week
+    assert default_week("perm", WEEK_OF_28_SEP[day]).isoformat() == expected
+
+
+def test_both_teams_open_on_the_same_meeting():
+    """Whatever week each files it under, it is always next Monday's 1:1 —
+    contract one week behind perm."""
+    from datetime import timedelta
+    from shared.oneonone import default_week
+    for d in WEEK_OF_28_SEP.values():
+        assert default_week("contract", d) == default_week("perm", d) - timedelta(days=7)
 
 
 def test_the_default_week_is_always_a_monday():
