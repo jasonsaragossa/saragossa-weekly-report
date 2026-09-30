@@ -214,3 +214,53 @@ def test_contract_usa_starts_on_21_sep_and_snoz_has_no_start():
 
 def test_the_back_arrow_is_disabled_at_the_start():
     assert "disabled title=\"1:1s started here\"" in _body("quarterStrip")
+
+
+# ── Nobody sees into the future ───────────────────────────────────────────────
+# The latest reachable 1:1 is the one currently open — the upcoming one only
+# from the Thursday before it (Jason, Sep 2026).
+
+def test_the_strip_cannot_page_past_the_open_1_1():
+    from shared.oneonone import quarter_weeks
+    q = quarter_weeks(date(2026, 9, 28), until=date(2026, 9, 28))
+    assert q["next"] is None
+
+
+def test_from_an_older_page_next_stops_at_the_open_1_1():
+    from shared.oneonone import quarter_weeks
+    q = quarter_weeks(date(2026, 6, 1), until=date(2026, 9, 28))
+    assert q["next"] == "2026-08-31"                 # a normal page on…
+    q = quarter_weeks(date(2026, 8, 31), until=date(2026, 9, 28))
+    assert q["next"] == "2026-09-28"                 # …but never beyond the open one
+
+
+def test_on_wednesday_next_weeks_snoz_1_1_is_not_reachable():
+    from shared.oneonone import default_week, quarter_weeks
+    wed = WEEK_OF_28_SEP["Wed"]
+    latest = default_week("perm", wed)
+    assert latest == date(2026, 9, 28)
+    assert quarter_weeks(latest, until=latest)["next"] is None
+
+
+def test_on_thursday_it_opens_and_is_the_furthest_you_can_go():
+    from shared.oneonone import default_week, quarter_weeks
+    thu = WEEK_OF_28_SEP["Thu"]
+    for kind, opens in (("perm", date(2026, 10, 5)), ("contract", date(2026, 9, 28))):
+        latest = default_week(kind, thu)
+        assert latest == opens
+        assert quarter_weeks(latest, until=latest)["next"] is None
+
+
+def test_the_server_caps_every_request_at_the_open_1_1():
+    """View and save alike: the week is capped before the save branch runs."""
+    src = io.open(os.path.join(os.path.dirname(__file__), "..", "api", "function_app.py"),
+                  encoding="utf-8").read()
+    body = src[src.index("def one_to_one("):]
+    body = body[:body.index("@app.route")]
+    cap = body.index("if wk > latest:")
+    assert "wk = latest" in body[cap:cap + 60]
+    assert cap < body.index('if req.method == "POST":')
+
+
+def test_the_forward_arrow_is_disabled_at_the_open_1_1():
+    assert 'disabled title="The next 1:1 opens on Thursday"' in _body("quarterStrip")

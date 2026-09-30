@@ -878,6 +878,12 @@ def one_to_one(req: func.HttpRequest) -> func.HttpResponse:
             since = date.fromisoformat(tpl["start_week"]) if tpl.get("start_week") else None
             if since and wk < since:
                 wk = since
+            # ...and nothing after the 1:1 that is currently open. The next
+            # one becomes available on the Thursday before it; nobody can see
+            # or write a week beyond that (Jason, Sep 2026).
+            latest = default_week(tpl["kind"])
+            if wk > latest:
+                wk = latest
         except ValueError:
             return func.HttpResponse(json.dumps({"ok": False, "error": "bad week"}),
                                      mimetype="application/json", status_code=400)
@@ -925,7 +931,7 @@ def one_to_one(req: func.HttpRequest) -> func.HttpResponse:
             "saved": saved,
             "carried_actions": (prev or {}).get("actions") or [],
             "mbr_actions": get_latest_mbr_actions(uid),
-            "quarter": {**quarter_weeks(wk, since=since),
+            "quarter": {**quarter_weeks(wk, since=since, until=latest),
                         "completed": sorted(w for w in list_one_to_one_weeks(uid)
                                             if not since or w >= since.isoformat())},
         }), mimetype="application/json", status_code=200)

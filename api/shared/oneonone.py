@@ -85,7 +85,8 @@ def default_week(kind: str, today: date = None) -> date:
 ROLLING_WEEKS = 13          # a rolling quarter, not a calendar one
 
 
-def quarter_weeks(d: date, count: int = ROLLING_WEEKS, since: date = None) -> dict:
+def quarter_weeks(d: date, count: int = ROLLING_WEEKS, since: date = None,
+                  until: date = None) -> dict:
     """
     The rolling 13 weeks ending at `d` — so crossing into a new calendar quarter
     doesn't hide the weeks either side of it (Jason, Sept 2026). Nothing is ever
@@ -94,6 +95,9 @@ def quarter_weeks(d: date, count: int = ROLLING_WEEKS, since: date = None) -> di
     `since` is the week a team started 1:1s: nothing earlier is shown or
     reachable, since those weeks can only ever be empty. `prev` is then None
     once the strip reaches it.
+
+    `until` is the latest 1:1 currently open: `next` never goes past it, and
+    is None once the strip already ends there — nobody pages into the future.
     """
     end = week_start(d)
     weeks = [(end - timedelta(days=7 * i)).isoformat() for i in range(count - 1, -1, -1)]
@@ -108,11 +112,14 @@ def quarter_weeks(d: date, count: int = ROLLING_WEEKS, since: date = None) -> di
         prev = None
     elif since and prev < since:
         prev = since
+    nxt = end + timedelta(days=7 * count)
+    if until:
+        nxt = None if end >= until else min(nxt, until)
     return {
         "label": label,
         "weeks": weeks,
         "prev": prev.isoformat() if prev else None,
-        "next": (end + timedelta(days=7 * count)).isoformat(),
+        "next": nxt.isoformat() if nxt else None,
     }
 
 

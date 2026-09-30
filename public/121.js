@@ -230,7 +230,8 @@ function quarterStrip(d) {
             title="${done.has(w) ? "1:1 saved" : "not yet completed"}">${shortDay(dt)}</button>`;
         }).join("")}
       </div>
-      <button class="oto-nav" data-week="${esc(q.next || "")}" title="Later weeks">›</button>
+      <button class="oto-nav" data-week="${esc(q.next || "")}"${q.next ? ' title="Later weeks"'
+        : ' disabled title="The next 1:1 opens on Thursday"'}>›</button>
       ${aiReadinessHtml(d.ai_readiness, { why: "nothing captured for this person yet" })}
       <span class="oto-q-count">${(q.weeks || []).filter(w => done.has(w)).length} of ${(q.weeks || []).length} completed</span>
     </section>`;
