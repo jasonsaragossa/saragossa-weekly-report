@@ -237,7 +237,7 @@ def test_leavers_still_get_their_contribution():
 def test_a_name_with_no_mercury_user_is_reported_not_dropped():
     m = match_to_users({"Phin Smith": 10.0, "Ex Employee": 1754.91}, USERS)
     assert [r["uid"] for r in m["matched"]] == ["u1"]
-    assert m["unmatched"] == [{"name": "Ex Employee", "amount": 1754.91}]
+    assert m["unmatched"] == [{"name": "Ex Employee", "amount": 1754.91, "suggestion": None}]
 
 
 def test_an_active_account_wins_over_a_disabled_namesake():
@@ -246,3 +246,54 @@ def test_an_active_account_wins_over_a_disabled_namesake():
     for order in (users, list(reversed(users))):
         m = match_to_users({"Jamie Smith": 1.0}, order)
         assert m["matched"][0]["uid"] == "new"
+
+
+# ── Names finance spells differently (Sep 2026) ───────────────────────────────
+# "Junaid Shabi" cost Junaid Feb, Mar, May and Jun; "Grace Kreiger" cost Grace
+# Apr and May. Both went unnoticed because the report never named them.
+
+MERCURY = [
+    {"systemuserid": "junaid", "fullname": "Junaid Shabir", "isdisabled": False},
+    {"systemuserid": "grace", "fullname": "Grace Krieger", "isdisabled": True},
+    {"systemuserid": "grace2", "fullname": "Grace Memmo", "isdisabled": True},
+]
+
+
+def test_the_workbook_misspellings_land_on_the_right_person():
+    m = match_to_users({"Junaid Shabi": 4653.57, "Grace Kreiger": 7373.34}, MERCURY)
+    assert {r["uid"]: r["amount"] for r in m["matched"]} == {"junaid": 4653.57, "grace": 7373.34}
+    assert m["unmatched"] == []
+
+
+def test_the_correct_spelling_still_matches_too():
+    m = match_to_users({"Junaid Shabir": 1.0, "Grace Krieger": 2.0}, MERCURY)
+    assert {r["uid"] for r in m["matched"]} == {"junaid", "grace"}
+
+
+def test_an_unknown_misspelling_is_suggested_never_applied():
+    """A new typo is not matched on a guess — it is reported with a hint."""
+    m = match_to_users({"Junaid Shabirr": 10.0}, MERCURY)
+    assert m["matched"] == []
+    assert m["unmatched"][0]["suggestion"] == "Junaid Shabir"
+
+
+def test_no_suggestion_when_nothing_is_close():
+    m = match_to_users({"Ex Employee": 10.0}, MERCURY)
+    assert m["unmatched"][0]["suggestion"] is None
+
+
+def test_the_sync_email_names_every_unmatched_person_with_a_hint():
+    from shared.commission_sync import compose_report
+    result = {"year": 2026, "committed": False, "skipped": [], "imported": [{
+        "month": 2, "kind": "contract", "file": "Contract Commission - Feb 26.xlsx",
+        "people": 9, "total": 276331.0, "file_total": 330000.0,
+        "unmatched": [{"name": "Junaid Shabirr", "amount": 4653.57,
+                       "suggestion": "Junaid Shabir"}],
+        "off_desk": [{"name": "Ryan Grant", "amount": 9000.0}],
+    }]}
+    subject, text = compose_report(result)
+    assert "1 name(s) not matched" in subject
+    assert "Junaid Shabirr  4,653.57 — did you mean Junaid Shabir?" in text
+    # …and the deliberate omissions are named separately, as expected
+    assert "Left out as expected" in text and "Ryan Grant (Contract): Feb" in text
+    assert text.index("NOT MATCHED") < text.index("Left out as expected")

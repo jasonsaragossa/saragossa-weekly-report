@@ -215,6 +215,11 @@ def sync_year(year: int, months: list = None, commit: bool = False) -> dict:
 
             m = match_to_users(parsed["totals"], users)
             matched = [r for r in m["matched"] if r["uid"] in on_ledger[kind]]
+            # Matched a real person who isn't on this ledger's desks — by
+            # design (contract money only goes on contract-team people), but
+            # named in the report so it is never confused with a lost name.
+            off_desk = [{"name": r["name"], "amount": round(r["amount"], 2)}
+                        for r in m["matched"] if r["uid"] not in on_ledger[kind]]
             amounts = {}
             for row in matched:
                 amounts[row["uid"]] = amounts.get(row["uid"], 0) + row["amount"]
@@ -225,6 +230,9 @@ def sync_year(year: int, months: list = None, commit: bool = False) -> dict:
                 "total": round(sum(amounts.values()), 2),
                 "file_total": round(sum(parsed["totals"].values()), 2),
                 "skipped_names": [u["name"] for u in m["unmatched"]],
+                "unmatched": [{"name": u["name"], "amount": round(u["amount"] or 0, 2),
+                               "suggestion": u.get("suggestion")} for u in m["unmatched"]],
+                "off_desk": off_desk,
             }
             if commit:
                 entry_out.update(replace_month_entries(kind, year, month, amounts))
@@ -251,12 +259,33 @@ def compose_report(result: dict) -> tuple:
                          f"{r['people']} people, {r['total']:,.0f}{note}  [{r['file']}]")
     else:
         lines.append("Nothing to import.")
+    # Names that matched nobody are money that went nowhere — the first thing
+    # to read. (Junaid's "Shabi" cost him four months unseen, Sep 2026, because
+    # this list was only ever a lump sum.)
+    unmatched = [(r, u) for r in result["imported"] for u in r.get("unmatched") or []]
+    if unmatched:
+        lines += ["", "NOT MATCHED to anyone in Mercury — not imported, needs a look:"]
+        for r, u in unmatched:
+            label = "Contract" if r["kind"] == "contract" else "Deploy & Consult"
+            hint = f" — did you mean {u['suggestion']}?" if u.get("suggestion") else ""
+            lines.append(f"  {MONTHS[r['month'] - 1].title()} {label}: "
+                         f"{u['name']}  {u['amount']:,.2f}{hint}")
     if result["skipped"]:
         lines += ["", "Skipped — needs a look:"]
         for r in result["skipped"]:
             label = "Contract" if r["kind"] == "contract" else "Deploy & Consult"
             lines.append(f"  {MONTHS[r['month'] - 1].title()} {label}: {r['reason']}")
+    off = {}
+    for r in result["imported"]:
+        for o in r.get("off_desk") or []:
+            off.setdefault((r["kind"], o["name"]), []).append(MONTHS[r["month"] - 1][:3].title())
+    if off:
+        lines += ["", "Left out as expected — not on a desk that ledger covers:"]
+        for (kind, name), months in sorted(off.items(), key=lambda kv: kv[0][1]):
+            label = "Contract" if kind == "contract" else "Deploy & Consult"
+            lines.append(f"  {name} ({label}): {', '.join(months)}")
     subject = (f"Commission sync {year}: {len(result['imported'])} imported"
+               + (f", {len(unmatched)} name(s) not matched" if unmatched else "")
                + (f", {len(result['skipped'])} skipped" if result["skipped"] else ""))
     return subject, "\n".join(lines)
 

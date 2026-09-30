@@ -78,6 +78,27 @@ def normalise_name(value) -> str:
     return re.sub(r"[^a-z]", "", str(value or "").lower())
 
 
+# Spellings finance's workbooks use for someone that don't match their Mercury
+# name. Explicit on purpose: a guessed match could move one person's money
+# onto another's figures, so every entry here is a confirmed person.
+# Workbook spelling -> Mercury full name.
+NAME_ALIASES = {
+    "Junaid Shabi":  "Junaid Shabir",   # Feb, Mar, May, Jun 2026 (Sep 2026)
+    "Grace Kreiger": "Grace Krieger",   # Apr, May 2026 (Sep 2026)
+}
+_ALIAS_INDEX = {normalise_name(k): normalise_name(v) for k, v in NAME_ALIASES.items()}
+
+
+def suggest_name(name: str, users: list) -> str | None:
+    """The closest Mercury name to an unmatched one, for a human to confirm —
+    never applied automatically."""
+    import difflib
+    names = {normalise_name(u.get("fullname")): u.get("fullname") for u in users
+             if u.get("fullname")}
+    hit = difflib.get_close_matches(normalise_name(name), list(names), n=1, cutoff=0.85)
+    return names[hit[0]] if hit else None
+
+
 def _header_map(row) -> dict:
     """{lowercased header: index} for a header row, or {} if it isn't one."""
     cells = [str(c).strip().lower() if c is not None else "" for c in row]
@@ -175,11 +196,13 @@ def match_to_users(totals: dict, users: list) -> dict:
             index[key] = u
     matched, unmatched = [], []
     for name, amount in sorted(totals.items(), key=lambda kv: -kv[1]):
-        user = index.get(normalise_name(name))
+        key = normalise_name(name)
+        user = index.get(_ALIAS_INDEX.get(key, key))
         if user:
             matched.append({"uid": user["systemuserid"], "name": user.get("fullname"),
                             "sheet_name": name, "amount": amount,
                             "disabled": bool(user.get("isdisabled"))})
         else:
-            unmatched.append({"name": name, "amount": amount})
+            unmatched.append({"name": name, "amount": amount,
+                              "suggestion": suggest_name(name, users)})
     return {"matched": matched, "unmatched": unmatched}
