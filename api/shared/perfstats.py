@@ -9,7 +9,6 @@ on a given date so the same function serves both this week and the 12-month
 trend.
 """
 import logging
-from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 
@@ -64,12 +63,20 @@ def _contract_placements(since: date) -> list:
                     "crimson_enddate,crimson_actualenddate,mercury_hoursperweek,"
                     "recruit_trueweeklygrossprofit,mercury_marginpercent,"
                     "_crimson_clientname_value,_crimson_consultant_value,"
-                    "_mercury_assignmentowner_value"),
+                    "_mercury_assignmentowner_value,crimson_placementidcode"),
         "$filter": (f"({type_filter}) and statecode eq 0 and {cancel_filter}"
                     f" and crimson_enddate ge {since.isoformat()}"),
         "$expand": ("crimson_clientname($select=name),"
                     "recruit_trueweeklygrossprofitcurrency($select=isocurrencycode)"),
     })
+
+
+def _contractor_key(p: dict) -> str:
+    """One contractor across a contract and its extensions — the first part of
+    the placement code, which both share and which is always filled in (the
+    parent link never is)."""
+    code = (p.get("crimson_placementidcode") or "").split("/")[0].strip()
+    return code or p["crimson_placementid"]
 
 
 def _is_running_on(p: dict, when: date) -> bool:
@@ -166,12 +173,21 @@ def build_performance_stats(today: date = None) -> dict:
 
     # Clients
     live_now = [p for p in placements if _is_running_on(p, today)]
-    per_client = Counter(p.get("_crimson_clientname_value") for p in live_now
-                         if p.get("_crimson_clientname_value"))
     names = {p.get("_crimson_clientname_value"): (p.get("crimson_clientname") or {}).get("name")
              for p in placements}
-    multi = sorted(((names.get(c) or "(client)", n) for c, n in per_client.items() if n > 1),
-                   key=lambda x: -x[1])
+    # Runners are people: a contract and an overlapping extension share the
+    # first part of the placement code and are one runner, not two.
+    runners_at = {}
+    for p in live_now:
+        cid = p.get("_crimson_clientname_value")
+        if cid:
+            runners_at.setdefault(cid, {})[_contractor_key(p)] = p
+    # Clients with exactly one runner — where a second placement is the
+    # opportunity (Jim, Sep 2026: "Clients w/ Multiple Potential").
+    single = sorted(({"client": (names.get(cid) or "(client)").strip(),
+                      "role": next(iter(rs.values())).get("crimson_name") or ""}
+                     for cid, rs in runners_at.items() if len(rs) == 1),
+                    key=lambda c: c["client"].lower())
     billed_12m = {p.get("_crimson_clientname_value") for p in placements
                   if p.get("_crimson_clientname_value")
                   and any(_is_running_on(p, d) for d in
@@ -199,7 +215,7 @@ def build_performance_stats(today: date = None) -> dict:
         "now": now_snap, "last_week": last_snap,
         "trend": trend,
         "billed_clients_12m": len(billed_12m),
-        "clients_multi_runners": [{"client": c, "runners": n} for c, n in multi],
+        "clients_single_runner": single,
         "week": {
             "interviews": sum(1 for s in shortlists if s["_iv"]),
             "cvs": sum(1 for s in shortlists if s["_cv"]),

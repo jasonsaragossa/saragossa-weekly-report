@@ -107,12 +107,13 @@ function render(d) {
       <h2>Clients</h2>
       <section class="mbr-headline">
         ${card("Billed clients", num(d.billed_clients_12m), "rolling 12 months")}
-        ${card("Clients with multiple runners", num(d.clients_multi_runners.length), "live now")}
+        ${card("Clients w/ Multiple Potential", num(d.clients_single_runner.length),
+               "one runner there now")}
       </section>
-      ${d.clients_multi_runners.length ? `<div class="table-wrap"><table>
-        <thead><tr><th>Client</th><th class="num">Runners</th></tr></thead>
-        <tbody>${d.clients_multi_runners.map(c => `<tr><td>${esc(c.client)}</td>
-          <td class="num">${num(c.runners)}</td></tr>`).join("")}</tbody></table></div>` : ""}
+      ${d.clients_single_runner.length ? `<div class="table-wrap"><table>
+        <thead><tr><th>Client</th><th>Current runner's role</th></tr></thead>
+        <tbody>${d.clients_single_runner.map(c => `<tr><td>${esc(c.client)}</td>
+          <td>${esc(c.role)}</td></tr>`).join("")}</tbody></table></div>` : ""}
     </section>
 
     <section class="mbr-section">
