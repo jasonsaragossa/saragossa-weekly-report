@@ -102,19 +102,38 @@ FINANCE_TEAM_NAME = "Bristol Finance and Compliance"
 
 # ── User queries ─────────────────────────────────────────────────────────────
 
+# People who sit in a territory but are not a desk on the report — they run
+# the desk rather than bill against it. Kept as an explicit list because a
+# title rule would also drop directors who do bill.
+# Applied to EVERY consultant list (weekly report, Analytics, board, 1:1s,
+# commission ledgers) through _on_report — it once reached only some of them.
+# NOTE: anything credited to someone here leaves the report with them, so only
+# add a name that carries no figures of their own (checked for both, Sep 2026).
+REPORT_EXCLUDED_EMAILS = {
+    "jim@saragossa.io",     # Jim Jeffers, Contract Sales Director — Chicago Contract
+    "jonny@saragossa.io",   # Jonny Demko, Regional Director London — London Contract
+}
+
+
+def _on_report(u: dict) -> bool:
+    return (u.get("internalemailaddress") or "").lower() not in REPORT_EXCLUDED_EMAILS
+
+
 def get_active_consultants() -> list[dict]:
     """Returns all active users in the 6 territories."""
     territory_filter = " or ".join(
         f"_territoryid_value eq '{tid}'" for tid in TERRITORY_IDS.values()
     )
-    return odata_get_all(
+    users = odata_get_all(
         "systemusers",
         params={
-            "$select": "systemuserid,fullname,title,createdon,_territoryid_value",
+            "$select": ("systemuserid,fullname,title,createdon,_territoryid_value,"
+                        "internalemailaddress"),
             "$filter": f"isdisabled eq false and ({territory_filter})",
             "$orderby": "createdon asc",
         },
     )
+    return [u for u in users if _on_report(u)]
 
 # Users with no territory in Mercury that we inject into the analytics.
 # Key = systemuserid, value = territory name (must exist in TERRITORY_IDS).
@@ -140,14 +159,6 @@ def get_all_named_users() -> list[dict]:
             "$filter": "isintegrationuser eq false and fullname ne null",
         },
     )
-
-
-# People who sit in a territory but are not a desk on the report — they run
-# the desk rather than bill against it. Kept as an explicit list because a
-# title rule would also drop the Regional Directors, who do bill.
-# NOTE: anything credited to someone here leaves the report with them, so only
-# add a name that carries no placements of their own (Jason, Sep 2026).
-REPORT_EXCLUDED_EMAILS = {"jim@saragossa.io"}   # Jim Jeffers, Contract Sales Director
 
 
 def get_all_territory_consultants() -> list[dict]:
@@ -182,8 +193,7 @@ def get_all_territory_consultants() -> list[dict]:
         for u in house_users:
             u["_territoryid_value"] = TERRITORY_IDS[territory]
             results.append(u)
-    return [u for u in results
-            if (u.get("internalemailaddress") or "").lower() not in REPORT_EXCLUDED_EMAILS]
+    return [u for u in results if _on_report(u)]
 
 
 # Known report team names — must match Dataverse team names exactly
