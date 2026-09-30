@@ -1296,15 +1296,27 @@ tr.mbr-prompt-row td { background: var(--tint); padding: 8px 14px 12px; }
   font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--mid);
   display: block; margin-bottom: 8px;
 }
-.perf-chart {
-  display: flex; align-items: flex-end; gap: 4px; height: 90px;
-  border-bottom: 1px solid var(--border); padding-bottom: 2px;
+/* 12-month trend lines. Theme tokens throughout, so light mode follows. */
+.perf-line { display: block; width: 100%; height: auto; overflow: visible; outline: none; }
+.perf-line:focus-visible { outline: 1px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+.perf-path { fill: none; stroke: var(--accent); stroke-width: 2;
+  stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.perf-grid, .perf-base { stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.perf-grid { opacity: .6; }
+.perf-end-dot, .perf-hover-dot { fill: var(--accent); stroke: var(--bg); stroke-width: 2; }
+.perf-end-label { font-size: 10px; fill: var(--light); font-family: var(--mono); }
+.perf-axis { font-size: 8px; fill: var(--mid); }
+.perf-cross { stroke: var(--mid); stroke-width: 1; vector-effect: non-scaling-stroke;
+  visibility: hidden; }
+.perf-hover-dot { visibility: hidden; }
+.perf-line.hovering .perf-cross, .perf-line.hovering .perf-hover-dot { visibility: visible; }
+.perf-tip {
+  position: absolute; z-index: 50; display: none; pointer-events: none;
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+  padding: 5px 9px; font-size: 11px; white-space: nowrap; box-shadow: 0 4px 14px rgba(0,0,0,.25);
 }
-.perf-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center;
-  justify-content: flex-end; height: 100%; }
-.perf-bar { width: 100%; background: var(--accent); border-radius: 2px 2px 0 0; opacity: .85; }
-.perf-bar-col:hover .perf-bar { opacity: 1; }
-.perf-bar-label { font-size: 8px; color: var(--mid); margin-top: 3px; }
+.perf-tip-month { color: var(--mid); margin-right: 8px; }
+.perf-tip-value { color: var(--white); font-family: var(--mono); }
 .perf-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; }
 .perf-col-title {
   font-size: 11px; color: var(--white); margin: 0 0 8px; font-weight: 600;
