@@ -294,8 +294,22 @@ def board_note_period(today: date = None) -> str:
     return f"{y}-{m:02d}"
 
 
-def compose_board_email(build_admin_report_fn) -> tuple:
+# Who may write the board commentary — and the only people whose sends carry
+# it. Every other admin can still email themselves the board pack, but it goes
+# without the commentary: it is Jason's own voice, kept to Jason (Oct 2026).
+BOARD_NOTE_AUTHORS = {"jason@saragossa.io"}
+
+
+def is_note_author(email: str) -> bool:
+    return (email or "").strip().lower() in BOARD_NOTE_AUTHORS
+
+
+def compose_board_email(build_admin_report_fn, include_note: bool = False) -> tuple:
     """
+    include_note: put the commentary in. Off unless the caller has checked the
+    send belongs to a note author — so a new way of sending the pack can never
+    leak it by default.
+
     Gathers everything and returns (subject, text_fallback, html, inline_images)
     — inline_images carries the logo for graph_send_mail, or None if the asset
     couldn't be fetched (the HTML then points at the hosted URL instead).
@@ -325,8 +339,9 @@ def compose_board_email(build_admin_report_fn) -> tuple:
             "prev_cancel":     pool.submit(get_cancellations_by_status_change, py, pm),
             "curr_cancel":     pool.submit(get_cancellations_by_status_change, year, today.month),
             "forecast":        pool.submit(get_latest_forecast),
-            # Jason's own commentary for the month the report covers
-            "note":            pool.submit(get_board_note, f"{py}-{pm:02d}"),
+            # Jason's own commentary for the month the report covers — only
+            # read at all when this send is allowed to carry it
+            **({"note": pool.submit(get_board_note, f"{py}-{pm:02d}")} if include_note else {}),
             "roi":             pool.submit(fetch_roi_summary),
         }
         consultants     = futs["consultants"].result()
@@ -352,7 +367,7 @@ def compose_board_email(build_admin_report_fn) -> tuple:
         # The commentary is the one part nobody else can reconstruct, but the
         # figures still stand without it — never lose the pack over a note.
         try:
-            note = futs["note"].result() or {}
+            note = (futs["note"].result() or {}) if "note" in futs else {}
         except Exception:
             logging.warning("Could not read the board commentary — sending without it")
             note = {}

@@ -241,7 +241,7 @@ def test_the_board_email_composes_with_commentary(composable, monkeypatch):
     monkeypatch.setattr(B, "get_board_note", lambda period: {
         "body": serialise_note({"new_developments": "Shipped the MBR module.",
                                 "concerns": "Graph consent is slow."})})
-    subject, text, html, images = B.compose_board_email(build)
+    subject, text, html, images = B.compose_board_email(build, include_note=True)
     assert "Board figures" in subject
     assert "New AI Developments" in html and "Shipped the MBR module." in html
     assert "Concerns / Issues" in html and "General AI News" not in html
@@ -250,7 +250,7 @@ def test_the_board_email_composes_with_commentary(composable, monkeypatch):
 def test_the_board_email_composes_without_commentary(composable, monkeypatch):
     B, build = composable
     monkeypatch.setattr(B, "get_board_note", lambda period: {})
-    _, _, html, _ = B.compose_board_email(build)
+    _, _, html, _ = B.compose_board_email(build, include_note=True)
     assert "Board figures" in html or "Commentary" not in html
     assert "Commentary" not in html
 
@@ -262,7 +262,7 @@ def test_a_broken_commentary_read_does_not_lose_the_pack(composable, monkeypatch
     def boom(period):
         raise RuntimeError("Dataverse down")
     monkeypatch.setattr(B, "get_board_note", boom)
-    subject, _, html, _ = B.compose_board_email(build)
+    subject, _, html, _ = B.compose_board_email(build, include_note=True)
     assert "Board figures" in subject and "Commentary" not in html
 
 
@@ -270,7 +270,7 @@ def test_the_commentary_is_read_for_the_month_the_report_covers(composable, monk
     B, build = composable
     asked = []
     monkeypatch.setattr(B, "get_board_note", lambda period: asked.append(period) or {})
-    B.compose_board_email(build)
+    B.compose_board_email(build, include_note=True)
     from datetime import date as _date
     assert asked == [B.board_note_period(_date.today())]
 
@@ -280,6 +280,97 @@ def test_the_commentary_sits_below_the_figures(composable, monkeypatch):
     B, build = composable
     monkeypatch.setattr(B, "get_board_note", lambda period: {
         "body": serialise_note({"new_developments": "Shipped the MBR module."})})
-    _, _, html, _ = B.compose_board_email(build)
+    _, _, html, _ = B.compose_board_email(build, include_note=True)
     assert html.index("P&amp;L") < html.index("Commentary")
     assert html.index("Tech ROI") < html.index("Commentary")
+
+
+# ── Only Jason's own sends carry the commentary (Oct 2026) ────────────────────
+# Any admin could email themselves the board pack, or schedule one, and the
+# commentary went with it. Now it's opt-in per send, and only for its author.
+
+def _with_note(B, monkeypatch, read=None):
+    monkeypatch.setattr(B, "get_board_note", lambda period: (read.append(period) if read is not None
+                                                            else None) or {
+        "body": serialise_note({"concerns": "Private thought."})})
+
+
+def test_by_default_the_pack_has_no_commentary_and_never_reads_it(composable, monkeypatch):
+    B, build = composable
+    read = []
+    _with_note(B, monkeypatch, read)
+    _, _, html, _ = B.compose_board_email(build)
+    assert "Private thought." not in html and "Commentary" not in html
+    assert read == []                          # not even fetched
+
+
+def test_only_jason_is_a_note_author():
+    from shared.board import is_note_author
+    assert is_note_author("jason@saragossa.io") and is_note_author(" Jason@Saragossa.io ")
+    for other in ("becky@saragossa.io", "rory@saragossa.io", "", None):
+        assert not is_note_author(other)
+
+
+@pytest.mark.parametrize("who,carries", [("jason@saragossa.io", True),
+                                         ("becky@saragossa.io", False),
+                                         ("jonny@saragossa.io", False)])
+def test_email_me_the_board_figures_carries_it_only_for_jason(composable, monkeypatch, who, carries):
+    import json
+    import function_app as F
+    B, build = composable
+    _with_note(B, monkeypatch)
+    monkeypatch.setattr(F, "require_admin", lambda req: (who, None))
+    monkeypatch.setattr("shared.calc.build_admin_report", build)
+    sent = []
+    monkeypatch.setattr("shared.dataverse.graph_send_mail",
+                        lambda sender, to, subj, text, body_html=None, **k: sent.append((to, body_html)))
+    monkeypatch.setenv("ALERT_SENDER", "alerts@saragossa.io")
+    resp = F.board_report_post(object())
+    assert json.loads(resp.get_body())["ok"]
+    assert ("Private thought." in sent[0][1]) is carries
+
+
+@pytest.mark.parametrize("creator,carries", [("jason@saragossa.io", True),
+                                             ("becky@saragossa.io", False)])
+def test_a_schedule_carries_it_only_if_jason_made_it(composable, monkeypatch, creator, carries):
+    B, build = composable
+    _with_note(B, monkeypatch)
+    due = dict(sched(-1, created_by=creator), recipients=["board@saragossa.io"])
+    monkeypatch.setattr("shared.dataverse.get_board_schedules", lambda include_sent=True: [due])
+    monkeypatch.setattr("shared.dataverse.mark_board_schedule_sent", lambda *a, **k: None)
+    monkeypatch.setattr("shared.calc.build_admin_report", build)
+    sent = []
+    monkeypatch.setattr("shared.dataverse.graph_send_mail",
+                        lambda sender, to, subj, text, body_html=None, **k: sent.append(body_html))
+    monkeypatch.setenv("ALERT_SENDER", "alerts@saragossa.io")
+
+    class _FrozenNow(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return NOW
+    monkeypatch.setattr(S, "datetime", _FrozenNow)
+    assert S.run_due_schedules()["sent"] == 1
+    assert ("Private thought." in sent[0]) is carries
+
+
+def test_two_schedules_due_together_each_get_the_right_version(composable, monkeypatch):
+    B, build = composable
+    _with_note(B, monkeypatch)
+    mine = dict(sched(-1, created_by="jason@saragossa.io"), id="mine", recipients=["a@x.io"])
+    theirs = dict(sched(-1, created_by="becky@saragossa.io"), id="theirs", recipients=["b@x.io"])
+    monkeypatch.setattr("shared.dataverse.get_board_schedules", lambda include_sent=True: [mine, theirs])
+    monkeypatch.setattr("shared.dataverse.mark_board_schedule_sent", lambda *a, **k: None)
+    monkeypatch.setattr("shared.calc.build_admin_report", build)
+    sent = {}
+    monkeypatch.setattr("shared.dataverse.graph_send_mail",
+                        lambda sender, to, subj, text, body_html=None, **k: sent.update({to[0]: body_html}))
+    monkeypatch.setenv("ALERT_SENDER", "alerts@saragossa.io")
+
+    class _FrozenNow(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return NOW
+    monkeypatch.setattr(S, "datetime", _FrozenNow)
+    S.run_due_schedules()
+    assert "Private thought." in sent["a@x.io"]
+    assert "Private thought." not in sent["b@x.io"]

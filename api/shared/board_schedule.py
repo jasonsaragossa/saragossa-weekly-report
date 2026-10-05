@@ -110,8 +110,18 @@ def run_due_schedules() -> dict:
         return {"sent": 0, "skipped": len(stale), "reminded": reminded,
                 "checked_at": now.isoformat(timespec="seconds")}
 
-    # Build once even when several schedules come due in the same tick
-    subject, text, html, images = compose_board_email(build_admin_report)
+    # Build once per variant even when several schedules come due in the same
+    # tick. The commentary goes only into sends its author scheduled; anyone
+    # else's schedule gets the pack without it.
+    from shared.board import is_note_author
+    built = {}
+
+    def email_for(with_note: bool):
+        if with_note not in built:
+            built[with_note] = compose_board_email(build_admin_report, include_note=with_note)
+        return built[with_note]
+
+    subject = None
     sent = failed = 0
     for s in due:
         recipients = s.get("recipients") or default_recipients
@@ -124,6 +134,7 @@ def run_due_schedules() -> dict:
                           s["id"], s["send_at"])
             failed += 1
             continue
+        subject, text, html, images = email_for(is_note_author(s.get("created_by")))
         graph_send_mail(sender, recipients, subject, text, body_html=html,
                         inline_images=images)
         mark_board_schedule_sent(s["id"])

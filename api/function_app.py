@@ -597,14 +597,12 @@ def commission_import_post(req: func.HttpRequest) -> func.HttpResponse:
 # or wipe the commentary with no record of who did. This is one person's voice
 # in the board pack, so the list is explicit (Jason, Sep 2026).
 
-BOARD_NOTE_AUTHORS = {"jason@saragossa.io"}
-
-
 def _require_board_note_author(req: func.HttpRequest):
+    from shared.board import is_note_author
     email, err = require_auth(req)
     if err:
         return None, err
-    if (email or "").lower() not in BOARD_NOTE_AUTHORS:
+    if not is_note_author(email):
         return None, func.HttpResponse("Forbidden — board commentary is restricted",
                                        status_code=403)
     return email, None
@@ -662,7 +660,7 @@ def board_report_post(req: func.HttpRequest) -> func.HttpResponse:
     if err:
         return err
     try:
-        from shared.board import compose_board_email
+        from shared.board import compose_board_email, is_note_author
         from shared.calc import build_admin_report as _bar
         from shared.dataverse import graph_send_mail
         sender = os.environ.get("ALERT_SENDER")
@@ -671,7 +669,10 @@ def board_report_post(req: func.HttpRequest) -> func.HttpResponse:
                 json.dumps({"ok": False, "error": "ALERT_SENDER not configured"}),
                 mimetype="application/json", status_code=500,
             )
-        subject, text, html, images = compose_board_email(_bar)
+        # Any admin may email themselves the pack; the commentary rides along
+        # only when the commentary's author is the one asking.
+        subject, text, html, images = compose_board_email(
+            _bar, include_note=is_note_author(email))
         # Always copy in the standing board recipients alongside the requester
         extras = [e.strip() for e in
                   os.environ.get("BOARD_REPORT_EXTRA_RECIPIENTS", "").split(",") if e.strip()]

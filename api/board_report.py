@@ -26,7 +26,8 @@ def main() -> None:
     from shared.calc import build_admin_report
     from shared.dataverse import graph_send_mail
 
-    subject, text, html, images = compose_board_email(build_admin_report)
+    # Started by hand from GitHub Actions, which only the repo's owners can do
+    subject, text, html, images = compose_board_email(build_admin_report, include_note=True)
     graph_send_mail(sender, recipients, subject, text, body_html=html, inline_images=images)
     print(f"Sent '{subject}' to {', '.join(recipients)}")
 
