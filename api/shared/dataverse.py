@@ -241,7 +241,7 @@ _REPORT_TEAM_NAMES = [
     "Team Batt", "Team Charlie", "Team Sion", "Team Harry W",
     "Team Data & Cyber", "Team Data and Cyber", "Team Snoz",
     "Team JD", "Team Matty", "Team Adam", "Team Adam W",
-    "Team Makenzie", "Team Mike B",
+    "Team Makenzie", "Team Mike B", "Team Connor",
 ]
 
 @ttl_cached(300)

@@ -450,8 +450,10 @@ function buildPermFlatTable(members) {
   return tableWrap(`<table>${permHeaders()}<tbody>${body}</tbody></table>`);
 }
 
+// A desk with teams shows each team under its own header, as perm desks do
 function buildContractTable(tdata) {
-  const members = tdata.type === "flat" ? tdata.members : tdata.groups.flatMap(g => g.members);
+  const groups = tdata.type === "flat" ? [{ team: "", members: tdata.members }]
+    : [...tdata.groups.filter(g => g.team), ...tdata.groups.filter(g => !g.team)];
   const headers = `<thead><tr>
     <th>Consultant</th>
     <th>Role</th>
@@ -462,7 +464,7 @@ function buildContractTable(tdata) {
     <th class="num">Year Billing</th>
   </tr></thead>`;
 
-  const body = members.map(m => {
+  const row = m => {
     const yearBilling = m.wnf > 0
       ? m.sym + Math.round(m.wnf * 48).toLocaleString("en-GB")
       : "—";
@@ -479,7 +481,12 @@ function buildContractTable(tdata) {
       <td class="num">${fmt(m.wnf, m.sym)}</td>
       <td class="num year-billing-cell">${yearBilling}</td>
     </tr>`;
-  }).join("");
+  };
+  // Anyone outside the desk's teams gets a header of their own, not a blank one
+  const label = g => g.team || (tdata.type === "teams" ? "Not in a team" : "");
+  const body = groups.map(g =>
+    (label(g) ? `<tr class="team-header"><td colspan="7">${esc(label(g))}</td></tr>` : "")
+    + g.members.map(row).join("")).join("");
 
   return tableWrap(`<table class="contract-table">${headers}<tbody>${body}</tbody></table>`);
 }

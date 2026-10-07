@@ -33,7 +33,7 @@ TEAM_ORDER = {
     "Bristol":          ["Team Batt", "Team Charlie", "Team Sion", "Team Harry W"],
     "London":           ["Team Data & Cyber", "Team Data and Cyber", "Team Snoz"],
     "Chicago":          ["Team JD", "Team Matty", "Team Adam", "Team Adam W"],
-    "Chicago Contract": ["Team Makenzie", "Team Mike B"],
+    "Chicago Contract": ["Team Makenzie", "Team Mike B", "Team Connor"],
 }
 
 TO_GBP = {
