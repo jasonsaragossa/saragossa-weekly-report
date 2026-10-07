@@ -96,3 +96,10 @@ def test_only_the_typed_inputs_can_be_written(desk, bad):
 def test_an_unknown_desk_is_refused(desk):
     status, _ = call(params={"desk": "Narnia"})
     assert status == 400
+
+
+@pytest.mark.parametrize("good", ["gp_month:2026-Q1", "gp_budget:2026-H2", "carried_a:2026-03", "carried_b:2026-Q3"])
+def test_period_cells_and_carried_in_can_be_typed(desk, good):
+    desk.update(email="jonny@saragossa.io", team=True, edit=True)
+    status, _ = call(method="POST", body={"desk": DESK, "year": 2026, "values": {good: 5}})
+    assert status == 200 and desk["saved"][1] == {good: 5.0}

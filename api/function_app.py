@@ -1242,7 +1242,7 @@ def mbr_contract(req: func.HttpRequest) -> func.HttpResponse:
     if err:
         return err
     from shared.dataverse import get_mbr_targets, upsert_mbr_targets
-    from shared.mbr_contract import DESK_KEY, DESKS, IMPORTED, TYPED, build_view
+    from shared.mbr_contract import DESK_INPUTS, DESK_KEY, DESKS, build_view
     try:
         body = req.get_json() if req.method == "POST" else {}
     except ValueError:
@@ -1262,11 +1262,13 @@ def mbr_contract(req: func.HttpRequest) -> func.HttpResponse:
             if not can_edit:
                 return func.HttpResponse(json.dumps({"ok": False, "error": "forbidden"}),
                                          mimetype="application/json", status_code=403)
-            allowed = set(TYPED + IMPORTED)
+            allowed = set(DESK_INPUTS)
             clean = {}
             for k, v in ((body or {}).get("values") or {}).items():
                 name, _, ym = str(k).partition(":")
-                if name not in allowed or not re.fullmatch(rf"{year}-(0[1-9]|1[0-2])", ym):
+                # A month (2026-03) or a period column (2026-Q1, 2026-H1)
+                if name not in allowed or not re.fullmatch(
+                        rf"{year}-(0[1-9]|1[0-2]|Q[1-4]|H[12])", ym):
                     return _bad_request(f"not an input: {k}")
                 if v in ("", None):
                     clean[k] = None

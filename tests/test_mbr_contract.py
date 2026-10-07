@@ -207,3 +207,27 @@ def test_new_customers_add_up_over_a_quarter():
 def test_every_measure_says_wgp_never_wnf():
     for key, label, *_ in M.MEASURES:
         assert "WNF" not in label and "NFI" not in label, key
+
+
+# ── Typed rows (Jason, Oct 2026): every column typed, ratios follow ───────────
+
+def test_typed_quarters_drive_their_ratios_against_the_quarters_totals():
+    """Q1 GP per fee earner = Q1's typed GP over Q1's person-months — not over
+    the quarter's average headcount, which would triple it."""
+    d = data(presence={A: [(date(2025, 1, 1), date(2026, 12, 31))]})
+    d["people"] = [{"uid": A, "name": "Alice", "active": True}]
+    inputs = {"gp_month:2026-01": 100, "gp_month:2026-02": 100, "gp_month:2026-03": 100,
+              "gp_month:2026-Q1": 300, "gp_budget:2026-Q1": 600}
+    v = M.build_view("London Contract", 2026, "team", inputs, today=date(2026, 4, 15), data=d)
+    q1 = v["values"]["Q1"]
+    assert q1["gp_month"] == 300
+    assert q1["gp_achievement"] == pytest.approx(0.5)
+    assert q1["gp_per_head"] == pytest.approx(300 / 3)           # 3 person-months
+
+
+def test_an_empty_typed_cell_offers_mercurys_figure_as_a_guide():
+    d = data(vacancies=[vac("c1", "A", "2026-01-10")])
+    d["people"] = [{"uid": A, "name": "Alice", "active": True}]
+    v = M.build_view("London Contract", 2026, "team", {}, today=date(2026, 3, 15), data=d)
+    assert v["values"]["P3"]["carried_a"] is None                # nothing typed
+    assert v["estimates"]["carried_a|P3"] == 1                   # Mercury's guess, shown greyed

@@ -77,17 +77,18 @@ function fmt(unit, v) {
 const MONTH = { P1: 1, P2: 2, P3: 3, P4: 4, P5: 5, P6: 6, P7: 7, P8: 8, P9: 9, P10: 10, P11: 11, P12: 12 };
 
 // ── Render ────────────────────────────────────────────────────────────────────
+// Coloured as Jonny's sheet: section bands and quarter columns green, half-year
+// columns pale blue, and in the top block each actual (blue) beside its budget
+// (gold). The same four colours, softer, in dark mode.
+
+const SECTION_TITLES = { Book: "Team book", Deals: "Team deals", Interviews: "Team interviews",
+                         Jobs: "Team jobs", Meetings: "Team meetings", Activity: "Team activity drivers",
+                         Customers: "Team customers" };
 
 function render(d) {
   const box = document.getElementById("cmbr-content");
   box.textContent = "";
-
-  const intro = document.createElement("p");
-  intro.className = "mbr-note cmbr-intro";
-  intro.textContent = d.view === "team"
-    ? "The desk's year from Mercury, laid out as the director's sheet. Quarter and half-year columns are monthly averages; ratios are worked from the period's totals. Money is weekly gross profit (WGP) in GBP."
-    : "Your year from Mercury. Quarter and half-year columns are monthly averages; ratios are worked from the period's totals. Money is weekly gross profit (WGP) in GBP.";
-  box.appendChild(intro);
+  box.appendChild(legend(d));
 
   const wrap = document.createElement("div");
   wrap.className = "table-wrap cmbr-wrap";
@@ -97,7 +98,7 @@ function render(d) {
   const thead = document.createElement("thead");
   const hr = document.createElement("tr");
   hr.appendChild(th("", "cmbr-label"));
-  d.columns.forEach(c => hr.appendChild(th(c, MONTH[c] ? "num" : "num cmbr-period")));
+  d.columns.forEach(c => hr.appendChild(th(MONTH[c] ? c : `${c} avg`, colClass(c))));
   thead.appendChild(hr);
   table.appendChild(thead);
 
@@ -109,9 +110,10 @@ function render(d) {
       const sr = document.createElement("tr");
       sr.className = "cmbr-section";
       const td = document.createElement("td");
-      td.colSpan = d.columns.length + 1;
-      td.textContent = section;
+      td.className = "cmbr-label";
+      td.textContent = d.view === "team" ? (SECTION_TITLES[section] || section) : section;
       sr.appendChild(td);
+      d.columns.forEach(c => sr.appendChild(Object.assign(document.createElement("td"), { className: colClass(c) })));
       tbody.appendChild(sr);
     }
     tbody.appendChild(row(d, m));
@@ -120,23 +122,50 @@ function render(d) {
   wrap.appendChild(table);
   box.appendChild(wrap);
 
-  const notes = document.createElement("p");
-  notes.className = "mbr-note";
-  notes.textContent = "† Estimate. Jobs carried in: Mercury records a closing date on only some closed jobs, so for earlier months a closed job counts as open until it was last changed. Headcount: a leaver counts until their last activity in Mercury.";
-  box.appendChild(notes);
-
   if (d.view === "team" && d.can_edit) {
     const bar = document.createElement("div");
     bar.className = "mbr-savebar";
     const btn = document.createElement("button");
     btn.className = "save-btn"; btn.id = "cmbr-save"; btn.type = "button";
-    btn.textContent = "Save GP and budgets";
+    btn.textContent = "Save typed figures";
     btn.addEventListener("click", save);
     const note = document.createElement("span");
     note.className = "mbr-saved-note"; note.id = "cmbr-saved";
     bar.append(btn, note);
     box.appendChild(bar);
   }
+}
+
+function colClass(c) {
+  if (MONTH[c]) return "num";
+  return "num " + (c.startsWith("H") ? "cmbr-half" : "cmbr-quarter");
+}
+
+// A key to the colours and marks, along the top where it's seen
+function legend(d) {
+  const el = document.createElement("div");
+  el.className = "cmbr-legend";
+  const items = [];
+  if (d.view === "team") {
+    items.push(["cmbr-key-actual", "Actual"], ["cmbr-key-budget", "Budget / target"]);
+  }
+  items.push(["cmbr-key-quarter", "Quarter average"], ["cmbr-key-half", "Half-year average"]);
+  if (d.view === "team" && d.can_edit) items.push(["cmbr-key-input", "Typed: Mercury's figure shows greyed until filled"]);
+  items.push(["cmbr-key-est", "Estimate"]);
+  items.forEach(([cls, text]) => {
+    const i = document.createElement("span");
+    i.className = "cmbr-key";
+    const sw = document.createElement("span");
+    sw.className = "cmbr-swatch " + cls;
+    if (cls === "cmbr-key-est") sw.textContent = "est";
+    i.append(sw, document.createTextNode(text));
+    el.appendChild(i);
+  });
+  const note = document.createElement("span");
+  note.className = "cmbr-legend-note";
+  note.textContent = "Money is weekly gross profit (WGP) in GBP. Ratios use each period's totals.";
+  el.appendChild(note);
+  return el;
 }
 
 function th(text, cls) {
@@ -148,27 +177,38 @@ function th(text, cls) {
 
 function row(d, m) {
   const tr = document.createElement("tr");
-  if (m.typed || m.imported) tr.className = "cmbr-input-row";
+  tr.className = [m.tone ? `cmbr-tone-${m.tone}` : "", m.input ? "cmbr-input-row" : ""].join(" ").trim();
+
   const label = document.createElement("td");
   label.className = "cmbr-label";
-  label.textContent = m.label + (m.estimate ? " †" : "");
-  if (m.typed) label.title = "Typed in each month by the desk's director";
-  if (m.imported) label.title = "Budget, imported from the director's sheet";
+  label.appendChild(document.createTextNode(m.label));
+  if (m.estimate) {
+    const est = document.createElement("span");
+    est.className = "cmbr-est";
+    est.textContent = "est";
+    est.title = m.key === "headcount"
+      ? "A leaver counts until their last activity in Mercury, which records no leaving date."
+      : "Mercury records a closing date on only some closed jobs, so earlier months overstate this.";
+    label.appendChild(est);
+  }
   tr.appendChild(label);
 
   d.columns.forEach(c => {
     const td = document.createElement("td");
-    td.className = "num" + (MONTH[c] ? "" : " cmbr-period");
+    td.className = colClass(c) + (m.estimate ? " cmbr-estimate" : "");
     const v = (d.values[c] || {})[m.key];
-    const editable = (m.typed || m.imported) && MONTH[c] && d.view === "team" && d.can_edit;
+    const editable = m.input && d.can_edit;
     if (editable) {
       const input = document.createElement("input");
       input.type = "number"; input.step = "any"; input.className = "cmbr-input";
       input.id = `cmbr-${m.key}-${c}`;
       input.value = v === null || v === undefined ? "" : String(Math.round(v * 100) / 100);
+      const guide = d.estimates[`${m.key}|${c}`];
+      if (guide !== undefined) input.placeholder = fmt(m.unit, guide);
       input.setAttribute("aria-label", `${m.label}, ${c}`);
       input.addEventListener("input", () => {
-        dirty[`${m.key}:${d.year}-${String(MONTH[c]).padStart(2, "0")}`] = input.value;
+        const when = MONTH[c] ? String(MONTH[c]).padStart(2, "0") : c;
+        dirty[`${m.key}:${d.year}-${when}`] = input.value;
         document.getElementById("cmbr-saved").textContent = "Unsaved changes";
       });
       td.appendChild(input);
@@ -197,7 +237,7 @@ async function save() {
   } catch (e) {
     note.textContent = "Could not save: " + e.message;
   }
-  btn.disabled = false; btn.textContent = "Save GP and budgets";
+  btn.disabled = false; btn.textContent = "Save typed figures";
 }
 
 function showError(msg) {

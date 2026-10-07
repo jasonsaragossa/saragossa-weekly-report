@@ -69,16 +69,17 @@ ROLE_FIELDS = ("_mercury_assignmentowner_value", "_crimson_consultant_value",
 #   rule:  "avg" (monthly average), "sum", or ("ratio", numerator, denominator)
 
 MEASURES = [
+    # Targets: Jonny's top block, each actual beside its budget
+    ("gp_month", "GP (month)", "Targets", "team", "money", "sum"),
+    ("gp_budget", "GP budget", "Targets", "team", "money", "sum"),
+    ("gp_achievement", "% achievement", "Targets", "team", "pct", ("ratio", "gp_month", "gp_budget")),
+    ("runners_split", "Runners out (by split)", "Targets", "both", "count", "avg"),
+    ("runners_budget", "Runners out budget", "Targets", "team", "count", "avg"),
+    ("gp_per_head", "GP per fee earner", "Targets", "team", "money", ("ratio", "gp_month", "headcount")),
+    ("gp_per_head_budget", "GP per fee earner budget", "Targets", "team", "money", "avg"),
     # Book
-    ("gp_month", "GP (month)", "Book", "team", "money", "sum"),
-    ("gp_budget", "GP budget", "Book", "team", "money", "sum"),
-    ("gp_achievement", "% achievement", "Book", "team", "pct", ("ratio", "gp_month", "gp_budget")),
-    ("runners", "Runners", "Book", "both", "count", "avg"),
-    ("runners_split", "Runners by split", "Book", "both", "count", "avg"),
-    ("runners_budget", "Runners budget", "Book", "team", "count", "avg"),
     ("headcount", "Headcount", "Book", "team", "count", "avg"),
-    ("gp_per_head", "GP per fee earner", "Book", "team", "money", ("ratio", "gp_month", "headcount")),
-    ("gp_per_head_budget", "GP per fee earner budget", "Book", "team", "money", "avg"),
+    ("runners", "Runners (whole)", "Book", "both", "count", "avg"),
     ("wgp_running", "Running WGP at month end", "Book", "both", "money", "avg"),
     ("wgp_per_head", "Running WGP per head", "Book", "team", "money", ("ratio", "wgp_running", "headcount")),
     ("wgp_avg_runner", "Average WGP of runner book", "Book", "both", "money",
@@ -174,6 +175,15 @@ MEASURES = [
 MEASURE = {m[0]: m for m in MEASURES}
 TYPED = ("gp_month",)                                       # Jonny types these
 IMPORTED = ("gp_budget", "runners_budget", "gp_per_head_budget")   # from his sheet
+# Typed for the desk in every column, months and periods alike (Jason: "if in
+# any row there's a typed metric they should all be typed"). Jobs carried in
+# joins them: Mercury can't rebuild it reliably, so Jonny's own figures stand
+# and he keeps them up; Mercury's estimate shows greyed in an empty box.
+DESK_INPUTS = TYPED + IMPORTED + ("carried_a", "carried_b")
+# How each row is coloured, after Jonny's sheet: actuals blue, targets gold
+TONE = {"gp_month": "actual", "runners_split": "actual", "gp_per_head": "actual",
+        "gp_budget": "budget", "gp_achievement": "budget", "runners_budget": "budget",
+        "gp_per_head_budget": "budget"}
 
 # ── Small helpers ─────────────────────────────────────────────────────────────
 
@@ -721,13 +731,14 @@ def build_view(desk: str, year: int, view: str, inputs: dict, today: date | None
         raise KeyError(view)
     people = team_ids if is_team else {view}
 
-    months = {}
+    months, estimate = {}, {}
     for m in range(1, through + 1):
         raw = compute(people, year, m, data, data["fx"],
                       data["director"] if is_team else None,
                       data.get("book") if is_team else None)
         if is_team:
-            for k in TYPED + IMPORTED:
+            for k in DESK_INPUTS:
+                estimate[(k, f"P{m}")] = raw.get(k)          # Mercury's own figure, as a guide
                 raw[k] = inputs.get(f"{k}:{year}-{m:02d}")
         months[m] = finish(raw)
     cols = {f"P{m}": months[m] for m in months}
@@ -735,6 +746,25 @@ def build_view(desk: str, year: int, view: str, inputs: dict, today: date | None
         got = [months[m] for m in ms if m in months]
         if got:
             cols[name] = period(got)
+            if is_team:
+                for k in DESK_INPUTS:
+                    estimate[(k, name)] = cols[name].get(k)
+                    cols[name][k] = inputs.get(f"{k}:{year}-{name}")
+                # Ratios built on typed figures follow what was typed. The
+                # other side is the period's total (not its monthly average):
+                # Q1 GP per fee earner is Q1's GP over Q1's person-months.
+                def total(k):
+                    if k in DESK_INPUTS:
+                        return cols[name].get(k)
+                    vals = [mo.get(k) for mo in got if mo.get(k) is not None]
+                    return sum(vals) if vals else None
+                for key, _l, _s, _lv, _u, rule in MEASURES:
+                    if isinstance(rule, tuple) and (rule[1] in DESK_INPUTS or rule[2] in DESK_INPUTS):
+                        cols[name][key] = _ratio(total(rule[1]), total(rule[2]))
+    if is_team:
+        for c in cols.values():                      # total carried follows its typed parts
+            a, b = c.get("carried_a"), c.get("carried_b")
+            c["carried_total"] = None if a is None and b is None else (a or 0) + (b or 0)
 
     shown = ("team", "both") if is_team else ("consultant", "both")
     return {
@@ -742,9 +772,12 @@ def build_view(desk: str, year: int, view: str, inputs: dict, today: date | None
         "columns": [c for c in COLUMN_ORDER if c in cols],
         "values": {c: {k: cols[c].get(k) for k, *_ in MEASURES} for c in cols},
         "measures": [{"key": k, "label": lb, "section": sec, "unit": u,
-                      "typed": k in TYPED, "imported": k in IMPORTED,
-                      "estimate": k.startswith("carried_") or k == "headcount"}
+                      "input": is_team and k in DESK_INPUTS,
+                      "tone": TONE.get(k) if is_team else None,
+                      "estimate": (k == "headcount") or (not is_team and k.startswith("carried_"))}
                      for k, lb, sec, lv, u, _r in MEASURES if lv in shown],
+        # Mercury's figure for each typed cell, shown greyed when it's empty
+        "estimates": {f"{k}|{c}": v for (k, c), v in estimate.items() if v is not None},
         "people": [{"uid": p["uid"], "name": p["name"], "active": p["active"]}
                    for p in sorted(data["people"], key=lambda p: (not p["active"], p["name"]))],
     }

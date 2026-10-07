@@ -1692,27 +1692,78 @@ tr.oto-closed { opacity: .45; text-decoration: line-through; }
   .menu-link { white-space: nowrap; }
 }
 
-/* ── Contract MBR: the director's sheet, as a page ─────────────────────────── */
+/* ── Contract MBR: the director's sheet, as a page ───────────────────────────
+   Jonny's sheet's colours (Office theme): green #C6DEB5 for section bands and
+   quarter columns, pale blue #DAE3F3 for half-years, blue #BDD7EE for actuals,
+   gold #FFE699 for budgets. Exact in light mode; softened for dark. */
+:root {
+  --cmbr-green: rgba(112, 173, 71, .16);   --cmbr-green-ink: #a9d48c;
+  --cmbr-half:  rgba(68, 114, 196, .14);
+  --cmbr-actual: rgba(91, 155, 213, .16);
+  --cmbr-budget: rgba(255, 192, 0, .13);
+  --cmbr-est: #d9a441;
+}
+.theme-light {
+  --cmbr-green: #C6DEB5;  --cmbr-green-ink: #2f5d1c;
+  --cmbr-half:  #DAE3F3;
+  --cmbr-actual: #BDD7EE;
+  --cmbr-budget: #FFE699;
+  --cmbr-est: #9a6400;
+}
 .cmbr-page { max-width: none; }
-.cmbr-intro { max-width: 90ch; margin-bottom: 12px; }
-.cmbr-wrap { max-height: calc(100vh - 210px); }
-.cmbr-table { font-size: 12px; }
-.cmbr-table th, .cmbr-table td { padding: 6px 10px; white-space: nowrap; }
+.cmbr-legend {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px;
+  margin: 0 0 12px; font-size: 11.5px; color: var(--mid);
+}
+.cmbr-key { display: inline-flex; align-items: center; gap: 7px; }
+.cmbr-swatch { width: 16px; height: 12px; border-radius: 3px; border: 1px solid var(--border); }
+.cmbr-key-actual { background: var(--cmbr-actual); }
+.cmbr-key-budget { background: var(--cmbr-budget); }
+.cmbr-key-quarter { background: var(--cmbr-green); }
+.cmbr-key-half { background: var(--cmbr-half); }
+.cmbr-key-input { background: var(--surface2); border-color: var(--accent); }
+.cmbr-key-est { width: auto; height: auto; border: 0; padding: 1px 5px; font: 600 9.5px var(--mono);
+  text-transform: uppercase; letter-spacing: .06em; color: var(--cmbr-est);
+  border: 1px solid var(--cmbr-est); border-radius: 3px; }
+.cmbr-legend-note { flex-basis: 100%; }
+.cmbr-wrap { max-height: calc(100vh - 220px); }
+.cmbr-table { font-size: 12px; border-collapse: separate; border-spacing: 0; }
+.cmbr-table th, .cmbr-table td { padding: 6px 10px; white-space: nowrap; border-bottom: 1px solid var(--hairline); }
 .cmbr-table .cmbr-label {
   position: sticky; left: 0; z-index: 1; background: var(--surface);
-  min-width: 240px; text-align: left;
+  min-width: 260px; text-align: left; border-right: 1px solid var(--border);
 }
-.cmbr-table thead .cmbr-label { z-index: 3; background: var(--surface2); }
-.cmbr-table .cmbr-period { background: var(--tint); color: var(--light); font-weight: 500; }
-.cmbr-table thead .cmbr-period { background: var(--surface2); color: var(--accent); }
-.cmbr-section td {
-  background: var(--deep); color: var(--accent); font-size: 10px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: .12em; padding: 12px 10px 6px;
-  border-bottom: 1px solid var(--accent); position: sticky; left: 0;
+.cmbr-table thead th { background: var(--surface2); }
+.cmbr-table thead .cmbr-label { z-index: 3; }
+.cmbr-table .cmbr-quarter { background: var(--cmbr-green); font-weight: 500; }
+.cmbr-table .cmbr-half { background: var(--cmbr-half); font-weight: 500; }
+.cmbr-table thead .cmbr-quarter, .cmbr-table thead .cmbr-half { color: var(--white); }
+.cmbr-section td { background: var(--cmbr-green); padding-top: 10px; padding-bottom: 6px; }
+.cmbr-section td.cmbr-label {
+  background: var(--cmbr-green); color: var(--cmbr-green-ink); font-size: 10.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .1em;
 }
-.cmbr-input-row .cmbr-label { color: var(--white); }
+.cmbr-tone-actual td { background: var(--cmbr-actual); }
+.cmbr-tone-budget td { background: var(--cmbr-budget); }
+.cmbr-tone-actual td.cmbr-label, .cmbr-tone-budget td.cmbr-label { color: var(--white); }
+.cmbr-tone-actual td.cmbr-label { background: linear-gradient(var(--cmbr-actual), var(--cmbr-actual)), var(--surface); }
+.cmbr-tone-budget td.cmbr-label { background: linear-gradient(var(--cmbr-budget), var(--cmbr-budget)), var(--surface); }
+.cmbr-tone-actual td.cmbr-quarter, .cmbr-tone-budget td.cmbr-quarter,
+.cmbr-tone-actual td.cmbr-half, .cmbr-tone-budget td.cmbr-half { font-weight: 600; }
+.cmbr-est {
+  margin-left: 8px; padding: 1px 5px; font: 600 9.5px var(--mono); letter-spacing: .06em;
+  text-transform: uppercase; color: var(--cmbr-est); border: 1px solid var(--cmbr-est);
+  border-radius: 3px; cursor: help; vertical-align: 1px;
+}
+.cmbr-table td.cmbr-estimate { color: var(--mid); font-style: italic; }
 .cmbr-input {
-  width: 92px; text-align: right; font: 12px var(--mono); padding: 3px 6px;
+  width: 96px; text-align: right; font: 12px var(--mono); padding: 3px 6px;
   background: var(--surface2); color: var(--light); border: 1px solid var(--border); border-radius: 4px;
 }
+.cmbr-input::placeholder { color: var(--disabled); font-style: italic; }
 .cmbr-input:focus { outline: none; border-color: var(--accent); }
+.cmbr-input-row td.cmbr-label { font-weight: 500; }
+.cmbr-section td.cmbr-label { background: linear-gradient(var(--cmbr-green), var(--cmbr-green)), var(--surface); }
+/* As the sheet: the top block keeps its own colour through the quarters */
+.cmbr-table .cmbr-tone-actual td.cmbr-quarter { background: var(--cmbr-actual); }
+.cmbr-table .cmbr-tone-budget td.cmbr-quarter { background: var(--cmbr-budget); }
