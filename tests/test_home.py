@@ -164,3 +164,24 @@ def test_the_home_page_itself_shows_no_back_link():
 def test_the_logo_still_goes_home(page):
     assert '<a href="/" class="logo-link"><img src="/logo.svg"' in read(page) \
         or '<a href="/"><img src="/logo.svg"' in read(page)
+
+
+def test_cameron_scott_and_london_perm_have_no_mbr_pill(monkeypatch):
+    TERR.update({"cs": "Cameron Scott"})
+    monkeypatch.setattr("shared.dataverse.get_territory_name", lambda tid: TERR.get(tid, "Unknown"))
+    monkeypatch.setattr(F, "_mbr_visible_people_all", lambda email: (
+        [person("a", "lc"), person("b", "lp"), person("c", "cs")], True))
+    monkeypatch.setattr("shared.oto_templates.templates_for", lambda email, is_admin: [])
+    monkeypatch.setattr("shared.dataverse.is_admin", lambda email: False)
+    mbr = next(s for s in F._home_sections("jason@saragossa.io") if s["key"] == "mbr")
+    assert [p["label"] for p in mbr["pills"]] == ["London Contract"]
+
+
+def test_the_mbr_page_itself_drops_those_desks_too(monkeypatch):
+    """Not just the pills — the person list and saving use the same check."""
+    monkeypatch.setattr("shared.dataverse.get_territory_name", lambda tid: TERR.get(tid, "Unknown"))
+    TERR.update({"cs": "Cameron Scott"})
+    monkeypatch.setattr(F, "_mbr_visible_people_all", lambda email: (
+        [person("a", "lc"), person("b", "lp"), person("c", "cs")], True))
+    people, _ = F._mbr_visible_people("jason@saragossa.io")
+    assert [p["systemuserid"] for p in people] == ["a"]

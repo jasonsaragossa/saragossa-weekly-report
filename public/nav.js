@@ -9,19 +9,32 @@
  * person can open from /api/home, which runs each section's own access check.
  */
 (function () {
-  const KEY = "saragossa-home-v1";
-  const TTL_MS = 10 * 60 * 1000;
+  // Remembered between visits so the home page can draw at once while it
+  // checks for changes. Only which sections to show — every section still
+  // checks access itself — and cleared on sign-out for shared computers.
+  const KEY = "saragossa-home-v2";
+  const TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
   function cached() {
     try {
-      const c = JSON.parse(sessionStorage.getItem(KEY) || "null");
+      const c = JSON.parse(localStorage.getItem(KEY) || "null");
       return c && Date.now() - c.at < TTL_MS ? c.sections : null;
     } catch (_) { return null; }
   }
 
   function remember(sections) {
-    try { sessionStorage.setItem(KEY, JSON.stringify({ at: Date.now(), sections })); } catch (_) {}
+    try { localStorage.setItem(KEY, JSON.stringify({ at: Date.now(), sections })); } catch (_) {}
   }
+
+  function forget() {
+    try { localStorage.removeItem(KEY); sessionStorage.removeItem("saragossa-home-v1"); } catch (_) {}
+  }
+
+  // Signing out forgets them, so the next person on this computer starts clean
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest && e.target.closest('a[href^="/.auth/logout"]');
+    if (a) forget();
+  });
 
   async function load() {
     const resp = await fetch("/api/home");
@@ -42,7 +55,7 @@
     host.appendChild(a);
   }
 
-  window.SaragossaNav = { load, remember, cached, render() {} };
+  window.SaragossaNav = { load, remember, cached, forget, render() {} };
 
   const host = document.getElementById("main-menu");
   if (host) renderBackLink(host);

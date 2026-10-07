@@ -7,31 +7,45 @@
  */
 (async () => {
   const grid = document.getElementById("home-grid");
-  let sections = null;
-  try {
-    sections = await window.SaragossaNav.load();
-  } catch (_) { /* handled below */ }
-  if (!sections) {
-    grid.innerHTML = `<p class="mbr-empty">Couldn't load your sections — try refreshing.</p>`;
-    return;
-  }
-  window.SaragossaNav.render(sections);
+  const nav = window.SaragossaNav;
+  let shown = null;
 
-  if (sections.length === 1 && sections[0].key === "report") {
-    window.location.replace("/report");
-    return;
+  function draw(sections) {
+    const sig = JSON.stringify(sections);
+    if (sig === shown) return;               // nothing changed — don't redraw
+    shown = sig;
+    if (sections.length === 1 && sections[0].key === "report") {
+      window.location.replace("/report");
+      return;
+    }
+    grid.textContent = "";
+    sections.forEach(s => grid.appendChild(card(s)));
   }
 
-  grid.textContent = "";
-  sections.forEach(s => grid.appendChild(card(s)));
+  // Draw at once from last time, then check for changes. Working out a
+  // person's sections takes the server a couple of seconds; there's no
+  // reason to make them watch a spinner for it on every visit.
+  const remembered = nav.cached();
+  if (remembered) draw(remembered);
+
+  let fresh = null;
+  try { fresh = await nav.load(); } catch (_) { /* handled below */ }
+  if (fresh) draw(fresh);
+  else if (!remembered) {
+    grid.innerHTML = `<p class="mbr-empty">Couldn't load your sections. Try refreshing.</p>`;
+  }
 })();
 
 // Built with DOM calls and textContent: names come from Mercury, so they are
 // never handed to innerHTML.
+//
+// Every card works the same way: the card itself is not a link, and every
+// destination is a pill. A one-place section gets a single "Open" pill, so it
+// is never a case of "click anywhere here, but only the tabs there" (Jason,
+// Oct 2026).
 function card(s) {
-  const el = document.createElement(s.href ? "a" : "section");
+  const el = document.createElement("section");
   el.className = "home-card";
-  if (s.href) el.href = s.href;
 
   const h = document.createElement("h2");
   h.className = "home-card-title";
@@ -43,22 +57,20 @@ function card(s) {
   p.textContent = s.description;
   el.appendChild(p);
 
-  if (s.pills && s.pills.length) {
+  const pills = (s.pills && s.pills.length) ? s.pills
+    : (s.href ? [{ label: "Open", href: s.href, primary: true }] : []);
+  if (pills.length) {
     const row = document.createElement("div");
     row.className = "home-pills";
-    s.pills.forEach(pl => {
+    pills.forEach(pl => {
       const a = document.createElement("a");
-      a.className = "home-pill";
+      a.className = "home-pill" + (pl.primary ? " home-pill-open" : "");
       a.href = pl.href;
       a.textContent = pl.label;
+      if (pl.primary) a.setAttribute("aria-label", `Open ${s.title}`);
       row.appendChild(a);
     });
     el.appendChild(row);
-  } else if (s.href) {
-    const go = document.createElement("span");
-    go.className = "home-open";
-    go.textContent = "Open →";
-    el.appendChild(go);
   }
   return el;
 }

@@ -1038,7 +1038,19 @@ def performance_stats(req: func.HttpRequest) -> func.HttpResponse:
 # POST /api/mbr                            → save the judgement fields and actions
 # GET/POST /api/mbr-targets                → per-person monthly targets (admin)
 
+# Desks with no MBRs (Jason, Oct 2026): Cameron Scott's solution sales seat
+# doesn't need one, and London Perm is no longer reviewed this way. Applied
+# inside the visibility check, so the home page, the MBR page's person list
+# and saving all agree.
+MBR_EXCLUDED_DESKS = {"Cameron Scott", "London Perm"}
+
+
 def _mbr_visible_people(email: str):
+    people, can_manage = _mbr_visible_people_all(email)
+    return [p for p in people if _mbr_desk(p) not in MBR_EXCLUDED_DESKS], can_manage
+
+
+def _mbr_visible_people_all(email: str):
     """
     (people, can_manage) — MBR visibility, deliberately NOT the analytics admin
     check: reading someone's performance conversation is a different permission
@@ -1050,16 +1062,26 @@ def _mbr_visible_people(email: str):
     from shared.dataverse import (get_all_territory_consultants, get_team_membership_map,
                                   get_overrides, get_mbr_scopes, get_territory_name)
     from shared.dataverse import odata_get_all, odata_str
-    people = [c for c in get_all_territory_consultants() if not c.get("isdisabled")]
-    # Resolve the caller from ALL Mercury users, not just the six consultant
-    # territories — directors sit outside them (Jason's user is in "Testing"),
-    # so looking them up in `people` would silently deny their own grant.
-    me = next((u for u in odata_get_all("systemusers", params={
-        "$select": "systemuserid,fullname,title,internalemailaddress,_territoryid_value",
-        "$filter": (f"internalemailaddress eq '{odata_str(email)}'"
-                    f" and isdisabled eq false"),
-    })), None)
-    scopes = get_mbr_scopes()
+    from concurrent.futures import ThreadPoolExecutor
+
+    def find_me():
+        # Resolve the caller from ALL Mercury users, not just the six consultant
+        # territories — directors sit outside them (Jason's user is in "Testing"),
+        # so looking them up in `people` would silently deny their own grant.
+        return next((u for u in odata_get_all("systemusers", params={
+            "$select": "systemuserid,fullname,title,internalemailaddress,_territoryid_value",
+            "$filter": (f"internalemailaddress eq '{odata_str(email)}'"
+                        f" and isdisabled eq false"),
+        })), None)
+
+    # Independent lookups, fetched side by side rather than one after another
+    # (this check was most of the home page's load time, Oct 2026).
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        f_people, f_me = pool.submit(get_all_territory_consultants), pool.submit(find_me)
+        f_scopes, f_over = pool.submit(get_mbr_scopes), pool.submit(get_overrides)
+        people = [c for c in f_people.result() if not c.get("isdisabled")]
+        me, scopes = f_me.result(), f_scopes.result()
+        overrides_rows = f_over.result()
 
     # Grants are the authority. Deliberately NOT the analytics admin check:
     # finance and analytics access must not carry into performance conversations.
@@ -1078,7 +1100,7 @@ def _mbr_visible_people(email: str):
         return [], False
 
     visible = {me["systemuserid"]: me}
-    overrides = {o["crbb7_userid"]: o for o in get_overrides()}
+    overrides = {o["crbb7_userid"]: o for o in overrides_rows}
     if (overrides.get(me["systemuserid"]) or {}).get("crbb7_isteamlead"):
         teams = get_team_membership_map()
         my_team = teams.get(me["systemuserid"])

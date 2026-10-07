@@ -12,7 +12,7 @@ Access, per template:
   * everyone else on the roster sees only themselves;
   * admins see every template and every person.
 """
-from shared.dataverse import (TERRITORY_IDS, odata_get_all, odata_str)
+from shared.dataverse import (TERRITORY_IDS, odata_get_all, odata_str, ttl_cached)
 
 TEMPLATES = {
     "snoz": {
@@ -77,6 +77,7 @@ def rung(title: str) -> str | None:
     return _TITLE_TO_RUNG.get((title or "").strip().lower())
 
 
+@ttl_cached(300)
 def _team_members(team_name: str) -> list:
     teams = odata_get_all("teams", params={
         "$select": "teamid", "$filter": f"name eq '{odata_str(team_name)}'"})
@@ -87,15 +88,19 @@ def _team_members(team_name: str) -> list:
         params={"$select": _SELECT}) if not m.get("isdisabled")]
 
 
+@ttl_cached(300)
+def _territory_people(tid: str) -> list:
+    return odata_get_all("systemusers", params={
+        "$select": _SELECT,
+        "$filter": f"_territoryid_value eq '{tid}' and isdisabled eq false"})
+
+
 def roster(template: dict) -> list:
     """Everyone the template covers, sorted by name."""
     if template.get("team"):
         people = _team_members(template["team"])
     else:
-        tid = TERRITORY_IDS[template["territory"]]
-        people = odata_get_all("systemusers", params={
-            "$select": _SELECT,
-            "$filter": f"_territoryid_value eq '{tid}' and isdisabled eq false"})
+        people = _territory_people(TERRITORY_IDS[template["territory"]])
     skip = tuple(template.get("exclude_names") or ())
     skip_email = {e.lower() for e in (template.get("exclude_emails") or ())}
     people = [p for p in people

@@ -102,6 +102,43 @@ FINANCE_TEAM_NAME = "Bristol Finance and Compliance"
 
 # ── User queries ─────────────────────────────────────────────────────────────
 
+# ── Short-lived memory for the staff lists ────────────────────────────────────
+# Who is on which desk and team only changes when Mercury does, yet nearly
+# every page asks — the home page three times over. Five minutes is invisible
+# to people and saves a second or more per page. Each caller gets its own copy,
+# so one that edits the list it was given can't change anyone else's.
+# NOT for anything edited in the app (Settings overrides, MBR grants): a change
+# there must show on the next load.
+import copy as _copy
+import threading as _threading
+import time as _time
+
+_TTL_STORE: dict = {}
+_TTL_LOCK = _threading.Lock()
+
+
+def ttl_cached(seconds: int):
+    def deco(fn):
+        def wrapper(*args):
+            key = (fn.__name__, args)
+            with _TTL_LOCK:
+                hit = _TTL_STORE.get(key)
+            if hit and _time.time() - hit[0] < seconds:
+                return _copy.deepcopy(hit[1])
+            value = fn(*args)
+            with _TTL_LOCK:
+                _TTL_STORE[key] = (_time.time(), value)
+            return _copy.deepcopy(value)
+        wrapper.__name__, wrapper.__doc__, wrapper.__wrapped__ = fn.__name__, fn.__doc__, fn
+        return wrapper
+    return deco
+
+
+def clear_ttl_cache() -> None:
+    with _TTL_LOCK:
+        _TTL_STORE.clear()
+
+
 # People who sit in a territory but are not a desk on the report — they run
 # the desk rather than bill against it. Kept as an explicit list because a
 # title rule would also drop directors who do bill.
@@ -161,6 +198,7 @@ def get_all_named_users() -> list[dict]:
     )
 
 
+@ttl_cached(300)
 def get_all_territory_consultants() -> list[dict]:
     """
     Returns active AND inactive users in the 6 territories, with isdisabled flag.
@@ -204,6 +242,7 @@ _REPORT_TEAM_NAMES = [
     "Team Makenzie", "Team Mike B",
 ]
 
+@ttl_cached(300)
 def get_team_membership_map() -> dict:
     """
     Returns {systemuserid: team_name} for all users in any known report team.
