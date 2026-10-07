@@ -107,6 +107,21 @@ def _load_report(today: date) -> tuple:
     return report, fetch_ms, total_ms - fetch_ms
 
 
+# The desks' house accounts are shown to Directors only (Jason, Oct 2026).
+# Built as a copy: the report itself may be shared between callers.
+def _without_house_accounts(report: dict) -> dict:
+    from shared.dataverse import is_house_account
+    keep = lambda ms: [m for m in ms if not is_house_account(m.get("name"))]
+    out = {}
+    for territory, tdata in report.items():
+        if tdata.get("type") == "teams":
+            groups = [{**g, "members": keep(g["members"])} for g in tdata.get("groups", [])]
+            out[territory] = {**tdata, "groups": [g for g in groups if g["members"]]}
+        else:
+            out[territory] = {**tdata, "members": keep(tdata.get("members") or [])}
+    return out
+
+
 @app.route(route="report-data", methods=["GET"])
 def report_data(req: func.HttpRequest) -> func.HttpResponse:
     email, err = require_auth(req)
@@ -115,6 +130,9 @@ def report_data(req: func.HttpRequest) -> func.HttpResponse:
     try:
         today = date.today()
         report, fetch_ms, build_ms = _load_report(today)
+        from shared.dataverse import is_director
+        if not is_director(email):
+            report = _without_house_accounts(report)
         # Where the time went, so a slow load can be diagnosed from the payload
         # rather than guessed at: fetch is Dataverse, build is our own maths.
         logging.info("report-data: fetch %dms, build %dms", fetch_ms, build_ms)
@@ -155,6 +173,7 @@ def contract_screen(req: func.HttpRequest) -> func.HttpResponse:
 
         today = date.today()
         report, _, _ = _load_report(today)
+        from shared.dataverse import is_house_account
 
         def desk(territory, label):
             tdata = report.get(territory) or {}
@@ -169,7 +188,7 @@ def contract_screen(req: func.HttpRequest) -> func.HttpResponse:
                 # the house accounts are not people.
                 if "director" in (m.get("role") or "").lower():
                     continue
-                if (m.get("name") or "").lower().startswith("saragossa house"):
+                if is_house_account(m.get("name")):
                     continue
                 wnf = m.get("wnf") or 0
                 ytd = m.get("margin_ytd") or 0
@@ -228,8 +247,18 @@ def settings_get(req: func.HttpRequest) -> func.HttpResponse:
             for c in consultants
         ]
 
+        # The teams Mercury has on each desk, so the team picker offers a new
+        # one as soon as it exists
+        team_map = get_team_membership_map()
+        mercury_teams = {}
+        for u in users:
+            team = team_map.get(u["uid"])
+            if team and team not in mercury_teams.setdefault(u["territory"], []):
+                mercury_teams[u["territory"]].append(team)
+
         return func.HttpResponse(
             json.dumps({"ok": True, "users": users, "overrides": overrides,
+                        "mercury_teams": mercury_teams,
                         "all_active_users": all_users, "finance_member_uids": finance_uids,
                         "nb_thresholds": get_nb_thresholds(),
                         "manual_nb_clients": get_manual_nb_clients()}),
@@ -1046,8 +1075,13 @@ MBR_EXCLUDED_DESKS = {"Cameron Scott", "London Perm"}
 
 
 def _mbr_visible_people(email: str):
+    from shared.dataverse import is_director, is_house_account
     people, can_manage = _mbr_visible_people_all(email)
-    return [p for p in people if _mbr_desk(p) not in MBR_EXCLUDED_DESKS], can_manage
+    people = [p for p in people if _mbr_desk(p) not in MBR_EXCLUDED_DESKS]
+    # House accounts are for Directors' eyes only (Jason, Oct 2026)
+    if any(is_house_account(p.get("fullname")) for p in people) and not is_director(email):
+        people = [p for p in people if not is_house_account(p.get("fullname"))]
+    return people, can_manage
 
 
 def _mbr_visible_people_all(email: str):
@@ -1225,10 +1259,12 @@ def _mbr_contract_access(email: str, desk: str):
     from shared.mbr_contract import DESKS
     people, _ = _mbr_visible_people(email)
     on_desk = {p["systemuserid"] for p in people if _mbr_desk(p) == desk}
-    from shared.dataverse import TERRITORY_IDS, get_all_territory_consultants
+    from shared.dataverse import TERRITORY_IDS, get_all_territory_consultants, is_house_account
     tid = TERRITORY_IDS[DESKS[desk][0]]
+    # The house account isn't a person, and is hidden from all but Directors
     everyone = {c["systemuserid"] for c in get_all_territory_consultants()
-                if c.get("_territoryid_value") == tid and not c.get("isdisabled")}
+                if c.get("_territoryid_value") == tid and not c.get("isdisabled")
+                and not is_house_account(c.get("fullname"))}
     lower = (email or "").lower()
     is_director = lower == DESKS[desk][1]
     admin = lower in ONE_TO_ONE_ADMINS

@@ -36,6 +36,22 @@ TEAM_ORDER = {
     "Chicago Contract": ["Team Makenzie", "Team Mike B", "Team Connor"],
 }
 
+
+def team_sort_key(territory: str, team: str) -> tuple:
+    """Listed teams in their set order, any newer Mercury team after them by
+    name, and anyone in no team last."""
+    order = TEAM_ORDER.get(territory) or []
+    if team in order:
+        return (0, order.index(team), "")
+    return (1, 0, team) if team else (2, 0, "")
+
+
+def splits_into_teams(territory: str, members: list) -> bool:
+    """A desk is shown by team when it has a set order, or when Mercury has put
+    its people in two or more teams — so a new team shows without a code change.
+    One team covering the whole desk (Team Jonny) is no split at all."""
+    return bool(TEAM_ORDER.get(territory)) or len({m["team"] for m in members if m["team"]}) >= 2
+
 TO_GBP = {
     "GBP": 1.000, "USD": 0.789, "EUR": 0.838,
     "SGD": 0.591, "HKD": 0.101, "CAD": 0.575, "AUD": 0.491,
@@ -1057,7 +1073,6 @@ def build_admin_report(
 
     report = {}
     for territory, members in by_territory.items():
-        order = TEAM_ORDER.get(territory)
         ccy   = CCY.get(territory, "GBP")
         sym   = "£" if ccy == "GBP" else "$"
 
@@ -1092,11 +1107,9 @@ def build_admin_report(
             t_last_ytd += member.get("last_year_ytd", 0)
         t_total = sum(t_months.values())
 
-        if order:
-            members.sort(key=lambda m: (
-                order.index(m["team"]) if m["team"] in order else 99,
-                m.get("createdon", "")
-            ))
+        if splits_into_teams(territory, members):
+            members.sort(key=lambda m: (team_sort_key(territory, m["team"]),
+                                        m.get("createdon", "")))
             groups = []
             for m in members:
                 existing = next((g for g in groups if g["team"] == m["team"]), None)
@@ -1404,13 +1417,10 @@ def build_report(
     # Sort and group each territory
     report = {}
     for territory, members in by_territory.items():
-        order = TEAM_ORDER.get(territory)
-        if order:
+        if splits_into_teams(territory, members):
             # Sort within team by createdon
-            members.sort(key=lambda m: (
-                order.index(m["team"]) if m["team"] in order else -1,
-                m.get("createdon", "")
-            ))
+            members.sort(key=lambda m: (team_sort_key(territory, m["team"]),
+                                        m.get("createdon", "")))
             # Group into teams
             groups = []
             seen_teams = []

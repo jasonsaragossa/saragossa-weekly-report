@@ -54,6 +54,11 @@ let nbSelectedUid = "";   // consultant selected in the NB-client section
   financeMemberUids = data.finance_member_uids || [];
   nbThresholds = data.nb_thresholds || {};
   manualNbClients = data.manual_nb_clients || {};
+  // Teams Mercury has that aren't listed above join the picker on their own
+  for (const [territory, teams] of Object.entries(data.mercury_teams || {})) {
+    const list = TEAMS_BY_TERRITORY[territory] || (TEAMS_BY_TERRITORY[territory] = []);
+    teams.forEach(t => { if (!list.includes(t)) list.push(t); });
+  }
   (data.overrides || []).forEach(o => { overrideMap[o.crbb7_userid] = o; });
 
   renderSettings();

@@ -439,7 +439,7 @@ function nbClientsHtml(m) {
 function buildPermTeamTable(groups) {
   let body = "";
   for (const g of groups) {
-    body += `<tr class="team-header"><td colspan="10">${esc(g.team)}</td></tr>`;
+    body += `<tr class="team-header"><td colspan="10">${esc(g.team || "Not in a team")}</td></tr>`;
     body += g.members.map(permRow).join("");
   }
   return tableWrap(`<table>${permHeaders()}<tbody>${body}</tbody></table>`);
@@ -452,8 +452,7 @@ function buildPermFlatTable(members) {
 
 // A desk with teams shows each team under its own header, as perm desks do
 function buildContractTable(tdata) {
-  const groups = tdata.type === "flat" ? [{ team: "", members: tdata.members }]
-    : [...tdata.groups.filter(g => g.team), ...tdata.groups.filter(g => !g.team)];
+  const groups = tdata.type === "flat" ? [{ team: "", members: tdata.members }] : tdata.groups;
   const headers = `<thead><tr>
     <th>Consultant</th>
     <th>Role</th>

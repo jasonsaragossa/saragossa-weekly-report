@@ -1752,8 +1752,8 @@ function buildMonthlyTable(tdata, showLastYear = false, showWritten = false, isN
     <tbody>`;
 
   for (const g of groups) {
-    if (g.team) {
-      html += `<tr class="team-header"><td colspan="${colCount}">${esc(g.team)}</td></tr>`;
+    if (g.team || tdata.type === "teams") {
+      html += `<tr class="team-header"><td colspan="${colCount}">${esc(g.team || "Not in a team")}</td></tr>`;
     }
     for (const m of g.members) {
       const mMonths = primaryMonths(m);

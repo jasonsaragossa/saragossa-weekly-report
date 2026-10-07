@@ -236,24 +236,39 @@ def get_all_territory_consultants() -> list[dict]:
     return [u for u in results if _on_report(u)]
 
 
-# Known report team names — must match Dataverse team names exactly
-_REPORT_TEAM_NAMES = [
+# Every Mercury team named "Team …" is a report team — a new one appears on its
+# own (Jason, Oct 2026). These come first, in this order, when someone sits in
+# more than one: James Batt is in Team Batt, Team Charlie and Team Ed.
+PREFERRED_TEAMS = [
     "Team Batt", "Team Charlie", "Team Sion", "Team Harry W",
     "Team Data & Cyber", "Team Data and Cyber", "Team Snoz",
     "Team JD", "Team Matty", "Team Adam", "Team Adam W",
     "Team Makenzie", "Team Mike B", "Team Connor",
 ]
 
+
+def pick_team(names: list, sizes: dict) -> str:
+    """The one team someone is shown under. A preferred team wins; otherwise the
+    smallest, so a desk-wide team (Team Jim holds all of Chicago Contract) only
+    takes the people who are in no team of their own."""
+    names = [n for n in names if n]
+    if not names:
+        return ""
+    known = [n for n in PREFERRED_TEAMS if n in names]
+    if known:
+        return known[0]
+    return min(names, key=lambda n: (sizes.get(n, 0), n))
+
+
 @ttl_cached(300)
 def get_team_membership_map() -> dict:
     """
-    Returns {systemuserid: team_name} for all users in any known report team.
+    Returns {systemuserid: team_name} for everyone in a Mercury "Team …" team.
     Uses separate queries per team to avoid $expand encoding issues.
     """
-    name_filter = " or ".join(f"name eq '{t}'" for t in _REPORT_TEAM_NAMES)
     teams = odata_get_all("teams", params={
         "$select": "teamid,name",
-        "$filter": name_filter,
+        "$filter": "startswith(name,'Team ')",
     })
     # One query per team, so run them together — sequentially this is a dozen
     # round trips on the critical path of every report load.
@@ -261,17 +276,35 @@ def get_team_membership_map() -> dict:
     with ThreadPoolExecutor(max_workers=8) as pool:
         rosters = list(pool.map(
             lambda t: odata_get_all(f"teams({t['teamid']})/teammembership_association",
-                                    params={"$select": "systemuserid"}),
+                                    params={"$select": "systemuserid,isdisabled"}),
             teams))
 
-    # Kept in team order, so the first team to list someone still wins.
-    uid_to_team = {}
+    # Leavers still sit in their old teams; only current people count to size
+    sizes, by_uid = {}, {}
     for team, members in zip(teams, rosters):
+        live = [m for m in members if m.get("systemuserid") and not m.get("isdisabled")]
+        sizes[team["name"]] = len(live)
         for m in members:
-            uid = m.get("systemuserid")
-            if uid and uid not in uid_to_team:
-                uid_to_team[uid] = team["name"]
-    return uid_to_team
+            if m.get("systemuserid"):
+                by_uid.setdefault(m["systemuserid"], []).append(team["name"])
+    return {uid: pick_team(names, sizes) for uid, names in by_uid.items()}
+
+
+def is_house_account(name: str) -> bool:
+    """The desks' "Saragossa House …" users — they own work but aren't people."""
+    return (name or "").strip().lower().startswith("saragossa house")
+
+
+@ttl_cached(300)
+def is_director(user_email: str) -> bool:
+    """A Director by Mercury job title — the same rule the admin check starts from."""
+    if not user_email:
+        return False
+    users = odata_get_all("systemusers", params={
+        "$select": "title",
+        "$filter": f"internalemailaddress eq '{odata_str(user_email)}' and isdisabled eq false",
+    })
+    return bool(users) and "director" in (users[0].get("title") or "").lower()
 
 def get_territory_name(tid: str) -> str:
     return next((k for k, v in TERRITORY_IDS.items() if v == tid), "Unknown")
