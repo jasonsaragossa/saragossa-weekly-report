@@ -1691,3 +1691,28 @@ tr.oto-closed { opacity: .45; text-decoration: line-through; }
   .main-menu::-webkit-scrollbar { display: none; }
   .menu-link { white-space: nowrap; }
 }
+
+/* ── Contract MBR: the director's sheet, as a page ─────────────────────────── */
+.cmbr-page { max-width: none; }
+.cmbr-intro { max-width: 90ch; margin-bottom: 12px; }
+.cmbr-wrap { max-height: calc(100vh - 210px); }
+.cmbr-table { font-size: 12px; }
+.cmbr-table th, .cmbr-table td { padding: 6px 10px; white-space: nowrap; }
+.cmbr-table .cmbr-label {
+  position: sticky; left: 0; z-index: 1; background: var(--surface);
+  min-width: 240px; text-align: left;
+}
+.cmbr-table thead .cmbr-label { z-index: 3; background: var(--surface2); }
+.cmbr-table .cmbr-period { background: var(--tint); color: var(--light); font-weight: 500; }
+.cmbr-table thead .cmbr-period { background: var(--surface2); color: var(--accent); }
+.cmbr-section td {
+  background: var(--deep); color: var(--accent); font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .12em; padding: 12px 10px 6px;
+  border-bottom: 1px solid var(--accent); position: sticky; left: 0;
+}
+.cmbr-input-row .cmbr-label { color: var(--white); }
+.cmbr-input {
+  width: 92px; text-align: right; font: 12px var(--mono); padding: 3px 6px;
+  background: var(--surface2); color: var(--light); border: 1px solid var(--border); border-radius: 4px;
+}
+.cmbr-input:focus { outline: none; border-color: var(--accent); }

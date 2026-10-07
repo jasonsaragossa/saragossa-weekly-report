@@ -117,18 +117,20 @@ _TTL_STORE: dict = {}
 _TTL_LOCK = _threading.Lock()
 
 
-def ttl_cached(seconds: int):
+def ttl_cached(seconds: int, copy: bool = True):
+    """copy=False hands back the shared value itself — only for callers that
+    never change what they're given, where copying would cost real time."""
     def deco(fn):
         def wrapper(*args):
             key = (fn.__name__, args)
             with _TTL_LOCK:
                 hit = _TTL_STORE.get(key)
             if hit and _time.time() - hit[0] < seconds:
-                return _copy.deepcopy(hit[1])
+                return _copy.deepcopy(hit[1]) if copy else hit[1]
             value = fn(*args)
             with _TTL_LOCK:
                 _TTL_STORE[key] = (_time.time(), value)
-            return _copy.deepcopy(value)
+            return _copy.deepcopy(value) if copy else value
         wrapper.__name__, wrapper.__doc__, wrapper.__wrapped__ = fn.__name__, fn.__doc__, fn
         return wrapper
     return deco

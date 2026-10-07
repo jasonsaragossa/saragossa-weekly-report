@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contract MBR — Saragossa</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <script>
+    /* Set on <html> in the head so the dark palette never paints first. */
+    try { if (localStorage.getItem("saragossa-theme") === "light")
+      document.documentElement.classList.add("theme-light"); } catch (e) {}
+  </script>
+</head>
+<body>
+
+<header class="header">
+  <a href="/" class="logo-link"><img src="/logo.svg" alt="Saragossa" class="logo"></a>
+  <div class="header-right">
+    <nav class="main-menu" id="main-menu" data-active="mbr"></nav>
+    <button class="theme-toggle" id="theme-toggle" type="button">◑ Light</button>
+    <a href="/.auth/logout" class="logout-link">Sign out</a>
+  </div>
+</header>
+
+<div class="mbr-page cmbr-page">
+  <div class="mbr-toolbar">
+    <h1 class="mbr-title" id="cmbr-title">Contract MBR</h1>
+    <label class="mbr-ctl">View <select id="cmbr-view"></select></label>
+    <label class="mbr-ctl">Year <select id="cmbr-year"></select></label>
+    <span class="mbr-status" id="cmbr-status"></span>
+  </div>
+
+  <div id="cmbr-content">
+    <div class="loading-state"><div class="spinner"></div><p>Working out the year from Mercury…</p></div>
+  </div>
+</div>
+
+<div class="footer">Saragossa · Contract MBR beta</div>
+
+<script src="/theme.js"></script>
+<script src="/nav.js"></script>
+<script src="/mbr-contract.js"></script>
+</body>
+</html>

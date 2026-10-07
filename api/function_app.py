@@ -1185,8 +1185,11 @@ def _home_sections(email: str) -> list:
     # desk to review.
     desks = sorted({d for d in (_mbr_desk(p) for p in mbr_people) if d})
     if desks:
-        out.append(section("mbr", pills=[{"label": d, "href": f"/mbr?desk={quote(d)}"}
-                                         for d in desks]))
+        # Desks with their own MBR template open it; the rest use the perm MBR
+        from shared.mbr_contract import DESKS as CONTRACT_DESKS
+        out.append(section("mbr", pills=[{"label": d, "href": (
+            f"/mbr-contract?desk={quote(d)}" if d in CONTRACT_DESKS else f"/mbr?desk={quote(d)}")}
+            for d in desks]))
     if (email or "").lower() in PERF_STATS_ALLOWED:
         out.append(section("perf", href="/performance"))
     if admin:
@@ -1205,6 +1208,106 @@ def home(req: func.HttpRequest) -> func.HttpResponse:
                                  mimetype="application/json", status_code=200)
     except Exception:
         logging.exception("home error")
+        return _server_error()
+
+
+# ── /api/mbr-contract — the London Contract MBR (Jonny's desk, Oct 2026) ──────
+# GET  ?desk=London Contract&year=2026&view=team|<uid>  -> one view of the year
+# POST {desk, year, values: {"gp_month:2026-01": 283251, ...}} -> Jonny's inputs
+#
+# Who sees what follows the MBR's own visibility check: the team view needs
+# sight of everyone on the desk (the director, anyone granted the desk, admins);
+# a consultant sees their own figures. Only the desk's director and the 1:1
+# admins may change the typed GP and budgets.
+
+def _mbr_contract_access(email: str, desk: str):
+    """(visible_uids, can_see_team, can_edit) for this desk."""
+    from shared.mbr_contract import DESKS
+    people, _ = _mbr_visible_people(email)
+    on_desk = {p["systemuserid"] for p in people if _mbr_desk(p) == desk}
+    from shared.dataverse import TERRITORY_IDS, get_all_territory_consultants
+    tid = TERRITORY_IDS[DESKS[desk][0]]
+    everyone = {c["systemuserid"] for c in get_all_territory_consultants()
+                if c.get("_territoryid_value") == tid and not c.get("isdisabled")}
+    lower = (email or "").lower()
+    is_director = lower == DESKS[desk][1]
+    admin = lower in ONE_TO_ONE_ADMINS
+    can_team = is_director or admin or (everyone and everyone <= on_desk)
+    return on_desk, bool(can_team), bool(is_director or admin)
+
+
+@app.route(route="mbr-contract", methods=["GET", "POST"])
+def mbr_contract(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_auth(req)
+    if err:
+        return err
+    from shared.dataverse import get_mbr_targets, upsert_mbr_targets
+    from shared.mbr_contract import DESK_KEY, DESKS, IMPORTED, TYPED, build_view
+    try:
+        body = req.get_json() if req.method == "POST" else {}
+    except ValueError:
+        body = {}
+    try:
+        desk = (body or {}).get("desk") or req.params.get("desk") or "London Contract"
+        if desk not in DESKS:
+            return _bad_request("unknown desk")
+        try:
+            year = int((body or {}).get("year") or req.params.get("year") or date.today().year)
+        except ValueError:
+            return _bad_request("bad year")
+        visible, can_team, can_edit = _mbr_contract_access(email, desk)
+        key = DESK_KEY.format(desk=desk)
+
+        if req.method == "POST":
+            if not can_edit:
+                return func.HttpResponse(json.dumps({"ok": False, "error": "forbidden"}),
+                                         mimetype="application/json", status_code=403)
+            allowed = set(TYPED + IMPORTED)
+            clean = {}
+            for k, v in ((body or {}).get("values") or {}).items():
+                name, _, ym = str(k).partition(":")
+                if name not in allowed or not re.fullmatch(rf"{year}-(0[1-9]|1[0-2])", ym):
+                    return _bad_request(f"not an input: {k}")
+                if v in ("", None):
+                    clean[k] = None
+                else:
+                    try:
+                        clean[k] = float(v)
+                    except (TypeError, ValueError):
+                        return _bad_request(f"not a number: {k}")
+            upsert_mbr_targets(key, clean)
+            return func.HttpResponse(json.dumps({"ok": True, "saved": len(clean)}),
+                                     mimetype="application/json", status_code=200)
+
+        view = req.params.get("view") or ("team" if can_team else "")
+        me = None
+        if not can_team:
+            # A consultant sees their own figures, and only those
+            from shared.dataverse import odata_get_all, odata_str
+            me = next((u["systemuserid"] for u in odata_get_all("systemusers", params={
+                "$select": "systemuserid",
+                "$filter": f"internalemailaddress eq '{odata_str(email)}'"})), None)
+            view = view if view and view == me else me
+        if view == "team" and not can_team:
+            return func.HttpResponse(json.dumps({"ok": False, "error": "forbidden"}),
+                                     mimetype="application/json", status_code=403)
+        if view != "team" and view not in visible:
+            return func.HttpResponse(json.dumps({"ok": False, "error": "forbidden"}),
+                                     mimetype="application/json", status_code=403)
+        inputs = get_mbr_targets(key).get(key, {}) if view == "team" else {}
+        out = build_view(desk, year, view, inputs)
+        if not can_team:
+            out["people"] = [p for p in out["people"] if p["uid"] == view]
+        else:
+            out["people"] = [p for p in out["people"] if p["uid"] in visible]
+        return func.HttpResponse(json.dumps({"ok": True, "can_team": can_team, "can_edit": can_edit,
+                                             **out}, default=str),
+                                 mimetype="application/json", status_code=200)
+    except KeyError:
+        return func.HttpResponse(json.dumps({"ok": False, "error": "not on this desk"}),
+                                 mimetype="application/json", status_code=404)
+    except Exception:
+        logging.exception("mbr-contract error")
         return _server_error()
 
 

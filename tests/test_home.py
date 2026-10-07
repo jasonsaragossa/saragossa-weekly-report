@@ -44,7 +44,7 @@ def test_a_consultant_sees_the_report_and_their_own_desk(access):
     access(mbr=[person("louis", "lc")])
     s = F._home_sections("louis@saragossa.io")
     assert keys(s) == ["report", "mbr"]
-    assert s[1]["pills"] == [{"label": "London Contract", "href": "/mbr?desk=London%20Contract"}]
+    assert s[1]["pills"] == [{"label": "London Contract", "href": "/mbr-contract?desk=London%20Contract"}]
 
 
 def test_121_pills_are_the_teams_this_person_can_open(access):

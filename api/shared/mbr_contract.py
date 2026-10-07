@@ -686,3 +686,65 @@ def build_year(desk: str, year: int, today: date | None = None, data: dict | Non
             "consultants": sorted(consultants, key=lambda c: (not c["active"], c["name"])),
             "measures": [{"key": k, "label": lb, "section": s, "level": lv, "unit": u}
                          for k, lb, s, lv, u, _r in MEASURES]}
+
+
+# ── One view at a time, for the page ──────────────────────────────────────────
+
+def _fetch_cached(desk: str, year: int, today: date) -> dict:
+    """The desk's year, kept ten minutes so moving between people and back is
+    quick. The engine never changes the data it's given, so no copy is made."""
+    from shared.dataverse import ttl_cached
+    global _CACHED_FETCH
+    if _CACHED_FETCH is None:
+        _CACHED_FETCH = ttl_cached(600, copy=False)(fetch_year)
+    return _CACHED_FETCH(desk, year, today)
+
+
+_CACHED_FETCH = None
+
+COLUMN_ORDER = ["P1", "P2", "P3", "Q1", "P4", "P5", "P6", "Q2", "H1",
+                "P7", "P8", "P9", "Q3", "P10", "P11", "P12", "Q4", "H2"]
+
+
+def build_view(desk: str, year: int, view: str, inputs: dict, today: date | None = None,
+               data: dict | None = None) -> dict:
+    """
+    One view of a desk's year: "team", or a consultant's systemuserid.
+    Only that view is worked out, so a page load costs a fraction of the year.
+    """
+    today = today or date.today()
+    data = data or _fetch_cached(desk, year, today)
+    through = 12 if year < today.year else today.month
+    team_ids = {p["uid"] for p in data["people"]}
+    is_team = view == "team"
+    if not is_team and view not in team_ids:
+        raise KeyError(view)
+    people = team_ids if is_team else {view}
+
+    months = {}
+    for m in range(1, through + 1):
+        raw = compute(people, year, m, data, data["fx"],
+                      data["director"] if is_team else None,
+                      data.get("book") if is_team else None)
+        if is_team:
+            for k in TYPED + IMPORTED:
+                raw[k] = inputs.get(f"{k}:{year}-{m:02d}")
+        months[m] = finish(raw)
+    cols = {f"P{m}": months[m] for m in months}
+    for name, ms in PERIODS:
+        got = [months[m] for m in ms if m in months]
+        if got:
+            cols[name] = period(got)
+
+    shown = ("team", "both") if is_team else ("consultant", "both")
+    return {
+        "desk": desk, "year": year, "through": through, "view": view,
+        "columns": [c for c in COLUMN_ORDER if c in cols],
+        "values": {c: {k: cols[c].get(k) for k, *_ in MEASURES} for c in cols},
+        "measures": [{"key": k, "label": lb, "section": sec, "unit": u,
+                      "typed": k in TYPED, "imported": k in IMPORTED,
+                      "estimate": k.startswith("carried_") or k == "headcount"}
+                     for k, lb, sec, lv, u, _r in MEASURES if lv in shown],
+        "people": [{"uid": p["uid"], "name": p["name"], "active": p["active"]}
+                   for p in sorted(data["people"], key=lambda p: (not p["active"], p["name"]))],
+    }
