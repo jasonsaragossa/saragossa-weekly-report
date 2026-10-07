@@ -178,7 +178,7 @@ From Settings you can:
 
 **New territory** → add to `TERRITORY_IDS` in `api/shared/dataverse.py` and `TERRITORY_ORDER` in `public/app.js`
 
-**New team within a territory** → add to `TEAM_ORDER` in `api/shared/calc.py` and `TEAMS_BY_TERRITORY` in `public/settings.js`
+**New team within a territory** → nothing to do: any Mercury team named "Team …" is picked up within five minutes, listed after the desk's set order. To fix its position, add it to `TEAM_ORDER` in `api/shared/calc.py` (and `PREFERRED_TEAMS` in `api/shared/dataverse.py` if its people also sit in other teams)
 
 **FX rates** → update `TO_GBP` / `TO_USD` in `api/shared/calc.py` each year when HMRC publishes annual averages. Alternatively, wire it up to read from the existing `crbb7_fxrate` Dataverse table (same pattern as the Commission Calculator).
 
