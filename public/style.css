@@ -1643,3 +1643,50 @@ tr.oto-closed { opacity: .45; text-decoration: line-through; }
 }
 .oto-rung-arrow { color: var(--disabled); font-size: 13px; }
 .oto-rung-note { flex-basis: 100%; color: var(--warn); font-size: 11px; margin-top: 4px; }
+
+/* ── Home: a card per section, pills per team ─────────────────────────────── */
+.logo-link { line-height: 0; text-decoration: none; }
+.home { max-width: 1080px; margin: 0 auto; padding: 36px 24px 60px; }
+.home-title {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .14em;
+  color: var(--accent); margin: 0 0 18px;
+}
+.home-grid {
+  display: grid; gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+.home-card {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 20px 22px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); color: inherit; text-decoration: none;
+  transition: border-color .15s, background .15s;
+}
+a.home-card:hover { border-color: var(--accent); background: var(--surface2); }
+.home-card-title { font-size: 16px; font-weight: 500; color: var(--white); margin: 0; }
+.home-card-desc { font-size: 12.5px; line-height: 1.55; color: var(--mid); margin: 0; flex: 1; }
+.home-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.home-pill {
+  padding: 6px 13px; border-radius: 999px; font-size: 12px; text-decoration: none;
+  color: var(--light); background: var(--surface2); border: 1px solid var(--border);
+  transition: border-color .15s, color .15s;
+}
+.home-pill:hover, .home-pill:focus-visible { border-color: var(--accent); color: var(--white); }
+.home-open { font-size: 12px; color: var(--accent); margin-top: 4px; }
+@media (max-width: 520px) {
+  .home { padding: 24px 16px 40px; }
+  .home-grid { grid-template-columns: 1fr; }
+}
+
+/* Narrow screens: the header wraps, and the menu takes its own row and scrolls
+   within itself — the page itself never scrolls sideways (it did, to 840px on a
+   375px phone, once the menu grew). */
+@media (max-width: 860px) {
+  .header { flex-wrap: wrap; row-gap: 10px; padding: 10px 16px; }
+  .header-right { flex-wrap: wrap; gap: 10px; min-width: 0; }
+  .main-menu {
+    order: 10; flex-basis: 100%; min-width: 0; overflow-x: auto; flex-wrap: nowrap;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .main-menu::-webkit-scrollbar { display: none; }
+  .menu-link { white-space: nowrap; }
+}

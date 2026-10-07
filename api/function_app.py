@@ -1055,7 +1055,7 @@ def _mbr_visible_people(email: str):
     # territories — directors sit outside them (Jason's user is in "Testing"),
     # so looking them up in `people` would silently deny their own grant.
     me = next((u for u in odata_get_all("systemusers", params={
-        "$select": "systemuserid,fullname,title,internalemailaddress",
+        "$select": "systemuserid,fullname,title,internalemailaddress,_territoryid_value",
         "$filter": (f"internalemailaddress eq '{odata_str(email)}'"
                     f" and isdisabled eq false"),
     })), None)
@@ -1092,6 +1092,100 @@ def _mbr_visible_people(email: str):
     return list(visible.values()), False
 
 
+# Desk names as people say them: the perm desks are named as such so they read
+# clearly beside their contract counterparts.
+_DESK_LABELS = {"London": "London Perm", "Chicago": "Chicago Perm"}
+
+
+def _mbr_desk(person: dict) -> str:
+    from shared.dataverse import get_territory_name
+    name = get_territory_name(person.get("_territoryid_value")) if person.get(
+        "_territoryid_value") else ""
+    if not name or name == "Unknown":
+        return ""
+    return _DESK_LABELS.get(name, name)
+
+
+# ── /api/home — which sections and pills this person can open ─────────────────
+# Every rule here is the section's OWN access check, called rather than copied,
+# so the home page can never offer something the section would then refuse.
+
+HOME_SECTIONS = {
+    "report": ("Weekly Report",
+               "Every desk's numbers — placements, WGP, pipeline and year to date — "
+               "refreshed daily from Mercury."),
+    "121": ("121s",
+            "Weekly one-to-ones by team: last week's figures from Mercury, actions "
+            "carried forward, and both sides' notes."),
+    "mbr": ("MBRs",
+            "Monthly business reviews by desk: the month's numbers against target, "
+            "with prompts for the conversation."),
+    "perf": ("US Contract Performance Stats",
+             "The Chicago contract desk at a glance — runners, WGP, hours and "
+             "activity, with a 12-month trend."),
+    "admin": ("Admin & Leadership Analytics",
+              "Territory and consultant analytics, board reporting, commission "
+              "ledgers and settings."),
+}
+
+
+def _home_sections(email: str) -> list:
+    from concurrent.futures import ThreadPoolExecutor
+    from urllib.parse import quote
+    from shared.dataverse import is_admin
+    from shared.oto_templates import templates_for
+
+    def section(key, **extra):
+        title, desc = HOME_SECTIONS[key]
+        return {"key": key, "title": title, "description": desc, **extra}
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        f_121 = pool.submit(templates_for, email, (email or "").lower() in ONE_TO_ONE_ADMINS)
+        f_mbr = pool.submit(_mbr_visible_people, email)
+        f_adm = pool.submit(is_admin, email)
+        def safe(f, default):
+            try:
+                return f.result()
+            except Exception:
+                logging.exception("home: a section's access check failed")
+                return default
+        templates = safe(f_121, [])
+        mbr_people, _ = safe(f_mbr, ([], False))
+        admin = safe(f_adm, False)
+
+    out = [section("report", href="/report")]
+    if templates:
+        out.append(section("121", pills=[{"label": t["name"],
+                                          "href": f"/121?template={quote(t['id'])}"}
+                                         for t in templates]))
+    # Someone on no desk, seeing only themselves (finance, ops) would get an
+    # empty MBR of their own — so the section only appears where there is a
+    # desk to review.
+    desks = sorted({d for d in (_mbr_desk(p) for p in mbr_people) if d})
+    if desks:
+        out.append(section("mbr", pills=[{"label": d, "href": f"/mbr?desk={quote(d)}"}
+                                         for d in desks]))
+    if (email or "").lower() in PERF_STATS_ALLOWED:
+        out.append(section("perf", href="/performance"))
+    if admin:
+        out.append(section("admin", pills=[{"label": "Analytics", "href": "/admin"},
+                                           {"label": "Settings", "href": "/settings"}]))
+    return out
+
+
+@app.route(route="home", methods=["GET"])
+def home(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_auth(req)
+    if err:
+        return err
+    try:
+        return func.HttpResponse(json.dumps({"ok": True, "sections": _home_sections(email)}),
+                                 mimetype="application/json", status_code=200)
+    except Exception:
+        logging.exception("home error")
+        return _server_error()
+
+
 @app.route(route="mbr-people", methods=["GET"])
 def mbr_people(req: func.HttpRequest) -> func.HttpResponse:
     email, err = require_auth(req)
@@ -1102,7 +1196,8 @@ def mbr_people(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(json.dumps({
             "ok": True, "is_admin": admin,
             "people": [{"uid": p["systemuserid"], "name": p.get("fullname", ""),
-                        "email": p.get("internalemailaddress", "")} for p in
+                        "email": p.get("internalemailaddress", ""),
+                        "desk": _mbr_desk(p)} for p in
                        sorted(people, key=lambda x: x.get("fullname") or "")],
         }), mimetype="application/json", status_code=200)
     except Exception:

@@ -6,40 +6,32 @@
   <title>Saragossa Weekly Report</title>
   <link rel="stylesheet" href="/style.css">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <script>
+    /* Set on <html> in the head so the dark palette never paints first. */
+    try { if (localStorage.getItem("saragossa-theme") === "light")
+      document.documentElement.classList.add("theme-light"); } catch (e) {}
+  </script>
 </head>
 <body>
 
 <header class="header">
-  <img src="/logo.svg" alt="Saragossa" class="logo">
+  <a href="/" class="logo-link"><img src="/logo.svg" alt="Saragossa" class="logo"></a>
   <div class="header-right">
-    <span class="data-note" id="data-note">Loading…</span>
-    <span class="week-label">Week ending</span>
-    <span id="report-date" class="report-date"></span>
-    <nav class="main-menu">
-      <a href="/" class="menu-link active">Weekly Report</a>
-      <a href="/121" class="menu-link">121s <span class="beta-tag">pilot</span></a>
-      <a href="/mbr" class="menu-link">MBRs <span class="beta-tag">beta</span></a>
-      <a href="/performance" class="menu-link">Performance Stats <span class="beta-tag">pilot</span></a>
-      <span class="header-actions" id="admin-link" style="display:none">
-        <a href="/admin" class="menu-link">Analytics</a>
-        <a href="/settings" class="menu-link">⚙ Settings</a>
-      </span>
-    </nav>
+    <nav class="main-menu" id="main-menu" data-active="home" data-manual="1"></nav>
+    <button class="theme-toggle" id="theme-toggle" type="button">◑ Light</button>
     <a href="/.auth/logout" class="logout-link">Sign out</a>
   </div>
 </header>
 
-<nav class="tabs" id="tabs"></nav>
-
-<div class="panels" id="panels">
-  <div class="loading-state">
-    <div class="spinner"></div>
-    <p>Loading report data…</p>
+<main class="home">
+  <h1 class="home-title">Where to?</h1>
+  <div class="home-grid" id="home-grid">
+    <div class="loading-state"><div class="spinner"></div><p>Loading…</p></div>
   </div>
-</div>
+</main>
 
-<div class="footer" id="footer"></div>
-
-<script src="/app.js"></script>
+<script src="/nav.js"></script>
+<script src="/home.js"></script>
+<script src="/theme.js"></script>
 </body>
 </html>

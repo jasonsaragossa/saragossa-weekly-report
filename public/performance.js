@@ -6,10 +6,6 @@
  */
 
 (async () => {
-  try {
-    const info = await (await fetch("/.auth/me")).json();
-    if (info?.clientPrincipal) document.getElementById("admin-link").style.display = "inline";
-  } catch (_) {}
 
   try {
     const resp = await fetch("/api/performance-stats");

@@ -10,10 +10,6 @@ let mbrData = null;
 let people  = [];
 
 (async () => {
-  try {
-    const info = await (await fetch("/.auth/me")).json();
-    if (info?.clientPrincipal) document.getElementById("admin-link").style.display = "inline";
-  } catch (_) {}
 
   const now = new Date();
   const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -32,6 +28,18 @@ let people  = [];
 
   if (!people.length) {
     return showError("You don't have an MBR yet — no Mercury consultant record is linked to your account.");
+  }
+
+  // A pill on the home page opens one desk: /mbr?desk=London%20Contract.
+  // Only narrows what this person may already see — the server decides that.
+  const desk = new URLSearchParams(window.location.search).get("desk");
+  if (desk) {
+    const onDesk = people.filter(p => p.desk === desk);
+    if (onDesk.length) {
+      people = onDesk;
+      const title = document.querySelector(".mbr-title");
+      if (title) title.textContent = `MBR — ${desk}`;
+    }
   }
 
   const sel = document.getElementById("mbr-person");

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Performance Stats — Saragossa</title>
+  <title>Saragossa Weekly Report</title>
   <link rel="stylesheet" href="/style.css">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 </head>
@@ -12,24 +12,26 @@
 <header class="header">
   <a href="/" class="logo-link"><img src="/logo.svg" alt="Saragossa" class="logo"></a>
   <div class="header-right">
-    <nav class="main-menu" id="main-menu" data-active="perf"></nav>
+    <span class="data-note" id="data-note">Loading…</span>
+    <span class="week-label">Week ending</span>
+    <span id="report-date" class="report-date"></span>
+    <nav class="main-menu" id="main-menu" data-active="report"></nav>
     <a href="/.auth/logout" class="logout-link">Sign out</a>
   </div>
 </header>
 
-<div class="perf-page">
-  <div class="perf-head">
-    <h1 class="mbr-title">Performance Stats</h1>
-    <span class="perf-sub" id="perf-sub"></span>
-  </div>
-  <div id="perf-content">
-    <div class="loading-state"><div class="spinner"></div><p>Building the numbers…</p></div>
+<nav class="tabs" id="tabs"></nav>
+
+<div class="panels" id="panels">
+  <div class="loading-state">
+    <div class="spinner"></div>
+    <p>Loading report data…</p>
   </div>
 </div>
 
-<div class="footer">Saragossa · Performance Stats pilot</div>
+<div class="footer" id="footer"></div>
 
 <script src="/nav.js"></script>
-<script src="/performance.js"></script>
+<script src="/app.js"></script>
 </body>
 </html>

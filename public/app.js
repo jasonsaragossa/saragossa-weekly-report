@@ -25,7 +25,6 @@ const NB_TARGET_LINKS = { "Charlie Smith": "charlie@saragossa.io" };
 
 (async () => {
   // Check if current user is admin (for settings link)
-  checkAdminLink();
 
   // Fetch report data
   let data;
@@ -62,17 +61,6 @@ const NB_TARGET_LINKS = { "Charlie Smith": "charlie@saragossa.io" };
 
 // ── Admin link visibility ─────────────────────────────────────────────────────
 
-async function checkAdminLink() {
-  try {
-    const resp = await fetch("/.auth/me");
-    const info = await resp.json();
-    if (info?.clientPrincipal) {
-      // We can't determine admin on the frontend alone — show a tentative link
-      // and let /settings redirect non-admins with a 403 from the API
-      document.getElementById("admin-link").style.display = "flex";
-    }
-  } catch (_) {}
-}
 
 
 // ── Render ────────────────────────────────────────────────────────────────────

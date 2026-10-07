@@ -50,13 +50,13 @@ def _remind_if_note_missing(due_soon: list, sender: str) -> int:
         label = f"{_MONTHS[m - 1]} {y}"
         text = (f"The board report for {label} goes out within {REMIND_HOURS} hours and "
                 f"there's no AI commentary on it yet.\n\n"
-                f"Add it here: {site}/index.html#analytics\n\n"
+                f"Add it here: {site}/admin\n\n"
                 f"Leave it blank and the email simply goes without that section.")
         html = (f'<p style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;">'
                 f'The board report for <b>{label}</b> goes out within {REMIND_HOURS} hours '
                 f'and there is no commentary on it yet.</p>'
                 f'<p style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;">'
-                f'<a href="{site}/index.html#analytics">Add your commentary</a> — or leave '
+                f'<a href="{site}/admin">Add your commentary</a> — or leave '
                 f'it blank and the email goes without that section.</p>')
         try:
             graph_send_mail(sender, to, f"Board commentary for {label} — not written yet",

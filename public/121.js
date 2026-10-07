@@ -9,10 +9,6 @@
 let data = null;
 
 (async () => {
-  try {
-    const info = await (await fetch("/.auth/me")).json();
-    if (info?.clientPrincipal) document.getElementById("admin-link").style.display = "inline";
-  } catch (_) {}
 
   // The week is left empty so the FIRST load asks the server for it: which
   // week a 1:1 opens on is a property of the template (the contract desk
@@ -511,7 +507,8 @@ function esc(s) {
 // the page just renders the kind it is handed. Someone who can see more than
 // one template — an admin — gets a switch in the toolbar.
 
-let currentTemplate = "";
+// A pill on the home page opens a team directly: /121?template=contract_usa
+let currentTemplate = new URLSearchParams(window.location.search).get("template") || "";
 
 function templateSwitch(d) {
   const host = document.getElementById("oto-template-host");
@@ -523,6 +520,8 @@ function templateSwitch(d) {
   }</select></label>`;
   document.getElementById("oto-template").addEventListener("change", (e) => {
     currentTemplate = e.target.value;
+    // Keep the address in step, so a refresh or a shared link stays on this team
+    history.replaceState(null, "", "/121?template=" + encodeURIComponent(currentTemplate));
     // A different team means a different roster — rebuild the person list.
     document.getElementById("oto-person").innerHTML = "";
     load();
