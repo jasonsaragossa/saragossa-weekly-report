@@ -1692,78 +1692,151 @@ tr.oto-closed { opacity: .45; text-decoration: line-through; }
   .menu-link { white-space: nowrap; }
 }
 
-/* ── Contract MBR: the director's sheet, as a page ───────────────────────────
-   Jonny's sheet's colours (Office theme): green #C6DEB5 for section bands and
-   quarter columns, pale blue #DAE3F3 for half-years, blue #BDD7EE for actuals,
-   gold #FFE699 for budgets. Exact in light mode; softened for dark. */
+/* ── Contract MBR ────────────────────────────────────────────────────────────
+   A scorecard for the month being reviewed, then the month-by-month table.
+   Colour only where it means something: blue/gold markers pair actuals with
+   budgets (Jonny's sheet's coding), status colours for ahead/close/behind, a
+   faint tint for summary columns, the accent for the month in focus. */
 :root {
-  --cmbr-green: rgba(112, 173, 71, .16);   --cmbr-green-ink: #a9d48c;
-  --cmbr-half:  rgba(68, 114, 196, .14);
-  --cmbr-actual: rgba(91, 155, 213, .16);
-  --cmbr-budget: rgba(255, 192, 0, .13);
+  --cmbr-actual: #5b9bd5;  --cmbr-budget: #e0a800;
+  --cmbr-good: #4fbf7f;    --cmbr-good-bg: rgba(79, 191, 127, .12);
+  --cmbr-warn: #e0a800;    --cmbr-warn-bg: rgba(224, 168, 0, .12);
+  --cmbr-bad: #ef7d6d;     --cmbr-bad-bg: rgba(239, 125, 109, .12);
+  --cmbr-sum: rgba(255, 255, 255, .025);
+  --cmbr-focus: rgba(93, 143, 154, .13);
   --cmbr-est: #d9a441;
 }
 .theme-light {
-  --cmbr-green: #C6DEB5;  --cmbr-green-ink: #2f5d1c;
-  --cmbr-half:  #DAE3F3;
-  --cmbr-actual: #BDD7EE;
-  --cmbr-budget: #FFE699;
-  --cmbr-est: #9a6400;
+  --cmbr-actual: #2f6eb0;  --cmbr-budget: #b07d00;
+  --cmbr-good: #1f7a46;    --cmbr-good-bg: #e3f2ea;
+  --cmbr-warn: #8a5a00;    --cmbr-warn-bg: #fbf0d6;
+  --cmbr-bad: #b23a2c;     --cmbr-bad-bg: #f8e3df;
+  --cmbr-sum: rgba(0, 0, 0, .028);
+  --cmbr-focus: rgba(63, 109, 120, .10);
+  --cmbr-est: #8a5a00;
 }
-.cmbr-page { max-width: none; }
-.cmbr-legend {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px;
-  margin: 0 0 12px; font-size: 11.5px; color: var(--mid);
-}
-.cmbr-key { display: inline-flex; align-items: center; gap: 7px; }
-.cmbr-swatch { width: 16px; height: 12px; border-radius: 3px; border: 1px solid var(--border); }
-.cmbr-key-actual { background: var(--cmbr-actual); }
-.cmbr-key-budget { background: var(--cmbr-budget); }
-.cmbr-key-quarter { background: var(--cmbr-green); }
-.cmbr-key-half { background: var(--cmbr-half); }
-.cmbr-key-input { background: var(--surface2); border-color: var(--accent); }
-.cmbr-key-est { width: auto; height: auto; border: 0; padding: 1px 5px; font: 600 9.5px var(--mono);
-  text-transform: uppercase; letter-spacing: .06em; color: var(--cmbr-est);
-  border: 1px solid var(--cmbr-est); border-radius: 3px; }
+.cmbr { max-width: 1480px; margin: 0 auto; padding: 22px 24px 64px; display: grid; gap: 18px; }
+.cmbr-top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px 24px; }
+.cmbr-eyebrow { font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+.cmbr-title { font-size: 22px; font-weight: 500; color: var(--white); margin: 4px 0 0; }
+.cmbr-who { color: var(--mid); font-weight: 400; margin-left: 6px; }
+.cmbr-who::before { content: "· "; }
+.cmbr-who:empty::before { content: ""; }
+.cmbr-controls { display: flex; flex-wrap: wrap; gap: 10px 16px; }
+.cmbr-ctl { display: inline-flex; align-items: center; gap: 8px; font-size: 11px; color: var(--mid);
+  text-transform: uppercase; letter-spacing: .08em; }
+.cmbr-ctl select { text-transform: none; letter-spacing: 0; font: 13px var(--font); padding: 6px 10px;
+  background: var(--surface2); color: var(--light); border: 1px solid var(--border); border-radius: 6px; }
+
+/* Scorecard */
+.cmbr-score { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+.cmbr-tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px 16px 10px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.cmbr-tile-label { font-size: 10.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--mid); margin: 0; }
+.cmbr-tile-value { font: 500 26px/1.1 var(--mono); color: var(--white); font-variant-numeric: tabular-nums; }
+.cmbr-tile-value.is-empty { color: var(--disabled); }
+.cmbr-tile-lines { display: grid; gap: 3px; font-size: 12px; color: var(--mid); min-height: 34px; }
+.cmbr-tile-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cmbr-delta.up { color: var(--cmbr-good); }
+.cmbr-delta.down { color: var(--cmbr-bad); }
+.cmbr-status { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+.cmbr-status-good { color: var(--cmbr-good); background: var(--cmbr-good-bg); }
+.cmbr-status-warn { color: var(--cmbr-warn); background: var(--cmbr-warn-bg); }
+.cmbr-status-bad  { color: var(--cmbr-bad);  background: var(--cmbr-bad-bg); }
+.cmbr-spark { width: 100%; height: 34px; display: block; margin-top: 2px; overflow: visible; }
+.cmbr-spark-line { fill: none; stroke: var(--mid); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round;
+  vector-effect: non-scaling-stroke; opacity: .75; }
+.cmbr-spark-budget { fill: none; stroke: var(--cmbr-budget); stroke-width: 1; stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke; opacity: .7; }
+.cmbr-spark-dot { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+
+/* The table */
+.cmbr-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; min-width: 0;
+  display: grid; }
+.cmbr-card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 10px 16px; padding: 14px 16px 6px; }
+.cmbr-card-head h2 { font-size: 14px; font-weight: 600; color: var(--white); margin: 0; }
+.cmbr-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.cmbr-switch { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--light); cursor: pointer; }
+.cmbr-btn-quiet { font: 12px var(--font); color: var(--light); background: transparent; border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+.cmbr-btn-quiet:hover, .cmbr-btn-quiet:focus-visible { border-color: var(--accent); color: var(--white); }
+.cmbr-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 0 16px 10px;
+  font-size: 11.5px; color: var(--mid); }
+.cmbr-key { display: inline-flex; align-items: center; gap: 6px; }
+.cmbr-key-mark { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+.cmbr-key-mark.is-actual { background: var(--cmbr-actual); width: 4px; }
+.cmbr-key-mark.is-budget { background: var(--cmbr-budget); width: 4px; }
+.cmbr-key-mark.is-typed { border: 1px dashed var(--mid); }
+.cmbr-key-mark.is-est { border: 1px solid var(--cmbr-est); }
+.cmbr-key-mark.is-focus { background: var(--cmbr-focus); box-shadow: inset 0 2px 0 var(--accent); }
 .cmbr-legend-note { flex-basis: 100%; }
-.cmbr-wrap { max-height: calc(100vh - 220px); }
-.cmbr-table { font-size: 12px; border-collapse: separate; border-spacing: 0; }
-.cmbr-table th, .cmbr-table td { padding: 6px 10px; white-space: nowrap; border-bottom: 1px solid var(--hairline); }
-.cmbr-table .cmbr-label {
-  position: sticky; left: 0; z-index: 1; background: var(--surface);
-  min-width: 260px; text-align: left; border-right: 1px solid var(--border);
-}
-.cmbr-table thead th { background: var(--surface2); }
-.cmbr-table thead .cmbr-label { z-index: 3; }
-.cmbr-table .cmbr-quarter { background: var(--cmbr-green); font-weight: 500; }
-.cmbr-table .cmbr-half { background: var(--cmbr-half); font-weight: 500; }
-.cmbr-table thead .cmbr-quarter, .cmbr-table thead .cmbr-half { color: var(--white); }
-.cmbr-section td { background: var(--cmbr-green); padding-top: 10px; padding-bottom: 6px; }
-.cmbr-section td.cmbr-label {
-  background: var(--cmbr-green); color: var(--cmbr-green-ink); font-size: 10.5px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: .1em;
-}
-.cmbr-tone-actual td { background: var(--cmbr-actual); }
-.cmbr-tone-budget td { background: var(--cmbr-budget); }
-.cmbr-tone-actual td.cmbr-label, .cmbr-tone-budget td.cmbr-label { color: var(--white); }
-.cmbr-tone-actual td.cmbr-label { background: linear-gradient(var(--cmbr-actual), var(--cmbr-actual)), var(--surface); }
-.cmbr-tone-budget td.cmbr-label { background: linear-gradient(var(--cmbr-budget), var(--cmbr-budget)), var(--surface); }
-.cmbr-tone-actual td.cmbr-quarter, .cmbr-tone-budget td.cmbr-quarter,
-.cmbr-tone-actual td.cmbr-half, .cmbr-tone-budget td.cmbr-half { font-weight: 600; }
-.cmbr-est {
-  margin-left: 8px; padding: 1px 5px; font: 600 9.5px var(--mono); letter-spacing: .06em;
-  text-transform: uppercase; color: var(--cmbr-est); border: 1px solid var(--cmbr-est);
-  border-radius: 3px; cursor: help; vertical-align: 1px;
-}
-.cmbr-table td.cmbr-estimate { color: var(--mid); font-style: italic; }
-.cmbr-input {
-  width: 96px; text-align: right; font: 12px var(--mono); padding: 3px 6px;
-  background: var(--surface2); color: var(--light); border: 1px solid var(--border); border-radius: 4px;
-}
+
+.cmbr-scroll { overflow: auto; max-height: calc(100vh - 160px); border-top: 1px solid var(--border); }
+.cmbr-grid { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; background: transparent; }
+.cmbr-grid th, .cmbr-grid td { padding: 7px 12px; white-space: nowrap; border-bottom: 1px solid var(--hairline); }
+.cmbr-grid thead th { position: sticky; top: 0; z-index: 2; background: var(--surface2); font-size: 11px;
+  font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--mid); border-bottom: 1px solid var(--border); }
+.cmbr-grid .num { text-align: right; font-family: var(--mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.cmbr-grid .cmbr-name { position: sticky; left: 0; z-index: 1; background: var(--surface); text-align: left;
+  font: 400 13px var(--font); color: var(--light); min-width: 250px; border-right: 1px solid var(--border);
+  text-transform: none; letter-spacing: 0; }
+.cmbr-grid thead .cmbr-name { z-index: 3; background: var(--surface2); font-size: 11px; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--mid); }
+.cmbr-grid tbody tr:hover td { background-color: var(--hover); }
+.cmbr-grid tbody tr:hover .cmbr-name { background: linear-gradient(var(--hover), var(--hover)), var(--surface); }
+
+/* Summary columns: a faint tint, and a rule where they begin */
+.cmbr-grid .cmbr-sum { background: var(--cmbr-sum); color: var(--light); }
+.cmbr-grid .cmbr-sum-first { border-left: 1px solid var(--border); }
+.cmbr-grid .cmbr-ytd { font-weight: 600; color: var(--white); }
+/* The month under review */
+.cmbr-grid .cmbr-focus { background: var(--cmbr-focus); color: var(--white); }
+.cmbr-grid thead .cmbr-focus { color: var(--accent); box-shadow: inset 0 2px 0 var(--accent); }
+.cmbr-grid .cmbr-partial { color: var(--mid); font-style: italic; }
+.cmbr-sofar { display: block; font-size: 9px; letter-spacing: .04em; text-transform: none; font-style: italic; color: var(--mid); }
+
+/* Sections */
+.cmbr-sec td { padding: 0; background: var(--surface); border-bottom: 1px solid var(--border); }
+.cmbr-sec-btn { position: sticky; left: 0; display: inline-flex; align-items: center; gap: 8px; padding: 16px 12px 8px;
+  background: none; border: 0; cursor: pointer; text-align: left; font: 600 11px var(--font); letter-spacing: .12em;
+  text-transform: uppercase; color: var(--accent); }
+.cmbr-sec-btn:hover, .cmbr-sec-btn:focus-visible { color: var(--white); outline: none; }
+.cmbr-chev { width: 12px; color: var(--mid); }
+.cmbr-sec-count { font: 500 10px var(--mono); color: var(--mid); letter-spacing: 0; }
+
+/* Actual / budget pairs: a coloured edge, as Jonny's sheet colour-codes them */
+.cmbr-grid tr.is-actual .cmbr-name { box-shadow: inset 4px 0 0 var(--cmbr-actual); }
+.cmbr-grid tr.is-budget .cmbr-name { box-shadow: inset 4px 0 0 var(--cmbr-budget); color: var(--mid); }
+.cmbr-grid tr.is-budget td { color: var(--mid); }
+.cmbr-grid tr td.is-good { color: var(--cmbr-good); font-weight: 600; }
+.cmbr-grid tr td.is-warn { color: var(--cmbr-warn); font-weight: 600; }
+.cmbr-grid tr td.is-bad  { color: var(--cmbr-bad);  font-weight: 600; }
+
+/* Tags on a measure's name */
+.cmbr-tag { margin-left: 8px; padding: 1px 5px; font: 600 9px var(--mono); letter-spacing: .06em;
+  text-transform: uppercase; border-radius: 3px; vertical-align: 1px; cursor: help; }
+.cmbr-tag-typed { color: var(--mid); border: 1px dashed var(--mid); }
+.cmbr-tag-est { color: var(--cmbr-est); border: 1px solid var(--cmbr-est); }
+.cmbr-grid td.is-est { color: var(--mid); font-style: italic; }
+.cmbr-grid td.is-guide { color: var(--disabled); font-style: italic; }
+
+/* Editing */
+.cmbr-input { width: 100%; min-width: 84px; text-align: right; font: 12.5px var(--mono); padding: 4px 6px;
+  background: var(--bg); color: var(--white); border: 1px solid var(--border); border-radius: 4px; }
 .cmbr-input::placeholder { color: var(--disabled); font-style: italic; }
-.cmbr-input:focus { outline: none; border-color: var(--accent); }
-.cmbr-input-row td.cmbr-label { font-weight: 500; }
-.cmbr-section td.cmbr-label { background: linear-gradient(var(--cmbr-green), var(--cmbr-green)), var(--surface); }
-/* As the sheet: the top block keeps its own colour through the quarters */
-.cmbr-table .cmbr-tone-actual td.cmbr-quarter { background: var(--cmbr-actual); }
-.cmbr-table .cmbr-tone-budget td.cmbr-quarter { background: var(--cmbr-budget); }
+.cmbr-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--cmbr-focus); }
+.cmbr-editbar { position: sticky; bottom: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
+  padding: 12px 16px; background: var(--surface2); border-top: 1px solid var(--accent); border-radius: 0 0 10px 10px; }
+.cmbr-editbar-msg { font-size: 12px; color: var(--light); flex: 1 1 260px; }
+.cmbr-editbar-dirty { font-size: 12px; color: var(--cmbr-warn); }
+
+@media (max-width: 640px) {
+  .cmbr { padding: 16px 16px 48px; }
+  .cmbr-grid .cmbr-name { min-width: 170px; white-space: normal; }
+  .cmbr-score { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .cmbr-tile { padding: 10px 12px 8px; }
+  .cmbr-tile-value { font-size: 20px; }
+  .cmbr-tile-lines { font-size: 11px; }
+}

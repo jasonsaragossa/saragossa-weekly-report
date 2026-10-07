@@ -480,7 +480,9 @@ def period(months: list) -> dict:
     out = {}
     for key, _l, _s, _lv, _u, rule in MEASURES:
         if rule == "sum":
-            out[key] = totals.get(key)
+            # A period where nothing was recorded is blank, not zero
+            has = any(m.get(key) is not None for m in months)
+            out[key] = totals.get(key) if has else None
         elif rule == "avg":
             vals = [m[key] for m in months if m.get(key) is not None]
             out[key] = sum(vals) / len(vals) if vals else None
@@ -713,7 +715,7 @@ def _fetch_cached(desk: str, year: int, today: date) -> dict:
 _CACHED_FETCH = None
 
 COLUMN_ORDER = ["P1", "P2", "P3", "Q1", "P4", "P5", "P6", "Q2", "H1",
-                "P7", "P8", "P9", "Q3", "P10", "P11", "P12", "Q4", "H2"]
+                "P7", "P8", "P9", "Q3", "P10", "P11", "P12", "Q4", "H2", "YTD"]
 
 
 def build_view(desk: str, year: int, view: str, inputs: dict, today: date | None = None,
@@ -742,6 +744,20 @@ def build_view(desk: str, year: int, view: str, inputs: dict, today: date | None
                 raw[k] = inputs.get(f"{k}:{year}-{m:02d}")
         months[m] = finish(raw)
     cols = {f"P{m}": months[m] for m in months}
+
+    def typed_ratios(name, got):
+        # Ratios built on typed figures follow what was typed. The other side
+        # is the period's total (not its monthly average): Q1 GP per fee
+        # earner is Q1's GP over Q1's person-months.
+        def total(k):
+            if k in DESK_INPUTS:
+                return cols[name].get(k)
+            vals = [mo.get(k) for mo in got if mo.get(k) is not None]
+            return sum(vals) if vals else None
+        for key, _l, _s, _lv, _u, rule in MEASURES:
+            if isinstance(rule, tuple) and (rule[1] in DESK_INPUTS or rule[2] in DESK_INPUTS):
+                cols[name][key] = _ratio(total(rule[1]), total(rule[2]))
+
     for name, ms in PERIODS:
         got = [months[m] for m in ms if m in months]
         if got:
@@ -750,25 +766,31 @@ def build_view(desk: str, year: int, view: str, inputs: dict, today: date | None
                 for k in DESK_INPUTS:
                     estimate[(k, name)] = cols[name].get(k)
                     cols[name][k] = inputs.get(f"{k}:{year}-{name}")
-                # Ratios built on typed figures follow what was typed. The
-                # other side is the period's total (not its monthly average):
-                # Q1 GP per fee earner is Q1's GP over Q1's person-months.
-                def total(k):
-                    if k in DESK_INPUTS:
-                        return cols[name].get(k)
-                    vals = [mo.get(k) for mo in got if mo.get(k) is not None]
-                    return sum(vals) if vals else None
-                for key, _l, _s, _lv, _u, rule in MEASURES:
-                    if isinstance(rule, tuple) and (rule[1] in DESK_INPUTS or rule[2] in DESK_INPUTS):
-                        cols[name][key] = _ratio(total(rule[1]), total(rule[2]))
+                typed_ratios(name, got)
+
+    # Year to date, over every month so far. Typed rows follow their typed
+    # months (GP summed, budgets and carried-in averaged) and aren't typed here.
+    got = [months[m] for m in sorted(months)]
+    cols["YTD"] = period(got)
+    if is_team:
+        for k in DESK_INPUTS:
+            vals = [mo.get(k) for mo in got if mo.get(k) is not None]
+            rule = MEASURE[k][5]
+            cols["YTD"][k] = (sum(vals) if rule == "sum" else sum(vals) / len(vals)) if vals else None
+        typed_ratios("YTD", got)
     if is_team:
         for c in cols.values():                      # total carried follows its typed parts
             a, b = c.get("carried_a"), c.get("carried_b")
             c["carried_total"] = None if a is None and b is None else (a or 0) + (b or 0)
 
     shown = ("team", "both") if is_team else ("consultant", "both")
+    # The month still running is shown, but marked, and isn't the default focus
+    partial = f"P{through}" if (year == today.year and through == today.month) else None
+    complete = [m for m in months if f"P{m}" != partial]
     return {
         "desk": desk, "year": year, "through": through, "view": view,
+        "partial": partial,
+        "focus": f"P{max(complete)}" if complete else f"P{through}",
         "columns": [c for c in COLUMN_ORDER if c in cols],
         "values": {c: {k: cols[c].get(k) for k, *_ in MEASURES} for c in cols},
         "measures": [{"key": k, "label": lb, "section": sec, "unit": u,

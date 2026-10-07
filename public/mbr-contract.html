@@ -23,20 +23,23 @@
   </div>
 </header>
 
-<div class="mbr-page cmbr-page">
-  <div class="mbr-toolbar">
-    <h1 class="mbr-title" id="cmbr-title">Contract MBR</h1>
-    <label class="mbr-ctl">View <select id="cmbr-view"></select></label>
-    <label class="mbr-ctl">Year <select id="cmbr-year"></select></label>
-    <span class="mbr-status" id="cmbr-status"></span>
+<main class="cmbr">
+  <div class="cmbr-top">
+    <div class="cmbr-heading">
+      <span class="cmbr-eyebrow">Monthly business review</span>
+      <h1 class="cmbr-title"><span id="cmbr-desk">Contract</span> <span class="cmbr-who" id="cmbr-who"></span></h1>
+    </div>
+    <div class="cmbr-controls">
+      <label class="cmbr-ctl">Who <select id="cmbr-view"></select></label>
+      <label class="cmbr-ctl">Month <select id="cmbr-month"></select></label>
+      <label class="cmbr-ctl">Year <select id="cmbr-year"></select></label>
+    </div>
   </div>
 
-  <div id="cmbr-content">
+  <div id="cmbr-body">
     <div class="loading-state"><div class="spinner"></div><p>Working out the year from Mercury…</p></div>
   </div>
-</div>
-
-<div class="footer">Saragossa · Contract MBR beta</div>
+</main>
 
 <script src="/theme.js"></script>
 <script src="/nav.js"></script>
