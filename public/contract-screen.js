@@ -38,7 +38,7 @@
     return '<section class="desk"><h2>' + esc(d.label) +
       '<span class="ccy">' + esc(d.currency) + "</span></h2>" +
       '<div class="scaler"><table><thead><tr><th>Consultant</th>' +
-      '<th class="num">WNF</th><th class="num">Actual YTD Billing</th>' +
+      '<th class="num">WGP</th><th class="num">Actual YTD Billing</th>' +
       '<th class="num">Actual Last 12M</th></tr></thead><tbody>' + rows +
       "</tbody></table></div></section>";
   }

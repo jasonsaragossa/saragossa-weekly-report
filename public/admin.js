@@ -325,7 +325,7 @@ function buildScreenLinks() {
   const box = document.createElement("div");
   box.className = "screen-links";
   box.innerHTML = `<h3 class="hpb-subheading">Wall screens</h3>
-    <p class="settings-desc">Paste one of these into OneUp. Each shows WNF, Actual YTD Billing and
+    <p class="settings-desc">Paste one of these into OneUp. Each shows WGP, Actual YTD Billing and
       Actual Last 12M for that desk, in its own currency, refreshing itself every five minutes.
       The link carries its key, so treat it like a password — anyone holding it can see the figures.</p>
     <div class="screen-links-list"><span class="settings-desc">Loading…</span></div>`;

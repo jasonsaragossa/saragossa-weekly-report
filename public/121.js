@@ -552,7 +552,7 @@ function save() {
 // ── Contract USA ─────────────────────────────────────────────────────────────
 // Jim Jeffers' desk (Sep 2026). Measured on contractors rather than deals:
 // placements and the weekly margin they added, starters and finishers with
-// attrition, current WNFI, then the judgement calls — committed business,
+// attrition, current WGP, then the judgement calls — committed business,
 // placement chances, blocked roles and this week's client meetings.
 
 const usd = (n) => "$" + Math.round(n || 0).toLocaleString("en-GB");
@@ -594,7 +594,7 @@ function showContractDetail(f, period) {
   showModal(`${f.label} — ${period === "week" ? CONTRACT_WEEK_WORD.toLowerCase() : "this month"}`,
     `<div class="table-wrap"><table>
       <thead><tr><th>Client</th><th>Role</th><th class="num">Start</th><th class="num">End</th>
-        <th class="num">WNFI (share)</th><th class="num">Split</th></tr></thead>
+        <th class="num">WGP (share)</th><th class="num">Split</th></tr></thead>
       <tbody>${body}</tbody></table></div>`);
 }
 
@@ -700,14 +700,14 @@ function renderContract(d) {
       <div class="oto-two">
         <div>
           ${rowsTable([{label:""}, {label:CONTRACT_WEEK_WORD, num:true}, {label:esc(d.month_label), num:true}], figRows, "")}
-          <p class="mbr-note">Click a figure to see the contractors behind it. Placements and WNFI are split-credited; starters and finishers count whole, and include anyone due to start or finish later this month.</p>
+          <p class="mbr-note">Click a figure to see the contractors behind it. Placements and WGP are split-credited; starters and finishers count whole, and include anyone due to start or finish later this month.</p>
         </div>
         <div class="oto-cards">
           <div class="mbr-card"><span class="mbr-card-label">Runners out</span>
             <span class="mbr-card-value">${(d.live_contracts || []).length
               ? `<span class="oto-drill" id="oto-runners">${d.runners ?? 0}</span>` : (d.runners ?? 0)}</span>
             <span class="mbr-card-sub dim">contractors on assignment today</span></div>
-          <div class="mbr-card"><span class="mbr-card-label">Current WNFI</span>
+          <div class="mbr-card"><span class="mbr-card-label">Current WGP</span>
             <span class="mbr-card-value">${usd(d.current_wnfi)}</span>
             <span class="mbr-card-sub dim">your share per week, across your runners</span></div>
           <div class="mbr-card"><span class="mbr-card-label">Attrition — ${esc(d.month_label)}</span>
@@ -798,7 +798,7 @@ function showRunners(rows) {
   showModal("Runners out — today",
     `<div class="table-wrap"><table>
       <thead><tr><th>Client</th><th>Role</th><th class="num">Start</th><th class="num">End</th>
-        <th class="num">WNFI (share)</th></tr></thead>
+        <th class="num">WGP (share)</th></tr></thead>
       <tbody>${body}</tbody></table></div>`);
 }
 

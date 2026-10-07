@@ -206,7 +206,7 @@ All fields are on the `crimson_placement` entity (`crimson_placements` in OData 
 | Candidate | `recruit_candidatecontact` | Lookup to contact (expand for fullname) |
 | Pay rate | `mercury_pay_mc` | Contractor pay rate (raw, in placement currency) |
 | Charge rate | `mercury_charge_mc` | Client charge rate (raw, in placement currency) |
-| WNF | `recruit_trueweeklygrossprofit` | Weekly net fee |
+| WGP | `recruit_trueweeklygrossprofit` | Weekly gross profit (formerly WNF) |
 | GP currency | `_recruit_truegrossprofitcurrency_value` | Lookup to transactioncurrency |
 
 ### OData query pattern

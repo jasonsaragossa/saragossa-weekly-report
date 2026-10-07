@@ -4,13 +4,13 @@ The derived half of a Contract USA 1:1 (Jim Jeffers' desk, Sep 2026).
 A contract desk is measured on contractors rather than deals: what was placed
 and how much weekly margin it added, who started, who finished and whether
 they were replaced, and what is live right now. Everything here comes from
-contract placements the person has a role on. Money (WNFI) is split a third
+contract placements the person has a role on. Money (WGP, weekly gross profit) is split a third
 each 3-way or a quarter each 4-way (split_factor); the placement count uses
 placement_credit (0.5 Consultant + 0.5 AO, or 0.25 each on a 4-way deal).
 Starters and finishers are people, so they count whole.
 
   Placements in month     placements CREATED in the month, split-credited
-  WNFI added              their weekly margin, split-credited, in USD
+  WGP added               their weekly gross profit, split-credited, in USD
   Starters in month       start date in the month, not cancelled
   Finishers in month      effective end in the month, started, no extension
   Attrition               month: finishers ÷ contractors live at the start
@@ -18,7 +18,7 @@ Starters and finishers are people, so they count whole.
                           ANY point in the year (Jason, Sep 2026) — a year-old
                           snapshot would miss everyone who both started and
                           finished inside it, most of a contract desk's churn
-  Current WNFI            the weekly report's WNF figure for the person
+  Current WGP             the weekly report's WGP figure for the person
   Client meetings         appointments this week, new business vs process
 """
 from concurrent.futures import ThreadPoolExecutor
@@ -204,7 +204,7 @@ def build_contract_one_to_one(uid: str, week: date = None) -> dict:
     base_m = len(live_at(m_start))
     base_12 = live_during(r12_start, m_end)
 
-    # USD is the desk's currency; the live-contract WNF helper handles the FX.
+    # USD is the desk's currency; the live-contract WGP helper handles the FX.
     to_usd = _build_fx_tables(r["fx"])[1] if r["fx"] else TO_USD
     current_wnfi = compute_wnf(uid, r["live"], "USD", None, to_usd)
 
@@ -228,7 +228,7 @@ def build_contract_one_to_one(uid: str, week: date = None) -> dict:
             {"key": "placements", "label": "Placements", "week": split_count(placed_w),
              "month": split_count(placed_m), "detail_week": rows(placed_w), "detail_month": rows(placed_m),
              "note": "split-credited"},
-            {"key": "wnfi_added", "label": "WNFI added", "week": wnfi(placed_w),
+            {"key": "wnfi_added", "label": "WGP added", "week": wnfi(placed_w),
              "month": wnfi(placed_m), "money": True, "detail_week": rows(placed_w),
              "detail_month": rows(placed_m), "note": "weekly margin of placements made, split-credited"},
             {"key": "starters", "label": "Starters", "week": len(start_w), "month": len(start_m),

@@ -458,7 +458,7 @@ function buildContractTable(tdata) {
     <th class="num">Total Margin YTD</th>
     <th class="num">Contract Last 12M</th>
     <th class="num">Rolling 3M</th>
-    <th class="num">Current WNF</th>
+    <th class="num">Current WGP</th>
     <th class="num">Year Billing</th>
   </tr></thead>`;
 

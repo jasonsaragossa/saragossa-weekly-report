@@ -424,7 +424,9 @@ def solution_quarters(user_entries: dict, year: int, since_start: bool = True) -
 
 
 def compute_wnf(uid: str, live_contracts: list, display_ccy: str, to_gbp: dict = None, to_usd: dict = None) -> float:
-    """Returns the user's share of WNF across all live contract placements."""
+    """Returns the user's share of WGP (weekly gross profit) across all live
+    contract placements. Named compute_wnf from before the WNF -> WGP rename;
+    the name and the "wnf" fields stay so cached pages and other apps keep working."""
     fx = (to_gbp or TO_GBP) if display_ccy == "GBP" else (to_usd or TO_USD)
     total = 0.0
     for p in live_contracts:

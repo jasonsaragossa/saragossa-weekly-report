@@ -176,7 +176,7 @@ def contract_screen(req: func.HttpRequest) -> func.HttpResponse:
                 l12 = m.get("contract_last12m") or 0
                 rows.append({"name": m.get("name"), "wnf": round(wnf, 2),
                              "ytd": round(ytd, 2), "l12": round(l12, 2)})
-            # Highest WNF at the top; ties settle on YTD so the order is stable.
+            # Highest WGP at the top; ties settle on YTD so the order is stable.
             rows.sort(key=lambda r: (-r["wnf"], -r["ytd"]))
             return {
                 "label": label,
