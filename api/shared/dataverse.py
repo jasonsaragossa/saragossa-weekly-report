@@ -1163,18 +1163,25 @@ def get_first_placement_dates(client_ids: list) -> dict:
     a client is only a "new client" in the month of their first-ever placement.
     Rebated placements still count (money-only claw-back), so they are included.
     """
+    from concurrent.futures import ThreadPoolExecutor
     out = {}
     ids = [c for c in (client_ids or []) if c]
-    for i in range(0, len(ids), 20):
-        chunk = ids[i:i + 20]
+
+    def chunk_rows(chunk):
         or_f = " or ".join(f"_crimson_clientname_value eq '{cid}'" for cid in chunk)
-        rows = odata_get_all(
+        return odata_get_all(
             "crimson_placements",
             params={
                 "$select": "_crimson_clientname_value,createdon",
                 "$filter": f"({or_f}) and {active_or_rebated_filter()}",
             },
         )
+
+    # Chunks of 20 clients, fetched side by side rather than one after another
+    chunks = [ids[i:i + 20] for i in range(0, len(ids), 20)]
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(chunk_rows, chunks))
+    for rows in results:
         for r in rows:
             cid, created = r.get("_crimson_clientname_value"), r.get("createdon") or ""
             if cid and created and (cid not in out or created < out[cid]):
