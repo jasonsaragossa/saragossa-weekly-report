@@ -1,27 +1,16 @@
 /**
- * The header menu, shared by every page.
+ * The header's way around, shared by every page.
  *
- * Shows only the sections this person can actually open — the same list the
- * home page shows, from /api/home, which runs each section's own access check.
- * It used to be six hand-copied link rows that showed everyone everything
- * (Analytics included), leaving most people to click into a 403.
+ * The home page is the menu: a card per section with pills per team. So inside
+ * a section the header carries only a way back to it — no copy of the menu in
+ * the corner (Jason, Oct 2026). The home page itself shows nothing here.
  *
- * The list takes a few seconds to work out, so it's remembered for the session
- * for ten minutes; the home page refreshes it whenever it loads.
+ * SaragossaNav.load() is kept for the home page: it fetches the sections this
+ * person can open from /api/home, which runs each section's own access check.
  */
 (function () {
   const KEY = "saragossa-home-v1";
   const TTL_MS = 10 * 60 * 1000;
-
-  // Section -> the menu entries it contributes
-  const MENU = {
-    report: [{ id: "report", label: "Weekly Report", href: "/report" }],
-    "121":  [{ id: "121", label: "121s", href: "/121" }],
-    mbr:    [{ id: "mbr", label: "MBRs", href: "/mbr" }],
-    perf:   [{ id: "perf", label: "Performance Stats", href: "/performance" }],
-    admin:  [{ id: "admin", label: "Analytics", href: "/admin" },
-             { id: "settings", label: "⚙ Settings", href: "/settings" }],
-  };
 
   function cached() {
     try {
@@ -34,20 +23,6 @@
     try { sessionStorage.setItem(KEY, JSON.stringify({ at: Date.now(), sections })); } catch (_) {}
   }
 
-  function render(host, sections) {
-    const active = host.dataset.active || "";
-    host.textContent = "";
-    const items = [{ id: "home", label: "Home", href: "/" }];
-    (sections || []).forEach(s => items.push(...(MENU[s.key] || [])));
-    items.forEach(it => {
-      const a = document.createElement("a");
-      a.href = it.href;
-      a.className = "menu-link" + (it.id === active ? " active" : "");
-      a.textContent = it.label;
-      host.appendChild(a);
-    });
-  }
-
   async function load() {
     const resp = await fetch("/api/home");
     if (resp.status === 401) { window.location.href = "/.auth/login/aad"; return null; }
@@ -57,19 +32,18 @@
     return d.sections;
   }
 
-  // Exposed so the home page can reuse one fetch for both its cards and the menu
-  window.SaragossaNav = {
-    load, remember, cached,
-    render(sections) {
-      const host = document.getElementById("main-menu");
-      if (host) render(host, sections);
-    },
-  };
+  function renderBackLink(host) {
+    host.textContent = "";
+    if (host.dataset.active === "home") return;      // the home page is the menu
+    const a = document.createElement("a");
+    a.href = "/";
+    a.className = "menu-link home-back";
+    a.textContent = "← Home";
+    host.appendChild(a);
+  }
+
+  window.SaragossaNav = { load, remember, cached, render() {} };
 
   const host = document.getElementById("main-menu");
-  if (!host || host.dataset.manual === "1") return;
-  const have = cached();
-  if (have) { render(host, have); return; }
-  render(host, [{ key: "report" }]);           // something useful straight away
-  load().then(s => { if (s) render(host, s); }).catch(() => {});
+  if (host) renderBackLink(host);
 })();

@@ -142,3 +142,25 @@ def test_pills_open_a_team_or_desk_directly():
 def test_home_never_puts_mercury_names_into_html():
     js = read("home.js")
     assert "innerHTML" not in js.split("function card")[1]
+
+
+# ── No menu inside the pages (Jason, Oct 2026) ────────────────────────────────
+# The home page is the menu. Inside a section the header only offers a way back.
+
+def test_inside_a_page_the_header_only_links_home():
+    js = read("nav.js")
+    assert '"← Home"' in js
+    for target in ('"/admin"', '"/settings"', '"/report"', '"/121"', '"/mbr"', '"/performance"'):
+        assert target not in js, target
+
+
+def test_the_home_page_itself_shows_no_back_link():
+    js = read("nav.js")
+    assert 'if (host.dataset.active === "home") return;' in js
+    assert 'data-active="home"' in read("index.html")
+
+
+@pytest.mark.parametrize("page", PAGES)
+def test_the_logo_still_goes_home(page):
+    assert '<a href="/" class="logo-link"><img src="/logo.svg"' in read(page) \
+        or '<a href="/"><img src="/logo.svg"' in read(page)
