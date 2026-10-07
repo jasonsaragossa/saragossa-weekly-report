@@ -1136,11 +1136,15 @@ def _mbr_visible_people_all(email: str):
     visible = {me["systemuserid"]: me}
     overrides = {o["crbb7_userid"]: o for o in overrides_rows}
     if (overrides.get(me["systemuserid"]) or {}).get("crbb7_isteamlead"):
-        teams = get_team_membership_map()
-        my_team = teams.get(me["systemuserid"])
+        # The team as the report shows it: a team set in Settings wins over
+        # Mercury's membership (Adam Batbout is still in Team Ryan in Mercury,
+        # but leads Team Adam B)
+        mercury = get_team_membership_map()
+        team_of = lambda uid: (overrides.get(uid) or {}).get("crbb7_team") or mercury.get(uid)
+        my_team = team_of(me["systemuserid"])
         if my_team:
             for c in people:
-                if teams.get(c["systemuserid"]) == my_team:
+                if team_of(c["systemuserid"]) == my_team:
                     visible[c["systemuserid"]] = c
     for c in people:
         if my_scope and get_territory_name(c.get("_territoryid_value")) in my_scope:

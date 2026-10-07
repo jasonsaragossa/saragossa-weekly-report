@@ -62,6 +62,22 @@ def test_house_accounts_come_out_of_the_report():
     assert len(report["Bristol"]["groups"]) == 2
 
 
+def test_team_lead_sees_the_team_set_in_settings_not_mercurys(monkeypatch):
+    # Adam is still in Team Ryan in Mercury, but leads Team Adam B in the app
+    ny = D.TERRITORY_IDS["New York"]
+    people = [{"systemuserid": u, "fullname": u, "_territoryid_value": ny}
+              for u in ("adam", "jack", "ryan", "peter")]
+    monkeypatch.setattr(D, "get_all_territory_consultants", lambda: people)
+    monkeypatch.setattr(D, "get_team_membership_map", lambda: {
+        "adam": "Team Ryan", "jack": "Team Adam B", "ryan": "Team Ryan", "peter": "Team Ryan"})
+    monkeypatch.setattr(D, "get_overrides", lambda: [
+        {"crbb7_userid": "adam", "crbb7_team": "Team Adam B", "crbb7_isteamlead": True}])
+    monkeypatch.setattr(D, "get_mbr_scopes", lambda: {})
+    monkeypatch.setattr(D, "odata_get_all", lambda *a, **k: [people[0]])
+    seen, _ = F._mbr_visible_people_all("adam@saragossa.io")
+    assert sorted(p["systemuserid"] for p in seen) == ["adam", "jack"]
+
+
 def test_mbr_people_drop_house_accounts_unless_a_director(monkeypatch):
     people = [{"fullname": "Saragossa House Bristol", "_territoryid_value": D.TERRITORY_IDS["Bristol"]},
               {"fullname": "Jade Moger", "_territoryid_value": D.TERRITORY_IDS["Bristol"]}]
