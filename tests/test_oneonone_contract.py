@@ -57,6 +57,10 @@ def fake_sources(monkeypatch):
     monkeypatch.setattr(C, "get_live_contract_placements", lambda today: [])
     monkeypatch.setattr(C, "get_fx_rates", lambda: None)
     monkeypatch.setattr(C, "_activities", lambda *a, **k: [])
+    # The activity section's own sources (Oct 2026)
+    monkeypatch.setattr(C, "_spec_sends", lambda *a, **k: [])
+    monkeypatch.setattr(C, "_jobs_pulled", lambda *a, **k: [])
+    monkeypatch.setattr(C, "_shortlists", lambda *a, **k: [])
     # The desk works only its graded roles — record what the build asks for.
     asked = {}
     monkeypatch.setattr(C, "_live_jobs", lambda uid, grades=None: asked.__setitem__("grades", grades) or [])
@@ -230,3 +234,34 @@ class _FixedDate(date):
     @classmethod
     def today(cls):
         return date(2026, 9, 29)
+
+
+# ── Activity: inputs, the leading input, outputs (Oct 2026) ───────────────────
+
+def test_activity_is_grouped_inputs_leading_input_outputs():
+    d = C.build_contract_one_to_one(ME, WEEK)
+    groups = [(m["group"], m["key"]) for m in d["activity"]]
+    assert groups == [("Inputs", "candidate_calls"), ("Inputs", "senior_calls"),
+                      ("Inputs", "spec_sends"), ("Inputs", "resumes"), ("Inputs", "leads"),
+                      ("Leading input", "client_meetings"), ("Outputs", "jobs_pulled")]
+
+
+def test_spec_sends_and_jobs_pulled_count_for_the_week_and_month(monkeypatch):
+    spec = {"activityid": "e1", "subject": "Spec CV", "createdon": "2026-09-16T10:00:00Z"}
+    job = {"crimson_vacancyid": "v1", "crimson_jobtitle": "SRE", "createdon": "2026-09-03T09:00:00Z",
+           "_mercury_vacancytype_value": C.VACANCY_GRADES["B"], "crimson_clientid": {"name": "Acme"}}
+    monkeypatch.setattr(C, "_spec_sends", lambda uid, s, e: [spec] if s <= date(2026, 9, 16) < e else [])
+    monkeypatch.setattr(C, "_jobs_pulled", lambda uid, s, e: [job] if s <= date(2026, 9, 3) < e else [])
+    act = {m["key"]: m for m in C.build_contract_one_to_one(ME, WEEK)["activity"]}
+    assert (act["spec_sends"]["week"], act["spec_sends"]["month"]) == (1, 1)
+    assert (act["jobs_pulled"]["week"], act["jobs_pulled"]["month"]) == (0, 1)
+    assert act["jobs_pulled"]["detail_month"][0]["subject"] == "SRE · Grade B"
+
+
+def test_the_contract_save_keeps_the_new_typed_boxes_and_drops_placement_chances():
+    import function_app as F
+    keep = F._OTO_KEEP["contract"]
+    for k in ("b_managers_added", "b_managers_spoken", "b_managers_summary",
+              "solutions_sold", "solutions_note", "open_forum"):
+        assert k in keep
+    assert not {"chances_week", "chances_month", "chances_other"} & set(keep)

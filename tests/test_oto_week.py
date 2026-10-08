@@ -138,7 +138,8 @@ def test_every_field_the_contract_save_reads_is_on_the_contract_page():
     import re
     save, page = _body("saveContract"), _body("renderContract")
     for field in re.findall(r'getElementById\("(f-[a-z_]+)"\)', save):
-        assert f'id="{field}"' in page, field
+        # Drawn literally, or by the activity table's typed-row helper
+        assert f'id="{field}"' in page or f'typedRow("{field[2:]}"' in page, field
 
 
 def test_the_week_strip_follows_the_desk_locale():

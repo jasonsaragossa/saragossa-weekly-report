@@ -28,9 +28,46 @@ from shared.calc import (TO_USD, _build_fx_tables, _is_extension, compute_wnf,
                          parse_date, placement_credit, split_factor)
 from shared.dataverse import (CANCEL_CODES, CONTRACT_TYPES, get_fx_rates,
                               get_live_contract_placements, odata_get_all, odata_str)
-from shared.mbr_registry import CLIENT_MEETING_PURPOSES
-from shared.oneonone import (_activities, _activity_row, _company_names,
-                             _live_jobs, week_start)
+from shared.mbr_registry import CANDIDATE_CALL_PURPOSES, CLIENT_MEETING_PURPOSES
+from shared.oneonone import (LEADS, VACANCY_GRADES, _activities, _activity_row, _company_names,
+                             _live_jobs, _shortlist_row, _shortlists, _sorted, week_start)
+
+# The activity section (Jason, Oct 2026): inputs, the leading input, outputs.
+SPEC_CV = "47e272c6-a769-ee11-94f7-000d3ad6abf9"            # Spec CV — logged as an email
+# Senior candidate networking calls are logged as a candidate flip
+CANDIDATE_FLIP = {"41e272c6-a769-ee11-94f7-000d3ad6abf9",    # Candidate Flip Call
+                  "403d3f07-29ab-ee11-be37-002248c7244c"}    # Candidate Flip Meeting
+_GRADE_BY_ID = {v: k for k, v in VACANCY_GRADES.items()}
+
+
+def _spec_sends(uid: str, start: date, end: date) -> list:
+    """Spec CVs sent. Emails tag their purpose in _recruit_purpose_value."""
+    return odata_get_all("emails", params={
+        "$select": "activityid,subject,createdon",
+        "$filter": (f"_recruit_purpose_value eq '{SPEC_CV}' and _ownerid_value eq '{odata_str(uid)}'"
+                    f" and createdon ge {start.isoformat()} and createdon lt {end.isoformat()}"),
+        "$expand": ("regardingobjectid_account($select=name),"
+                    "regardingobjectid_contact($select=fullname,jobtitle,_parentcustomerid_value)"),
+    })
+
+
+def _jobs_pulled(uid: str, start: date, end: date) -> list:
+    """Vacancies brought in: created in the period, this person the delivery owner."""
+    return odata_get_all("crimson_vacancies", params={
+        "$select": "crimson_vacancyid,crimson_jobtitle,crimson_name,createdon,_mercury_vacancytype_value",
+        "$filter": (f"_crimson_deliveryownerid_value eq '{odata_str(uid)}'"
+                    f" and createdon ge {start.isoformat()}T00:00:00Z"
+                    f" and createdon lt {end.isoformat()}T00:00:00Z"),
+        "$expand": "crimson_clientid($select=name)",
+    })
+
+
+def _job_row(v: dict) -> dict:
+    grade = _GRADE_BY_ID.get(v.get("_mercury_vacancytype_value"), "")
+    return {"contact": "", "client": (v.get("crimson_clientid") or {}).get("name") or "",
+            "subject": (v.get("crimson_jobtitle") or v.get("crimson_name") or "")
+                       + (f" · Grade {grade}" if grade else ""),
+            "when": (v.get("createdon") or "")[:10]}
 
 # The purposes that mean new business rather than running a process.
 NB_MEETING_PURPOSES = {
@@ -119,13 +156,23 @@ def build_contract_one_to_one(uid: str, week: date = None) -> dict:
     m_start, m_end = _month_bounds(week)
     r12_start = date(m_start.year - 1, m_start.month, 1)
 
-    with ThreadPoolExecutor(max_workers=6) as pool:
+    with ThreadPoolExecutor(max_workers=12) as pool:
         f = {
             "contracts": pool.submit(_contracts, uid, r12_start - timedelta(days=400)),
             "live":      pool.submit(get_live_contract_placements, today.isoformat()),
             "fx":        pool.submit(get_fx_rates),
             "meetings":  pool.submit(_activities, "appointments", "scheduledstart", uid, week, next_week),
             "jobs":      pool.submit(_live_jobs, uid, ("A", "B", "C", "O")),   # graded roles only
+            # The activity section, for the week and its month
+            "calls_w":   pool.submit(_activities, "phonecalls", "createdon", uid, week, next_week),
+            "calls_m":   pool.submit(_activities, "phonecalls", "createdon", uid, m_start, m_end),
+            "appts_m":   pool.submit(_activities, "appointments", "scheduledstart", uid, m_start, m_end),
+            "spec_w":    pool.submit(_spec_sends, uid, week, next_week),
+            "spec_m":    pool.submit(_spec_sends, uid, m_start, m_end),
+            "sl_w":      pool.submit(_shortlists, uid, week, next_week),
+            "sl_m":      pool.submit(_shortlists, uid, m_start, m_end),
+            "pulled_w":  pool.submit(_jobs_pulled, uid, week, next_week),
+            "pulled_m":  pool.submit(_jobs_pulled, uid, m_start, m_end),
         }
         r = {}
         for k, v in f.items():
@@ -219,6 +266,54 @@ def build_contract_one_to_one(uid: str, week: date = None) -> dict:
         row["id"] = a.get("activityid")
         meetings.append(row)
 
+    # ── Activity: inputs, the leading input, outputs ──────────────────────────
+    act_companies = _company_names(r["calls_m"] + r["appts_m"] + r["meetings"] + r["spec_m"])
+
+    def acts(rows, purposes, datefield):
+        return _sorted([_activity_row(a, datefield, act_companies) for a in rows
+                        if a.get("_mercury_purpose_value") in purposes])
+
+    def cvs(sl):
+        return _sorted([_shortlist_row(s, "new_statussubmitteddate") for s in sl
+                        if s.get("new_statussubmitteddate")])
+
+    def in_range(rows, start, end):
+        return [x for x in rows if x["when"] and start.isoformat() <= x["when"] < end.isoformat()]
+
+    def measure(key, group, label, week_rows, month_rows, note=""):
+        return {"key": key, "group": group, "label": label, "note": note,
+                "week": len(week_rows), "month": len(month_rows),
+                "detail_week": week_rows, "detail_month": month_rows}
+
+    cand = set(CANDIDATE_CALL_PURPOSES)
+    meet_w = acts(r["meetings"], CLIENT_MEETING_PURPOSES, "scheduledstart")
+    activity = [
+        measure("candidate_calls", "Inputs", "Candidate calls",
+                acts(r["calls_w"], cand, "createdon"), acts(r["calls_m"], cand, "createdon")),
+        measure("senior_calls", "Inputs", "Senior candidate networking calls",
+                _sorted(acts(r["calls_w"], CANDIDATE_FLIP, "createdon")
+                        + acts(r["meetings"], CANDIDATE_FLIP, "scheduledstart")),
+                _sorted(acts(r["calls_m"], CANDIDATE_FLIP, "createdon")
+                        + acts(r["appts_m"], CANDIDATE_FLIP, "scheduledstart")),
+                "logged in Mercury as a candidate flip call or meeting"),
+        measure("spec_sends", "Inputs", "Spec sends",
+                _sorted([_activity_row(e, "createdon", act_companies) for e in r["spec_w"]]),
+                _sorted([_activity_row(e, "createdon", act_companies) for e in r["spec_m"]]),
+                "spec CV emails"),
+        measure("resumes", "Inputs", "Resumes to jobs",
+                in_range(cvs(r["sl_w"]), week, next_week), in_range(cvs(r["sl_m"]), m_start, m_end),
+                "CVs submitted to live roles"),
+        measure("leads", "Inputs", "Leads gained",
+                acts(r["calls_w"], LEADS, "createdon"), acts(r["calls_m"], LEADS, "createdon"),
+                "lead gained from a candidate, or a manager referral"),
+        measure("client_meetings", "Leading input", "Client meetings",
+                meet_w, acts(r["appts_m"], CLIENT_MEETING_PURPOSES, "scheduledstart")),
+        measure("jobs_pulled", "Outputs", "Jobs pulled",
+                _sorted([_job_row(v) for v in r["pulled_w"]]),
+                _sorted([_job_row(v) for v in r["pulled_m"]]),
+                "new roles where you're the delivery owner"),
+    ]
+
     rows = lambda ps: [_row(p, uid) for p in ps]
     live_now = live_at(today + timedelta(days=1))
     return {
@@ -252,4 +347,5 @@ def build_contract_one_to_one(uid: str, week: date = None) -> dict:
         "runners": len({_contractor_key(p) for p in live_now}),
         "meetings": meetings,
         "live_jobs": r["jobs"],
+        "activity": activity,
     }

@@ -880,17 +880,13 @@ function renderContract(d) {
       <button type="button" class="oto-close-btn" data-vid="${esc(j.id)}"
         data-job="${esc(j.client)} — ${esc(j.job)}" disabled>Close job</button>
     </td>`;
+  // The % chance of placing sits on each live job (Oct 2026). Weeks saved
+  // before then kept it in the old placement-chances table, so read it there.
+  const pctOf = (id) => (committed[id] || {}).pct ?? (chances[id] || {}).pct;
   const committedRows = jobs.map((j, i) => jobRow(j, i, { name: "committed",
     cells: (i) => `<td>${ta("committed", "note", i, (committed[j.id] || {}).note, "What is committed, and where it stands")}</td>`
+      + `<td class="num">${nin("committed", "pct", i, pctOf(j.id), 58)}<span class="dim"> %</span></td>`
       + closeCell(j) })).join("");
-  const chanceRows = jobs.map((j, i) => jobRow(j, i, { name: "chances_week",
-    cells: (i) => {
-      const c = chances[j.id] || {};
-      return `<td class="num">${nin("chances_week", "week", i, c.week)}</td>
-        <td class="num">${nin("chances_week", "month", i, c.month)}</td>
-        <td class="num">${nin("chances_week", "pct", i, c.pct, 58)}<span class="dim"> %</span></td>
-        <td>${ta("chances_week", "note", i, c.note, "Why, and what needs to happen")}</td>`;
-    } })).join("");
 
   const jobOptions = (sel) => `<option value="">— pick a role —</option>` + jobs.map(j =>
     `<option value="${esc(j.id)}"${j.id === sel ? " selected" : ""}>${esc(j.client)} — ${esc(j.job)}${j.grade ? " (" + esc(j.grade) + ")" : ""}</option>`).join("");
@@ -919,6 +915,29 @@ function renderContract(d) {
       <td class="oto-fixed dim">${S(a.owner)}</td>
     </tr>`).join("");
 
+  // Activity (Oct 2026): inputs, the leading input and outputs. Mercury counts
+  // what it can and each count opens the records; the rest is typed.
+  const actCell = (m, period) => m[period]
+    ? `<span class="oto-drill" data-act="${esc(m.key)}" data-period="${period}">${m[period]}</span>` : "0";
+  const actRow = (m) => `<tr>
+      <td>${esc(m.label)}${m.note ? `<span class="oto-meta">${esc(m.note)}</span>` : ""}</td>
+      <td class="num"><strong>${actCell(m, "week")}</strong></td>
+      <td class="num dim">${actCell(m, "month")}</td></tr>`;
+  const typedRow = (id, label, note) => `<tr>
+      <td>${esc(label)}<span class="oto-meta">${esc(note)}</span></td>
+      <td class="num"><input type="number" min="0" class="oto-in oto-num" id="f-${id}"
+        value="${S(saved[id])}" style="width:64px" aria-label="${esc(label)}"></td>
+      <td class="num dim">—</td></tr>`;
+  const group = (name) => (d.activity || []).filter(m => m.group === name).map(actRow).join("");
+  const groupHead = (name) => `<tr class="team-header"><td colspan="3">${esc(name)}</td></tr>`;
+  const activityRows =
+    groupHead("Inputs") + group("Inputs")
+    + typedRow("b_managers_added", "B managers added", "typed — new hiring managers added to Mercury")
+    + typedRow("b_managers_spoken", "B managers spoken to", "typed")
+    + groupHead("Leading input") + group("Leading input")
+    + groupHead("Outputs") + group("Outputs")
+    + typedRow("solutions_sold", "Solutions sold / secured", "typed — not yet for most consultants");
+
   document.getElementById("oto-content").innerHTML = quarterStrip(d) + ladderStrip(d) + `
     <section class="mbr-section">
       <h2>Key figures</h2>
@@ -946,19 +965,30 @@ function renderContract(d) {
     </section>
 
     <section class="mbr-section">
-      <h2>Committed business being worked this week</h2>
-      ${rowsTable([{label:"Client"}, {label:"Role"}, {label:"What is committed"}, {label:"Close"}],
-        committedRows, "No live vacancies — nothing to commit against.")}
-      <p class="mbr-note">Closing a job writes the reason straight into Mercury — it is not
-        part of Save, and it cannot be undone from here.</p>
+      <h2>Activity</h2>
+      ${rowsTable([{label:""}, {label:CONTRACT_WEEK_WORD, num:true}, {label:esc(d.month_label), num:true}],
+        activityRows, "")}
+      <p class="mbr-note">Counted from Mercury unless marked typed. Click a count to see the records.</p>
+      <div class="oto-two">
+        <label class="mbr-field">B managers — summary
+          <textarea rows="3" class="oto-in" id="f-b_managers_summary"
+            placeholder="Who was added or spoken to, and what came of it">${S(saved.b_managers_summary)}</textarea></label>
+        <label class="mbr-field">Solutions — what was spotted or sold
+          <textarea rows="3" class="oto-in" id="f-solutions_note"
+            placeholder="Any solution opportunity spotted, and where it stands">${S(saved.solutions_note)}</textarea></label>
+      </div>
+      <label class="mbr-field">Open forum — target clients and keeping-in-touch calls
+        <textarea rows="3" class="oto-in" id="f-open_forum"
+          placeholder="Target clients, keeping-in-touch calls, senior calls — anything to talk through">${S(saved.open_forum)}</textarea></label>
     </section>
 
     <section class="mbr-section">
-      <h2>Placement chances</h2>
-      ${rowsTable([{label:"Client"}, {label:"Role"}, {label:"This week", num:true}, {label:"This month", num:true},
-        {label:"Confidence", num:true}, {label:"Notes"}], chanceRows, "No live vacancies.")}
-      <h3 class="perf-col-title" style="margin-top:14px">Other placement predictions</h3>
-      <textarea rows="1" class="oto-in" id="f-chances_other" placeholder="Anything not tied to a live role above">${S(saved.chances_other)}</textarea>
+      <h2>Committed business being worked this week</h2>
+      ${rowsTable([{label:"Client"}, {label:"Role"}, {label:"What is committed"},
+        {label:"% chance", num:true}, {label:"Close"}],
+        committedRows, "No live vacancies — nothing to commit against.")}
+      <p class="mbr-note">% chance is how likely the role is to be placed. Closing a job writes the
+        reason straight into Mercury — it is not part of Save, and it cannot be undone from here.</p>
     </section>
 
     <section class="mbr-section">
@@ -1011,7 +1041,25 @@ function renderContract(d) {
     showContractDetail(figs[el.dataset.fig], el.dataset.period)));
   const runners = document.getElementById("oto-runners");
   if (runners) runners.addEventListener("click", () => showRunners(d.live_contracts || []));
+  const acts = Object.fromEntries((d.activity || []).map(m => [m.key, m]));
+  document.querySelectorAll(".oto-drill[data-act]").forEach(el => el.addEventListener("click", () => {
+    const m = acts[el.dataset.act];
+    const when = el.dataset.period === "week" ? CONTRACT_WEEK_WORD.toLowerCase() : d.month_label;
+    showActivity(`${m.label} — ${when}`, m["detail_" + el.dataset.period] || []);
+  }));
   wireCloseJob();
+}
+
+// The records behind an activity count: who, which company, what, when.
+function showActivity(title, rows) {
+  showModal(`${title} (${rows.length})`, rows.length ? `<div class="table-wrap"><table>
+      <thead><tr><th>Contact</th><th>Company</th><th>Subject</th><th class="num">Date</th></tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td>${esc(r.contact) || "<span class='dim'>—</span>"}${r.job_title ? `<div class="oto-sub">${esc(r.job_title)}</div>` : ""}</td>
+        <td>${esc(r.client) || "<span class='dim'>—</span>"}</td>
+        <td>${esc(r.subject) || "<span class='dim'>—</span>"}</td>
+        <td class="num dim">${r.when ? fmtDate(r.when, { day: "numeric", month: "short" }) : "—"}</td>
+      </tr>`).join("")}</tbody></table></div>` : `<p class="mbr-empty">Nothing recorded.</p>`);
 }
 
 // Who is out right now — the records behind the Runners card.
@@ -1069,9 +1117,13 @@ async function saveContract() {
     uid: document.getElementById("oto-person").value,
     week: document.getElementById("oto-week").value,
     template: currentTemplate,
-    committed: collect("committed").filter(r => r.note),
-    chances_week: collect("chances_week").filter(r => r.week || r.month || r.pct || r.note),
-    chances_other: document.getElementById("f-chances_other").value,
+    committed: collect("committed").filter(r => r.note || r.pct),
+    b_managers_added: document.getElementById("f-b_managers_added").value,
+    b_managers_spoken: document.getElementById("f-b_managers_spoken").value,
+    b_managers_summary: document.getElementById("f-b_managers_summary").value,
+    solutions_sold: document.getElementById("f-solutions_sold").value,
+    solutions_note: document.getElementById("f-solutions_note").value,
+    open_forum: document.getElementById("f-open_forum").value,
     blocks: collect("blocks").filter(r => r.role_id || r.block || r.steps),
     meeting_plans: collect("meeting_plans").filter(r => r.plan),
     actions: collect("actions").filter(r => r.action),

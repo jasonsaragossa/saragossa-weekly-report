@@ -859,10 +859,15 @@ _OTO_KEEP = {
              "next_job", "bd_existing", "bd_new", "meetings_last_outcome",
              "meetings_this_plan", "mbr_progress", "priority_resourcing",
              "priority_bd", "support_needed"),
-    "contract": ("actions", "committed", "chances_week", "chances_month",
-                 "chances_other", "blocks", "meeting_plans",
+    # Placement chances went (Oct 2026): the % chance now sits on each live job
+    # in "committed". Old records keep theirs and the page still reads them.
+    "contract": ("actions", "committed", "blocks", "meeting_plans",
                  # How did the week go — both sides answer, in their own box
-                 "week_consultant", "week_manager"),
+                 "week_consultant", "week_manager",
+                 # Activity: B managers added / spoken to with a summary,
+                 # solutions sold, and the open forum (Jason, Oct 2026)
+                 "b_managers_added", "b_managers_spoken", "b_managers_summary",
+                 "solutions_sold", "solutions_note", "open_forum"),
     # Bristol's Loop template: last week's list reviewed, this week's list set.
     # The weekly guidelines aren't per person: see /api/one-to-one-guidelines.
     "loop": ("priority_review", "priorities", "live_job_notes",
