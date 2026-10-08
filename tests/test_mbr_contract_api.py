@@ -31,7 +31,9 @@ def desk(monkeypatch):
     monkeypatch.setattr("shared.dataverse.odata_get_all",
                         lambda ent, params=None: [{"systemuserid": LOUIS}])
 
-    def build(desk_, year, view, inputs, today=None, data=None):
+    monkeypatch.setattr("shared.mbr_snapshot.load", lambda desk_, view, year: {})
+
+    def build(desk_, year, view, inputs, today=None, data=None, snapshots=None):
         state["built"] = view
         return {"desk": desk_, "year": year, "view": view, "columns": [], "values": {},
                 "measures": [], "people": [{"uid": LOUIS, "name": "Louis", "active": True},

@@ -388,6 +388,19 @@ function gridCard() {
         so.className = "cmbr-sofar"; so.textContent = "so far";
         th.appendChild(so);
       }
+      // A month frozen at 23:59 on its last day shows as it stood then, so
+      // later cancellations and back-dating don't move it
+      const fz = (d.frozen || {})[c];
+      if (fz) {
+        const tag = document.createElement("span");
+        tag.className = "cmbr-sofar cmbr-frozen";
+        tag.textContent = "month end";
+        const when = fz.taken_at ? new Date(fz.taken_at).toLocaleString("en-GB",
+          { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+        th.title = `Mercury's figures as they stood at ${when}${fz.late ? " (taken late)" : ""}. ` +
+          "Later changes in Mercury don't move this month. Typed figures stay editable.";
+        th.appendChild(tag);
+      }
     } else {
       th.textContent = c === "YTD" ? "Year to date" : `${c} avg`;
     }
@@ -444,7 +457,10 @@ function legend() {
   add("is-focus", `${LONG[monthOf(state.focus) - 1]} (reviewing)`);
   const note = document.createElement("span");
   note.className = "cmbr-legend-note";
-  note.textContent = "Money is weekly gross profit (WGP) in GBP. Quarter and half-year columns are monthly averages; ratios use each period's totals.";
+  note.textContent = "Money is weekly gross profit (WGP) in GBP. Quarter and half-year columns are monthly averages; ratios use each period's totals." +
+    (Object.keys(data.frozen || {}).length
+      ? " Months marked “month end” are Mercury's figures as they stood at 23:59 on their last day."
+      : " From October, each month is frozen at 23:59 on its last day; until then a month shows Mercury as it is now.");
   el.appendChild(note);
   return el;
 }

@@ -722,10 +722,14 @@ COLUMN_ORDER = ["P1", "P2", "P3", "Q1", "P4", "P5", "P6", "Q2", "H1",
 
 
 def build_view(desk: str, year: int, view: str, inputs: dict, today: date | None = None,
-               data: dict | None = None) -> dict:
+               data: dict | None = None, snapshots: dict | None = None) -> dict:
     """
     One view of a desk's year: "team", or a consultant's systemuserid.
     Only that view is worked out, so a page load costs a fraction of the year.
+
+    `snapshots` is {month: {"raw", "taken_at", "late"}} from shared.mbr_snapshot:
+    a month frozen at 23:59 on its last day shows as it was then, not as
+    Mercury has it now (Jason, Oct 2026).
     """
     today = today or date.today()
     data = data or _fetch_cached(desk, year, today)
@@ -735,12 +739,18 @@ def build_view(desk: str, year: int, view: str, inputs: dict, today: date | None
     if not is_team and view not in team_ids:
         raise KeyError(view)
     people = team_ids if is_team else {view}
+    snapshots = snapshots or {}
 
-    months, estimate = {}, {}
+    months, estimate, frozen = {}, {}, {}
     for m in range(1, through + 1):
-        raw = compute(people, year, m, data, data["fx"],
-                      data["director"] if is_team else None,
-                      data.get("book") if is_team else None)
+        snap = snapshots.get(m)
+        if snap and snap.get("raw"):
+            raw = dict(snap["raw"])
+            frozen[f"P{m}"] = {"taken_at": snap.get("taken_at"), "late": bool(snap.get("late"))}
+        else:
+            raw = compute(people, year, m, data, data["fx"],
+                          data["director"] if is_team else None,
+                          data.get("book") if is_team else None)
         if is_team:
             for k in DESK_INPUTS:
                 estimate[(k, f"P{m}")] = raw.get(k)          # Mercury's own figure, as a guide
@@ -794,6 +804,8 @@ def build_view(desk: str, year: int, view: str, inputs: dict, today: date | None
         "desk": desk, "year": year, "through": through, "view": view,
         "partial": partial,
         "focus": f"P{max(complete)}" if complete else f"P{through}",
+        # Months shown as frozen at 23:59 on their last day, and when
+        "frozen": frozen,
         "columns": [c for c in COLUMN_ORDER if c in cols],
         "values": {c: {k: cols[c].get(k) for k, *_ in MEASURES} for c in cols},
         "measures": [{"key": k, "label": lb, "section": sec, "unit": u,

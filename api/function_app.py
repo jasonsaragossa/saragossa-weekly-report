@@ -1347,7 +1347,8 @@ def mbr_contract(req: func.HttpRequest) -> func.HttpResponse:
             return func.HttpResponse(json.dumps({"ok": False, "error": "forbidden"}),
                                      mimetype="application/json", status_code=403)
         inputs = get_mbr_targets(key).get(key, {}) if view == "team" else {}
-        out = build_view(desk, year, view, inputs)
+        from shared import mbr_snapshot
+        out = build_view(desk, year, view, inputs, snapshots=mbr_snapshot.load(desk, view, year))
         if not can_team:
             out["people"] = [p for p in out["people"] if p["uid"] == view]
         else:
@@ -1574,8 +1575,15 @@ def board_schedule_run(req: func.HttpRequest) -> func.HttpResponse:
     try:
         from shared.board_schedule import run_due_schedules
         result = run_due_schedules()
+        # The same every-minute clock freezes each month's MBR figures at 23:59
+        # on its last day. After the board sends, so it can never hold one up.
+        try:
+            from shared import mbr_snapshot
+            result["mbr_snapshots"] = mbr_snapshot.run_due()
+        except Exception:
+            logging.exception("MBR month-end snapshot failed")
         return func.HttpResponse(
-            json.dumps({"ok": True, **result}),
+            json.dumps({"ok": True, **result}, default=str),
             mimetype="application/json", status_code=200,
         )
     except Exception:
