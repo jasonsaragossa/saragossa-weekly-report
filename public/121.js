@@ -7,6 +7,9 @@
  */
 
 let data = null;
+// Declared before the start-up below runs: load() reads it straight away.
+// A pill on the home page opens a team directly: /121?template=contract_usa
+let currentTemplate = new URLSearchParams(window.location.search).get("template") || "";
 
 (async () => {
 
@@ -508,7 +511,6 @@ function esc(s) {
 // one template — an admin — gets a switch in the toolbar.
 
 // A pill on the home page opens a team directly: /121?template=contract_usa
-let currentTemplate = new URLSearchParams(window.location.search).get("template") || "";
 
 function templateSwitch(d) {
   const host = document.getElementById("oto-template-host");
