@@ -601,17 +601,26 @@ function renderLoop(d) {
           data-idx="${i}">${S((review[i] || {}).commentary)}</textarea></td>
       </tr>`).join("");
 
-  // 2. Key inputs: the weekly guideline is typed (and carried on from last
-  // week), the actual is counted from Mercury
-  const guide = saved.guidelines || d.carried_guidelines || {};
-  const inputRows = d.input_rows.map(r => `<tr>
+  // 2. Key inputs: the Loop's four activities. The weekly guideline is one
+  // figure for the whole desk, set by James or Jason; the actual is counted
+  // from Mercury and drills down to the records behind it.
+  const inputRows = (d.key_inputs || []).map(r => `<tr>
       <td>${esc(r.label)}</td>
-      <td><input class="oto-in oto-guide" data-guide="${esc(r.key)}" value="${S(guide[r.key])}"
-        placeholder="—" inputmode="numeric"></td>
+      <td class="num">${LOOP_EDIT_GUIDES
+        ? `<input class="oto-in oto-guide" data-guide="${esc(r.key)}" value="${r.guide ?? ""}"
+             inputmode="numeric" aria-label="Weekly guideline for ${esc(r.label)}">`
+        : (r.guide ?? "—")}</td>
       <td class="num"><strong>${lw[r.key]
         ? `<span class="oto-drill" data-key="${esc(r.key)}" data-period="last_week"
-             data-label="${esc(r.label)}">${lw[r.key]}</span>` : "0"}</strong>${loopVsGuide(lw[r.key], guide[r.key])}</td>
+             data-label="${esc(r.label)}">${lw[r.key]}</span>` : "0"}</strong>${loopVsGuide(lw[r.key], r.guide)}</td>
     </tr>`).join("");
+  const guideTools = d.can_edit_guides
+    ? (LOOP_EDIT_GUIDES
+        ? `<button type="button" class="save-btn" id="oto-guide-save">Save guidelines</button>
+           <button type="button" class="oto-nav" id="oto-guide-cancel">Cancel</button>
+           <span class="mbr-saved-note">Applies to everyone on the desk, every week from now.</span>`
+        : `<button type="button" class="oto-nav" id="oto-guide-edit">Edit guidelines</button>`)
+    : "";
 
   // 3. Live jobs from Mercury, with the Loop's columns to fill in. Notes are
   // kept against the job itself, so they stay put when the list changes.
@@ -652,8 +661,11 @@ function renderLoop(d) {
 
     <section class="mbr-section">
       <h2>Key inputs last week</h2>
-      ${rowsTable([{label:"Activity"},{label:"Weekly guideline"},{label:"Actual", num:true}], inputRows, "")}
-      <p class="mbr-note">Actuals are counted from Mercury for the week. Guidelines carry on from last week until changed.</p>
+      ${rowsTable([{label:"Activity"},{label:"Weekly guideline", num:true},{label:"Actual", num:true}], inputRows, "")}
+      <div class="oto-guide-tools">${guideTools}</div>
+      <p class="mbr-note">Actuals are counted from Mercury for the week — click one to see the records.
+        Total BD actions is every BD call plus every BD email. The guidelines are the same for the
+        whole desk${d.can_edit_guides ? "" : ", set by James"}.</p>
     </section>
 
     <section class="mbr-section">
@@ -685,6 +697,39 @@ function renderLoop(d) {
   document.querySelectorAll(".oto-drill[data-key]").forEach(el => el.addEventListener("click", () =>
     showDetail(el.dataset.label, el.dataset.period,
                ((data.detail || {})[el.dataset.period] || {})[el.dataset.key] || [])));
+  const on = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener("click", fn); };
+  on("oto-guide-edit", () => { LOOP_EDIT_GUIDES = true; renderLoop(data); });
+  on("oto-guide-cancel", () => { LOOP_EDIT_GUIDES = false; renderLoop(data); });
+  on("oto-guide-save", saveGuidelines);
+}
+
+// James and Jason set the desk's weekly guidelines, from any Bristol 1:1.
+// Kept apart from the 1:1's own Save, so it never saves someone's 1:1 by accident.
+let LOOP_EDIT_GUIDES = false;
+
+async function saveGuidelines() {
+  const btn = document.getElementById("oto-guide-save");
+  const values = {};
+  document.querySelectorAll(".oto-guide").forEach(el => { values[el.dataset.guide] = el.value.trim(); });
+  if (Object.values(values).some(v => v === "" || isNaN(Number(v)) || Number(v) < 0)) {
+    alert("Each guideline needs to be a number, 0 or more.");
+    return;
+  }
+  btn.disabled = true; btn.textContent = "Saving…";
+  try {
+    const resp = await fetch("/api/one-to-one-guidelines", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ template: currentTemplate, values }),
+    });
+    const d = await resp.json();
+    if (!d.ok) throw new Error(d.error || "unknown error");
+    data.key_inputs = d.key_inputs;
+    LOOP_EDIT_GUIDES = false;
+    renderLoop(data);
+  } catch (e) {
+    alert("Could not save the guidelines: " + e.message);
+    btn.disabled = false; btn.textContent = "Save guidelines";
+  }
 }
 
 // Against a numeric guideline, say whether the week met it
@@ -703,17 +748,12 @@ async function saveLoop() {
     const v = el.value.trim();
     if (v) (notes[el.dataset.idx] = notes[el.dataset.idx] || {})[el.dataset.key] = v;
   });
-  const guidelines = {};
-  document.querySelectorAll(".oto-guide").forEach(el => {
-    if (el.value.trim()) guidelines[el.dataset.guide] = el.value.trim();
-  });
   const payload = {
     uid: document.getElementById("oto-person").value,
     week: document.getElementById("oto-week").value,
     template: currentTemplate,
     priority_review: collect("priority_review").filter(r => r.item || r.achieved || r.commentary),
     priorities: collect("priorities").filter(r => r.item),
-    guidelines,
     live_job_notes: notes,
   };
   ["resourcing_priority", "next_placement", "next_job"].forEach(k => {

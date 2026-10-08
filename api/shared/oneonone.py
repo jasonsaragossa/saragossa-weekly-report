@@ -12,7 +12,7 @@ from datetime import date, timedelta
 
 from shared.calc import parse_date
 from shared.dataverse import (active_or_rebated_filter, odata_get_all, odata_str)
-from shared.mbr_registry import CANDIDATE_CALL_PURPOSES
+from shared.mbr_registry import BD_CALL_PURPOSES, CANDIDATE_CALL_PURPOSES
 
 PERM_TYPE = 143570000
 
@@ -400,6 +400,11 @@ def build_one_to_one(uid: str, week: date = None) -> dict:
             "candidate_meets":          acts(CANDIDATE_MEETING),
             "candidate_calls":          acts(set(CANDIDATE_CALL_PURPOSES)),
             "leads":                    acts(LEADS),
+            # Bristol's key inputs (Oct 2026): every client meeting together,
+            # and "Total BD actions" = every BD call plus every BD email
+            "client_meetings":          acts(ALL_CLIENT_MEETINGS),
+            "bd_actions": _sorted(acts(set(BD_CALL_PURPOSES)) + acts(BD_EMAIL)
+                                  + [_activity_row(e, "createdon", companies) for e in emails]),
         }
 
     def inputs(det):

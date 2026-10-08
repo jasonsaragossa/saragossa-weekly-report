@@ -863,10 +863,65 @@ _OTO_KEEP = {
                  "chances_other", "blocks", "meeting_plans",
                  # How did the week go — both sides answer, in their own box
                  "week_consultant", "week_manager"),
-    # Bristol's Loop template: last week's list reviewed, this week's list set
-    "loop": ("priority_review", "priorities", "guidelines", "live_job_notes",
+    # Bristol's Loop template: last week's list reviewed, this week's list set.
+    # The weekly guidelines aren't per person: see /api/one-to-one-guidelines.
+    "loop": ("priority_review", "priorities", "live_job_notes",
              "resourcing_priority", "next_placement", "next_job"),
 }
+
+# A template's weekly guidelines are one set for the whole desk, kept in the
+# MBR targets table under this id, keyed by the key input.
+_OTO_GUIDE_KEY = "oto-guidelines:{template}"
+
+
+def _oto_key_inputs(template_id: str) -> list:
+    """[{key, label, guide}] — the template's default guideline unless changed."""
+    from shared.dataverse import get_mbr_targets
+    from shared.oto_templates import TEMPLATES
+    rows = TEMPLATES[template_id].get("key_inputs") or ()
+    if not rows:
+        return []
+    uid = _OTO_GUIDE_KEY.format(template=template_id)
+    saved = get_mbr_targets(uid).get(uid, {})
+    return [{"key": k, "label": label, "guide": saved.get(k, default)}
+            for k, label, default in rows]
+
+
+@app.route(route="one-to-one-guidelines", methods=["POST"])
+def one_to_one_guidelines(req: func.HttpRequest) -> func.HttpResponse:
+    """POST {template, values: {key input: number}} — James and Jason only."""
+    email, err = require_auth(req)
+    if err:
+        return err
+    from shared.dataverse import upsert_mbr_targets
+    from shared.oto_templates import TEMPLATES
+    try:
+        body = req.get_json() or {}
+    except ValueError:
+        return _bad_request("bad json")
+    try:
+        tpl = TEMPLATES.get(str(body.get("template") or ""))
+        if not tpl or (email or "").lower() not in tpl.get("guideline_editors", set()):
+            return func.HttpResponse(json.dumps({"ok": False, "error": "forbidden"}),
+                                     mimetype="application/json", status_code=403)
+        allowed = {k for k, _l, _d in tpl.get("key_inputs") or ()}
+        clean = {}
+        for k, v in (body.get("values") or {}).items():
+            if k not in allowed:
+                return _bad_request(f"not a key input: {k}")
+            try:
+                n = float(v)
+            except (TypeError, ValueError):
+                return _bad_request(f"not a number: {k}")
+            if n < 0:
+                return _bad_request(f"can't be negative: {k}")
+            clean[k] = n
+        upsert_mbr_targets(_OTO_GUIDE_KEY.format(template=body["template"]), clean)
+        return func.HttpResponse(json.dumps({"ok": True, "key_inputs": _oto_key_inputs(body["template"])}),
+                                 mimetype="application/json", status_code=200)
+    except Exception:
+        logging.exception("one-to-one-guidelines error")
+        return _server_error()
 
 
 @app.route(route="one-to-one", methods=["GET", "POST"])
@@ -879,7 +934,7 @@ def one_to_one(req: func.HttpRequest) -> func.HttpResponse:
     from shared.oneonone import (build_one_to_one, week_start, default_week,
                                  quarter_weeks, INPUT_ROWS)
     from shared.oneonone_contract import build_contract_one_to_one
-    from shared.oto_templates import CAREER_LADDER, rung, templates_for
+    from shared.oto_templates import CAREER_LADDER, TEMPLATES, rung, templates_for
     try:
         body = req.get_json() if req.method == "POST" else {}
     except ValueError:
@@ -967,8 +1022,12 @@ def one_to_one(req: func.HttpRequest) -> func.HttpResponse:
             # the weekly guidelines are set once and carried on
             "carried_priorities": [p for p in ((prev or {}).get("priorities") or [])
                                    if (p or {}).get("item")],
-            "carried_guidelines": (prev or {}).get("guidelines") or {},
             "dashboard": tpl.get("dashboard"),
+            # Bristol's key inputs with the desk's weekly guidelines, and
+            # whether this person may change them (James and Jason)
+            "key_inputs": _oto_key_inputs(tpl["id"]),
+            "can_edit_guides": (email or "").lower() in
+                TEMPLATES[tpl["id"]].get("guideline_editors", set()),
             "mbr_actions": get_latest_mbr_actions(uid),
             "quarter": {**quarter_weeks(wk, since=since, until=latest),
                         "completed": sorted(w for w in list_one_to_one_weeks(uid)

@@ -68,6 +68,14 @@ TEMPLATES = {
         },
         # Where last week's activity is, as the Loop page points to it
         "dashboard": "https://saragossa.oneupsales.io/dashboard/51097",
+        # The Loop's Key Inputs: (Mercury count, label, weekly guideline). The
+        # guideline is one figure for the whole desk, set by James or Jason
+        # on the page; these are the Loop's own starting values.
+        "key_inputs": (("bd_actions", "Total BD Actions", 75),
+                       ("client_meetings", "Client Meetings", 2),
+                       ("candidate_calls", "Candidate Calls", 25),
+                       ("leads", "Leads Gained", 3)),
+        "guideline_editors": {"james@saragossa.io", "jason@saragossa.io"},
     },
 }
 
