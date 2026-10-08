@@ -863,6 +863,9 @@ _OTO_KEEP = {
                  "chances_other", "blocks", "meeting_plans",
                  # How did the week go — both sides answer, in their own box
                  "week_consultant", "week_manager"),
+    # Bristol's Loop template: last week's list reviewed, this week's list set
+    "loop": ("priority_review", "priorities", "guidelines", "live_job_notes",
+             "resourcing_priority", "next_placement", "next_job"),
 }
 
 
@@ -960,6 +963,12 @@ def one_to_one(req: func.HttpRequest) -> func.HttpResponse:
             **derived,
             "saved": saved,
             "carried_actions": (prev or {}).get("actions") or [],
+            # Bristol: last week's priority list comes back to be marked, and
+            # the weekly guidelines are set once and carried on
+            "carried_priorities": [p for p in ((prev or {}).get("priorities") or [])
+                                   if (p or {}).get("item")],
+            "carried_guidelines": (prev or {}).get("guidelines") or {},
+            "dashboard": tpl.get("dashboard"),
             "mbr_actions": get_latest_mbr_actions(uid),
             "quarter": {**quarter_weeks(wk, since=since, until=latest),
                         "completed": sorted(w for w in list_one_to_one_weeks(uid)

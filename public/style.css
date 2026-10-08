@@ -1840,3 +1840,9 @@ tr.oto-closed { opacity: .45; text-decoration: line-through; }
   .cmbr-tile-value { font-size: 20px; }
   .cmbr-tile-lines { font-size: 11px; }
 }
+
+/* Bristol 1:1 (the Loop template) — guideline box, and met / below the guideline */
+.oto-guide { max-width: 110px; min-height: 30px; }
+.oto-guide-flag { font: 600 10px var(--font); margin-left: 6px; white-space: nowrap; }
+.oto-guide-flag.hit { color: var(--ok); }
+.oto-guide-flag.miss { color: var(--warn); }

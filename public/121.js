@@ -532,7 +532,9 @@ function templateSwitch(d) {
 
 function render(d) {
   templateSwitch(d);
-  if (d.template && d.template.kind === "contract") renderContract(d);
+  const kind = d.template && d.template.kind;
+  if (kind === "contract") renderContract(d);
+  else if (kind === "loop") renderLoop(d);
   else renderPerm(d);
 }
 
@@ -548,7 +550,188 @@ function wireCommon() {
 }
 
 function save() {
-  return (data && data.template && data.template.kind === "contract") ? saveContract() : savePerm();
+  const kind = data && data.template && data.template.kind;
+  return kind === "contract" ? saveContract() : kind === "loop" ? saveLoop() : savePerm();
+}
+
+
+// ── Bristol (the desk's Loop template) ──────────────────────────────────────
+// A copy of "DUPLICATE ONLY - 1-1 Template 2026" (Jason, Oct 2026), section for
+// section. What Mercury already knows is filled in rather than typed: last
+// week's priority list comes back to be marked, the actuals are counted, and
+// the live jobs are listed. The weekly guidelines are typed once and carried on.
+
+const LOOP_PRIORITIES = 10;
+
+const LOOP_JOB_COLS = [
+  { key: "delivery",   label: "Hitting delivery goals?", yn: true },
+  { key: "blockers",   label: "Blockers" },
+  { key: "interviews", label: "# 'live' interviews" },
+  { key: "hm_contact", label: "Last HM contact?" },
+  { key: "feedback",   label: "Agreed feedback loop" },
+];
+
+function ynSelect(name, key, idx, value) {
+  return `<select class="oto-in" data-name="${name}" data-key="${key}" data-idx="${esc(idx)}">
+    ${["", "Y", "N"].map(v => `<option${value === v ? " selected" : ""}>${v}</option>`).join("")}
+  </select>`;
+}
+
+function renderLoop(d) {
+  const saved = d.saved || {};
+  const lw = d.last_week || {};
+
+  // 1. Last week's priority list, marked off. Before there is one (the first
+  // week in the app), the objectives can be typed in as the Loop asked.
+  const carried = d.carried_priorities || [];
+  const review = saved.priority_review || [];
+  const reviewRows = carried.length
+    ? carried.map((p, i) => `<tr>
+        <td class="oto-fixed">${S(p.item)}<input type="hidden" class="oto-in" data-name="priority_review"
+          data-key="item" data-idx="${i}" value="${S(p.item)}"></td>
+        <td>${ynSelect("priority_review", "achieved", i, (review[i] || {}).achieved)}</td>
+        <td><textarea rows="1" class="oto-in" data-name="priority_review" data-key="commentary"
+          data-idx="${i}">${S((review[i] || {}).commentary)}</textarea></td>
+      </tr>`).join("")
+    : Array.from({ length: Math.max(review.length, 5) }, (_, i) => `<tr>
+        <td><textarea rows="1" class="oto-in" data-name="priority_review" data-key="item"
+          data-idx="${i}">${S((review[i] || {}).item)}</textarea></td>
+        <td>${ynSelect("priority_review", "achieved", i, (review[i] || {}).achieved)}</td>
+        <td><textarea rows="1" class="oto-in" data-name="priority_review" data-key="commentary"
+          data-idx="${i}">${S((review[i] || {}).commentary)}</textarea></td>
+      </tr>`).join("");
+
+  // 2. Key inputs: the weekly guideline is typed (and carried on from last
+  // week), the actual is counted from Mercury
+  const guide = saved.guidelines || d.carried_guidelines || {};
+  const inputRows = d.input_rows.map(r => `<tr>
+      <td>${esc(r.label)}</td>
+      <td><input class="oto-in oto-guide" data-guide="${esc(r.key)}" value="${S(guide[r.key])}"
+        placeholder="—" inputmode="numeric"></td>
+      <td class="num"><strong>${lw[r.key]
+        ? `<span class="oto-drill" data-key="${esc(r.key)}" data-period="last_week"
+             data-label="${esc(r.label)}">${lw[r.key]}</span>` : "0"}</strong>${loopVsGuide(lw[r.key], guide[r.key])}</td>
+    </tr>`).join("");
+
+  // 3. Live jobs from Mercury, with the Loop's columns to fill in. Notes are
+  // kept against the job itself, so they stay put when the list changes.
+  const notes = saved.live_job_notes && !Array.isArray(saved.live_job_notes) ? saved.live_job_notes : {};
+  const jobRows = (d.live_jobs || []).map(j => {
+    const n = notes[j.id] || {};
+    return `<tr>
+      <td>${esc(j.job)}<div class="oto-sub">${esc(j.client)}</div></td>
+      <td class="num">${j.cvs_out}</td>
+      ${LOOP_JOB_COLS.map(c => `<td>${c.yn ? ynSelect("live_job_notes", c.key, j.id, n[c.key])
+        : `<textarea rows="1" class="oto-in" data-name="live_job_notes" data-key="${c.key}"
+             data-idx="${esc(j.id)}">${S(n[c.key])}</textarea>`}</td>`).join("")}
+    </tr>`;
+  }).join("");
+
+  // 4. This week's priority list — up to ten, carried into next week's review
+  const pri = saved.priorities || [];
+  const priRows = Array.from({ length: LOOP_PRIORITIES }, (_, i) => `<tr>
+      <td class="num dim">${i + 1}</td>
+      <td><textarea rows="1" class="oto-in" data-name="priorities" data-key="item"
+        data-idx="${i}">${S((pri[i] || {}).item)}</textarea></td>
+    </tr>`).join("");
+
+  const dash = d.dashboard
+    ? `<p class="mbr-note">Last week's activity is on the
+        <a href="${esc(d.dashboard)}" target="_blank" rel="noopener">OneUp Sales dashboard</a>
+        — set "Period" to "Last Week". Live jobs are in its "Jobs" section, and listed below.</p>`
+    : "";
+
+  document.getElementById("oto-content").innerHTML = quarterStrip(d) + dash + `
+    <section class="mbr-section">
+      <h2>Performance against last week's priority list</h2>
+      ${rowsTable([{label:"Priority / objective"},{label:"Achieved (Y/N)"},{label:"Commentary"}], reviewRows, "")}
+      <p class="mbr-note">${carried.length
+        ? "Last week's priority list, brought forward from last week's 1:1."
+        : "No priority list from last week in the app yet — type last week's objectives in. From next week they come through on their own."}</p>
+    </section>
+
+    <section class="mbr-section">
+      <h2>Key inputs last week</h2>
+      ${rowsTable([{label:"Activity"},{label:"Weekly guideline"},{label:"Actual", num:true}], inputRows, "")}
+      <p class="mbr-note">Actuals are counted from Mercury for the week. Guidelines carry on from last week until changed.</p>
+    </section>
+
+    <section class="mbr-section">
+      <h2>Live jobs</h2>
+      <p class="mbr-note" style="margin-top:0">Fill out the table, discuss gaps, and add forward actions to the priority list.</p>
+      ${rowsTable([{label:"Role"}, {label:"# CVs in play", num:true},
+                   ...LOOP_JOB_COLS.map(c => ({ label: c.label }))],
+        jobRows, "No live jobs where you're the delivery owner.")}
+      <label class="mbr-field">What are your resourcing priorities entering this week?
+        <textarea id="f-resourcing_priority" rows="2">${S(saved.resourcing_priority)}</textarea></label>
+      <label class="mbr-field">Where is your next placement coming from, and why?
+        <textarea id="f-next_placement" rows="2">${S(saved.next_placement)}</textarea></label>
+      <label class="mbr-field">Where is your next live job coming from, and why?
+        <textarea id="f-next_job" rows="2">${S(saved.next_job)}</textarea></label>
+    </section>
+
+    <section class="mbr-section">
+      <h2>Priority list — up to 10 items for the week</h2>
+      ${rowsTable([{label:"#", num:true},{label:"Priority"}], priRows, "")}
+      <p class="mbr-note">These come back next week to be marked achieved or not.</p>
+    </section>
+
+    <div class="mbr-savebar">
+      <button class="save-btn" id="oto-save">Save 1:1</button>
+      <span class="mbr-saved-note" id="oto-saved"></span>
+    </div>`;
+
+  wireCommon();
+  document.querySelectorAll(".oto-drill[data-key]").forEach(el => el.addEventListener("click", () =>
+    showDetail(el.dataset.label, el.dataset.period,
+               ((data.detail || {})[el.dataset.period] || {})[el.dataset.key] || [])));
+}
+
+// Against a numeric guideline, say whether the week met it
+function loopVsGuide(actual, guide) {
+  const g = parseFloat(String(guide || "").replace(/[^\d.]/g, ""));
+  if (!g) return "";
+  const hit = (actual || 0) >= g;
+  return ` <span class="oto-guide-flag ${hit ? "hit" : "miss"}">${hit ? "✓" : "✗"} ${hit ? "met" : "below"}</span>`;
+}
+
+async function saveLoop() {
+  const btn = document.getElementById("oto-save");
+  btn.disabled = true; btn.textContent = "Saving…";
+  const notes = {};
+  document.querySelectorAll('.oto-in[data-name="live_job_notes"]').forEach(el => {
+    const v = el.value.trim();
+    if (v) (notes[el.dataset.idx] = notes[el.dataset.idx] || {})[el.dataset.key] = v;
+  });
+  const guidelines = {};
+  document.querySelectorAll(".oto-guide").forEach(el => {
+    if (el.value.trim()) guidelines[el.dataset.guide] = el.value.trim();
+  });
+  const payload = {
+    uid: document.getElementById("oto-person").value,
+    week: document.getElementById("oto-week").value,
+    template: currentTemplate,
+    priority_review: collect("priority_review").filter(r => r.item || r.achieved || r.commentary),
+    priorities: collect("priorities").filter(r => r.item),
+    guidelines,
+    live_job_notes: notes,
+  };
+  ["resourcing_priority", "next_placement", "next_job"].forEach(k => {
+    payload[k] = document.getElementById("f-" + k).value;
+  });
+  try {
+    const resp = await fetch("/api/one-to-one", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const d = await resp.json();
+    if (!d.ok) throw new Error(d.error || "unknown error");
+    document.getElementById("oto-saved").textContent =
+      "Saved " + new Date().toLocaleTimeString(OTO_LOCALE, { hour: "2-digit", minute: "2-digit" });
+  } catch (e) {
+    alert("Could not save: " + e.message);
+  }
+  btn.disabled = false; btn.textContent = "Save 1:1";
 }
 
 // ── Contract USA ─────────────────────────────────────────────────────────────

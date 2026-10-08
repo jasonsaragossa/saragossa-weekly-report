@@ -32,6 +32,19 @@ SNOZ = [
     _u("harry", "Harry Snozwell", "harrysnozwell@saragossa.io"),
     _u("clara", "Clara Rapley",   "clara@saragossa.io"),
 ]
+BRISTOL = [
+    _u("james",  "James Batt",     "james@saragossa.io"),
+    _u("sion",   "Sion Johnson",   "sion@saragossa.io"),
+    _u("megan",  "Megan Christie", "megan@saragossa.io"),
+    _u("jake",   "Jake Cogzell",   "Jakec@saragossa.io"),
+    _u("joshua", "Joshua Rimmer",  "joshua@saragossa.io"),
+    _u("bhouse", "Saragossa House Bristol", None),
+]
+# As Mercury has them: Jake is still in Team Sion there; Settings moves him
+BRISTOL_TEAMS = {
+    "Team Sion": [BRISTOL[1], BRISTOL[2], BRISTOL[3]],
+    "Team Jake": [BRISTOL[4]],
+}
 TEAMS = {
     "Team Snoz":     SNOZ,
     "Team Connor":   [CHICAGO[1], CHICAGO[2]],
@@ -52,8 +65,16 @@ def fake_dataverse(monkeypatch):
             return TEAMS[path[6:].split(")")[0]]
         if path == "systemusers" and TERRITORY_IDS["Chicago Contract"] in f:
             return CHICAGO
+        if path == "systemusers" and TERRITORY_IDS["Bristol"] in f:
+            return BRISTOL
         return []
     monkeypatch.setattr(T, "odata_get_all", odata_get_all)
+    # Sub-team leads go by the team the report shows: Mercury's, unless one is
+    # set in Settings
+    from shared import dataverse as D
+    mercury = {p["systemuserid"]: team for team, ps in {**TEAMS, **BRISTOL_TEAMS}.items() for p in ps}
+    monkeypatch.setattr(D, "get_team_membership_map", lambda: mercury)
+    monkeypatch.setattr(D, "get_overrides", lambda: [{"crbb7_userid": "jake", "crbb7_team": "Team Jake"}])
 
 
 def names(people):
@@ -62,7 +83,7 @@ def names(people):
 
 def test_the_admin_sees_every_template_and_everyone():
     tpls = T.templates_for("jason@saragossa.io", is_admin=True)
-    assert [t["id"] for t in tpls] == ["snoz", "contract_usa"]
+    assert [t["id"] for t in tpls] == ["snoz", "contract_usa", "bristol"]
     assert all(t["is_lead"] for t in tpls)
     assert "Saragossa House Contract USA" not in names(tpls[1]["people"])
     assert "Jim Jeffers" not in names(tpls[1]["people"])
@@ -123,6 +144,27 @@ def test_jim_runs_the_1_1s_rather_than_sitting_in_one():
                        ("connor@saragossa.io", False)):
         seen, _ = T.visible_people("contract_usa", who, is_admin=admin)
         assert "Jim Jeffers" not in names(seen), who
+
+
+# ── Bristol ───────────────────────────────────────────────────────────────────
+
+def test_james_sees_all_of_bristol_but_has_no_1_1_himself():
+    people, lead = T.visible_people("bristol", "james@saragossa.io", is_admin=False)
+    assert lead
+    assert names(people) == ["Jake Cogzell", "Joshua Rimmer", "Megan Christie", "Sion Johnson"]
+
+
+def test_a_bristol_team_lead_sees_the_team_settings_gives_them():
+    # Jake leads Team Jake (set in Settings) though Mercury still has him in Sion's
+    people, lead = T.visible_people("bristol", "jakec@saragossa.io", is_admin=False)
+    assert lead and names(people) == ["Jake Cogzell", "Joshua Rimmer"]
+    people, lead = T.visible_people("bristol", "sion@saragossa.io", is_admin=False)
+    assert lead and names(people) == ["Megan Christie", "Sion Johnson"]
+
+
+def test_a_bristol_consultant_sees_only_themselves():
+    people, lead = T.visible_people("bristol", "joshua@saragossa.io", is_admin=False)
+    assert not lead and names(people) == ["Joshua Rimmer"]
 
 
 # ── Career ladder ─────────────────────────────────────────────────────────────
