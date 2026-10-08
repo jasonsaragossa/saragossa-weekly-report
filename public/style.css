@@ -1885,3 +1885,4 @@ tr.oto-closed { opacity: .45; text-decoration: line-through; }
 .oto-guide-flag.miss { color: var(--warn); }
 /* Contract MBR: a month frozen at 23:59 on its last day */
 .cmbr-grid .cmbr-frozen { font-style: normal; color: var(--accent); }
+a.cmbr-btn-quiet { text-decoration: none; display: inline-flex; align-items: center; }

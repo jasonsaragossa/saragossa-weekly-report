@@ -1353,6 +1353,25 @@ def mbr_contract(req: func.HttpRequest) -> func.HttpResponse:
             out["people"] = [p for p in out["people"] if p["uid"] == view]
         else:
             out["people"] = [p for p in out["people"] if p["uid"] in visible]
+        if req.params.get("format") == "xlsx":
+            # The same view, as Jonny's own workbook — same access, same figures
+            from shared import mbr_export
+            if view == "team":
+                people = [p for p in out["people"] if p["active"]]
+                body = mbr_export.director(out, [
+                    (p["name"], build_view(desk, year, p["uid"], {},
+                                           snapshots=mbr_snapshot.load(desk, p["uid"], year)))
+                    for p in people])
+                name = f"{year} Director MBR - {desk}.xlsx"
+            else:
+                body = mbr_export.consultant(out)
+                who = next((p["name"] for p in out["people"] if p["uid"] == view), "Consultant")
+                name = f"{year} Consultant MBR - {who}.xlsx"
+            return func.HttpResponse(
+                body, status_code=200,
+                mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={"Content-Disposition": f'attachment; filename="{name}"',
+                         "Cache-Control": "no-store"})
         return func.HttpResponse(json.dumps({"ok": True, "can_team": can_team, "can_edit": can_edit,
                                              **out}, default=str),
                                  mimetype="application/json", status_code=200)

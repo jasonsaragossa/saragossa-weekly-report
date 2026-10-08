@@ -344,6 +344,17 @@ function gridCard() {
   });
   tools.appendChild(all);
 
+  // The same figures as Jonny's own workbook: the Director sheet for the team,
+  // the consultant sheet for a person
+  const xl = document.createElement("a");
+  xl.className = "cmbr-btn-quiet";
+  xl.textContent = "Download Excel";
+  xl.title = d.view === "team" ? "As the Director MBR spreadsheet" : "As the consultant MBR spreadsheet";
+  xl.href = "/api/mbr-contract?" + new URLSearchParams(
+    { desk: d.desk, year: d.year, view: d.view, format: "xlsx" }).toString();
+  xl.setAttribute("download", "");
+  tools.appendChild(xl);
+
   if (d.view === "team" && d.can_edit) {
     const edit = document.createElement("button");
     edit.type = "button";
