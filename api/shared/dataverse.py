@@ -309,21 +309,12 @@ def is_director(user_email: str) -> bool:
 def get_territory_name(tid: str) -> str:
     return next((k for k, v in TERRITORY_IDS.items() if v == tid), "Unknown")
 
-# Emails always granted access, regardless of their Mercury user state.
-# Temporary: Stephen Herniman (CFO) — his Mercury user is currently disabled
-# but should be live. Remove once his Mercury account is re-enabled.
-ANALYTICS_ALWAYS_ALLOW = {"stephen.herniman@saragossa.io"}
-
-
 def is_admin(user_email: str) -> bool:
     """
     Admin (Analytics + Settings) =
-      Always-allow list, OR Director title, OR manually granted via override,
+      Director title, OR manually granted via override,
       OR member of the Finance and Compliance team.
     """
-    if user_email and user_email.lower() in ANALYTICS_ALWAYS_ALLOW:
-        return True
-
     users = odata_get_all(
         "systemusers",
         params={

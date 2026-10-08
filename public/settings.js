@@ -14,7 +14,7 @@ const TEAMS_BY_TERRITORY = {
   "Bristol":          ["Team Batt", "Team Charlie", "Team Sion", "Team Harry W"],
   "London":           ["Team Data & Cyber", "Team Data and Cyber", "Team Snoz"],
   "Chicago":          ["Team JD", "Team Matty", "Team Adam", "Team Adam W"],
-  "New York":         [],
+  "New York":         ["Team Ryan", "Team Adam B"],
   "London Contract":  [],
   "Chicago Contract": ["Team Makenzie", "Team Mike B", "Team Connor"],
 };

@@ -34,6 +34,7 @@ TEAM_ORDER = {
     "London":           ["Team Data & Cyber", "Team Data and Cyber", "Team Snoz"],
     "Chicago":          ["Team JD", "Team Matty", "Team Adam", "Team Adam W"],
     "Chicago Contract": ["Team Makenzie", "Team Mike B", "Team Connor"],
+    "New York":         ["Team Ryan", "Team Adam B"],
 }
 
 

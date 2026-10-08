@@ -158,7 +158,7 @@ function hpbQuarterHeaders(currentQ) {
 }
 
 const HPB_TERRITORY_ORDER = ["Chicago", "New York"];
-const HPB_TEAM_ORDER = ["Team JD", "Team Matty", "Team Adam", "Team Adam W"];
+const HPB_TEAM_ORDER = ["Team JD", "Team Matty", "Team Adam", "Team Adam W", "Team Ryan", "Team Adam B"];
 
 function hpbTeamSort(a, b) {
   const rank = (t) => {
