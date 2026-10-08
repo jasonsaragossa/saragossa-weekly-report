@@ -282,7 +282,10 @@ def compute(people: set, year: int, month: int, data: dict, fx: dict,
     # Book, at the last day of the month
     live = [p for p in contracts if live_on(p, last_day)]
     out["runners"] = len({contractor_key(p) for p in live})
-    out["runners_split"] = round(sum(_share(p, book) for p in live), 2)
+    # Runners count by placement credit (0.5 each to Consultant and AO, a
+    # quarter each when there's a CONRO), so a split runner is a half or a
+    # quarter, never a third: money splits in thirds, runners don't (Jason, Oct 2026)
+    out["runners_split"] = round(sum(_credit(p, book) for p in live), 2)
     out["wgp_running"] = round(sum(_wgp(p, fx) * _share(p, book) for p in live), 2)
 
     due = [p for p in contracts if (e := _end(p)) and m_start <= e < m_end]

@@ -46,11 +46,22 @@ def run(d, people=frozenset({A}), month=3, book=None):
 # ── Runners ───────────────────────────────────────────────────────────────────
 
 def test_runners_are_shown_whole_and_by_split():
-    """A contract Alice shares three ways is one runner, or a third by split."""
+    """A three-way contract where Alice is the AO is one runner, or half a runner
+    by split — runners go by placement credit, never a third (Jason, Oct 2026).
+    Its money is still split in thirds."""
     d = data(placements=[pl("p1", "001/00/01", "2026-01-05", "2026-12-31", roles=(A, "x", "y"))])
     out = run(d)
-    assert out["runners"] == 1 and out["runners_split"] == pytest.approx(1 / 3, abs=0.01)
+    assert out["runners"] == 1 and out["runners_split"] == 0.5
     assert out["wgp_running"] == pytest.approx(500 / 3, abs=0.01)
+
+
+def test_a_split_runner_is_only_ever_a_half_or_a_quarter():
+    d = data(placements=[
+        pl("p1", "001/00/01", "2026-01-05", "2026-12-31", roles=("x", A, "y")),        # consultant, 3-way
+        pl("p2", "002/00/01", "2026-01-05", "2026-12-31", roles=("x", "y", A)),        # CRO, 3-way: none
+        pl("p3", "003/00/01", "2026-01-05", "2026-12-31", roles=("x", "y", "z", A)),   # CONRO, 4-way
+    ])
+    assert run(d)["runners_split"] == 0.75
 
 
 def test_the_desk_book_takes_in_the_house_account_and_director():
