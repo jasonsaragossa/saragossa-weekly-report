@@ -78,6 +78,13 @@ def test_team_lead_sees_the_team_set_in_settings_not_mercurys(monkeypatch):
     assert sorted(p["systemuserid"] for p in seen) == ["adam", "jack"]
 
 
+def test_the_chairman_ranks_as_a_director():
+    assert D.is_director_title("Regional Director - Bristol")
+    assert D.is_director_title("Chairman")
+    assert not D.is_director_title("Chief Financial Officer")
+    assert not D.is_director_title("Principal Consultant")
+
+
 def test_mbr_people_drop_house_accounts_unless_a_director(monkeypatch):
     people = [{"fullname": "Saragossa House Bristol", "_territoryid_value": D.TERRITORY_IDS["Bristol"]},
               {"fullname": "Jade Moger", "_territoryid_value": D.TERRITORY_IDS["Bristol"]}]

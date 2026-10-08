@@ -295,6 +295,16 @@ def is_house_account(name: str) -> bool:
     return (name or "").strip().lower().startswith("saragossa house")
 
 
+# Job titles that rank as a Director: any "…Director…", and the Chairman
+# (Paul McGuire — "same as Directors", Jason, Oct 2026).
+DIRECTOR_LEVEL_TITLES = ("director", "chairman")
+
+
+def is_director_title(title: str) -> bool:
+    t = (title or "").lower()
+    return any(word in t for word in DIRECTOR_LEVEL_TITLES)
+
+
 @ttl_cached(300)
 def is_director(user_email: str) -> bool:
     """A Director by Mercury job title — the same rule the admin check starts from."""
@@ -304,7 +314,7 @@ def is_director(user_email: str) -> bool:
         "$select": "title",
         "$filter": f"internalemailaddress eq '{odata_str(user_email)}' and isdisabled eq false",
     })
-    return bool(users) and "director" in (users[0].get("title") or "").lower()
+    return bool(users) and is_director_title(users[0].get("title"))
 
 def get_territory_name(tid: str) -> str:
     return next((k for k, v in TERRITORY_IDS.items() if v == tid), "Unknown")
@@ -327,7 +337,7 @@ def is_admin(user_email: str) -> bool:
     user_id = users[0]["systemuserid"]
 
     # 1. Directors always have access (can't be locked out via overrides)
-    if "director" in (users[0].get("title") or "").lower():
+    if is_director_title(users[0].get("title")):
         return True
 
     # 2. Explicit override: True = grant, False = deny (revokes the team default)

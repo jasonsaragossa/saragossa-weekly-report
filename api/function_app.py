@@ -1123,7 +1123,8 @@ def _mbr_visible_people_all(email: str):
         # Table unreadable — fall back to Director title so the module can never
         # lock everyone out (including out of the screen that fixes the grants).
         logging.warning("MBR scope table unreadable — falling back to Director titles")
-        if "director" in ((me or {}).get("title") or "").lower():
+        from shared.dataverse import is_director_title
+        if is_director_title((me or {}).get("title")):
             return people, True
         scopes = {}
 
