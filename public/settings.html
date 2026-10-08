@@ -6,6 +6,11 @@
   <title>Report Settings — Saragossa</title>
   <link rel="stylesheet" href="/style.css">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <script>
+    /* Set on <html> in the head so the dark palette never paints first. */
+    try { if (localStorage.getItem("saragossa-theme") === "light")
+      document.documentElement.classList.add("theme-light"); } catch (e) {}
+  </script>
 </head>
 <body>
 
@@ -14,6 +19,7 @@
   <div class="header-right">
     <span class="week-label">Report Settings</span>
     <nav class="main-menu" id="main-menu" data-active="settings"></nav>
+    <button class="theme-toggle" id="theme-toggle" type="button">◑ Light</button>
     <a href="/.auth/logout" class="logout-link">Sign out</a>
   </div>
 </header>
@@ -38,6 +44,7 @@
 
 <div class="footer">Saragossa · Admin Settings</div>
 
+<script src="/theme.js"></script>
 <script src="/nav.js"></script>
 <script src="/settings.js"></script>
 </body>

@@ -49,6 +49,30 @@
   --warn:     #d98b8b;
   --disabled: #4a4a4a;
   --scheme:   dark;
+  /* Tints, shadows and one-offs, so light mode can swap every colour */
+  --gold-06:  rgba(200,168,75,.06);
+  --gold-08:  rgba(200,168,75,.08);
+  --gold-12:  rgba(200,168,75,.12);
+  --gold-16:  rgba(200,168,75,.16);
+  --gold-24:  rgba(200,168,75,.24);
+  --accent-06: rgba(93,143,154,.06);
+  --accent-10: rgba(93,143,154,.10);
+  --accent-15: rgba(93,143,154,.15);
+  --accent-18: rgba(93,143,154,.18);
+  --amber:    #d9b24b;
+  --ok-edge:  rgba(53,165,110,.5);
+  --future:   #2a2a2b;   /* months not yet happened: deliberately faint */
+  --on-accent:      #ffffff;   /* text on a solid accent fill */
+  --on-accent-deep: #101820;   /* the 1:1 current-week chip */
+  --overlay:      rgba(0,0,0,0.6);
+  --shadow-modal: rgba(0,0,0,0.55);
+  --shadow-tip:   rgba(0,0,0,.25);
+  --shadow-lift:  rgba(0,0,0,.35);
+  --feedback-border:   rgba(93, 143, 154, 0.55);
+  --feedback-bg:       linear-gradient(180deg, rgba(93,143,154,.20), rgba(93,143,154,.10));
+  --feedback-bg-hover: linear-gradient(180deg, rgba(93,143,154,.34), rgba(93,143,154,.20));
+  --feedback-fg:       #e8f1f3;
+  --feedback-fg-hover: #ffffff;
   --tab-h:    48px;
   --font:     'Aeonik Pro', -apple-system, BlinkMacSystemFont, sans-serif;
   --mono:     'SF Mono', 'Fira Code', ui-monospace, monospace;
@@ -262,7 +286,7 @@ tr.team-header:first-child td { border-top: none; }
   margin-left: auto;
   color: var(--accent);
   font-weight: 700;
-  background: rgba(200,168,75,.16);
+  background: var(--gold-16);
   border-radius: 4px;
   padding: 1px 6px;
 }
@@ -313,7 +337,7 @@ tr.team-header:first-child td { border-top: none; }
 /* Contract table editable cells */
 .manual-cell[contenteditable=true] { cursor: text; outline: none; }
 .manual-cell[contenteditable=true]:focus {
-  background: rgba(200,168,75,.08);
+  background: var(--gold-08);
   border-radius: 4px;
   box-shadow: 0 0 0 1px var(--accent);
 }
@@ -451,12 +475,12 @@ tr.team-header:first-child td { border-top: none; }
 }
 
 .save-btn {
-  background: rgba(200,168,75,.12);
+  background: var(--gold-12);
   color: var(--accent);
   border-color: var(--accent);
   margin-right: 6px;
 }
-.save-btn:hover   { background: rgba(200,168,75,.24); }
+.save-btn:hover   { background: var(--gold-24); }
 .save-btn:disabled { opacity: .5; cursor: not-allowed; }
 
 .clear-btn {
@@ -553,11 +577,11 @@ tr.team-header:first-child td { border-top: none; }
   padding: 2px 7px;
   border: 1px solid var(--accent);
   border-radius: 4px;
-  background: rgba(200,168,75,.12);
+  background: var(--gold-12);
   color: var(--accent);
   cursor: pointer;
 }
-.gbp-toggle:hover { background: rgba(200,168,75,.24); }
+.gbp-toggle:hover { background: var(--gold-24); }
 .gbp-tag {
   font-size: 9px;
   color: var(--accent);
@@ -601,7 +625,7 @@ tr.team-header:first-child td { border-top: none; }
   font-weight: 700;
   margin-top: 2px;
 }
-.hpb-current { background: rgba(200,168,75,.08); }
+.hpb-current { background: var(--gold-08); }
 
 /* Top-level analytics tabs */
 .analytics-tabs {
@@ -758,7 +782,7 @@ tr.inactive-consultant:hover td { opacity: 0.65; }
   margin-top: 1px;
 }
 .year-toggle-btn.active {
-  background: rgba(93,143,154,.15);
+  background: var(--accent-15);
   color: var(--white);
   border-color: var(--accent);
 }
@@ -830,10 +854,10 @@ tr.inactive-consultant:hover td { opacity: 0.65; }
 
 /* Future months (haven't happened yet) */
 .future-col {
-  color: var(--border);
+  color: var(--future);
 }
 thead .future-col {
-  color: var(--border);
+  color: var(--future);
 }
 
 /* Territory total footer row (tfoot for per-territory tables, tbody for Overall) */
@@ -847,7 +871,7 @@ tbody tr.territory-total-row td {
 
 /* Grand Total (GBP) row — stronger accent */
 tfoot tr.grand-total-row td {
-  background: rgba(93,143,154,.10);
+  background: var(--accent-10);
   border-top: 2px solid var(--accent);
   color: var(--white);
 }
@@ -858,7 +882,7 @@ td.clickable-cell {
   transition: background 0.12s, color 0.12s;
 }
 td.clickable-cell:hover {
-  background: rgba(93,143,154,.18) !important;
+  background: var(--accent-18) !important;
   color: var(--white) !important;
 }
 
@@ -866,7 +890,7 @@ td.clickable-cell:hover {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.6);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -881,7 +905,7 @@ td.clickable-cell:hover {
   max-height: 82vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 24px 64px rgba(0,0,0,0.55);
+  box-shadow: 0 24px 64px var(--shadow-modal);
 }
 .modal-header {
   display: flex;
@@ -998,7 +1022,7 @@ tbody tr.other-row:hover td {
   border-bottom: none;
 }
 .other-drilldown-table tbody tr:hover td {
-  background: rgba(93,143,154,.06);
+  background: var(--accent-06);
 }
 .other-drilldown-table tbody td {
   padding: 7px 12px;
@@ -1211,7 +1235,7 @@ tr.mbr-family td {
   background: var(--deep); color: var(--mid); font-size: 9px; text-transform: uppercase;
   letter-spacing: .12em; padding: 10px 12px 6px;
 }
-tr.mbr-flagged td { background: rgba(200,168,75,.06); }
+tr.mbr-flagged td { background: var(--gold-06); }
 .mbr-metric-name { border-bottom: 1px dotted var(--border); cursor: help; }
 .mbr-flag {
   font-size: 8px; text-transform: uppercase; letter-spacing: .08em; color: var(--accent);
@@ -1313,7 +1337,7 @@ tr.mbr-prompt-row td { background: var(--tint); padding: 8px 14px 12px; }
 .perf-tip {
   position: absolute; z-index: 50; display: none; pointer-events: none;
   background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
-  padding: 5px 9px; font-size: 11px; white-space: nowrap; box-shadow: 0 4px 14px rgba(0,0,0,.25);
+  padding: 5px 9px; font-size: 11px; white-space: nowrap; box-shadow: 0 4px 14px var(--shadow-tip);
 }
 .perf-tip-month { color: var(--mid); margin-right: 8px; }
 .perf-tip-value { color: var(--white); font-family: var(--mono); }
@@ -1336,8 +1360,8 @@ tr.mbr-prompt-row td { background: var(--tint); padding: 8px 14px 12px; }
   font-family: var(--mono);
 }
 .oto-week:hover { color: var(--white); border-color: var(--mid); }
-.oto-week.done { color: var(--ok); border-color: rgba(53,165,110,.5); }
-.oto-week.current { background: var(--accent); border-color: var(--accent); color: #101820; font-weight: 700; }
+.oto-week.done { color: var(--ok); border-color: var(--ok-edge); }
+.oto-week.current { background: var(--accent); border-color: var(--accent); color: var(--on-accent-deep); font-weight: 700; }
 .oto-q-count { font-size: 10px; color: var(--mid); }
 .oto-in {
   width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
@@ -1374,10 +1398,10 @@ select.oto-in { color-scheme: var(--scheme); }
   gap: 8px;
   margin-left: 6px;
   padding: 9px 18px;
-  border: 1px solid rgba(93, 143, 154, 0.55);
+  border: 1px solid var(--feedback-border);
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(93,143,154,.20), rgba(93,143,154,.10));
-  color: #e8f1f3;
+  background: var(--feedback-bg);
+  color: var(--feedback-fg);
   font-family: var(--font);
   font-size: 12px;
   font-weight: 600;
@@ -1392,11 +1416,11 @@ select.oto-in { color-scheme: var(--scheme); }
   opacity: .9;
 }
 .feedback-btn:hover {
-  background: linear-gradient(180deg, rgba(93,143,154,.34), rgba(93,143,154,.20));
+  background: var(--feedback-bg-hover);
   border-color: var(--accent);
-  color: #ffffff;
+  color: var(--feedback-fg-hover);
   transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(0,0,0,.35);
+  box-shadow: 0 4px 14px var(--shadow-lift);
 }
 .feedback-btn:active { transform: translateY(0); box-shadow: none; }
 .feedback-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -1487,28 +1511,29 @@ select.oto-in { color-scheme: var(--scheme); }
 .import-done { font-size: 11px; color: var(--mid); line-height: 1.7; margin-left: 16px; }
 
 /* ── Light mode ──────────────────────────────────────────────────────────────
-   Opt-in per page via <html class="theme-light">, set by the inline script in
-   the head of 121.html / mbr.html so the dark palette never flashes first. It
+   Every page except the wall screen (contract-screen.html) opts in via
+   <html class="theme-light">, set by the inline script in each page's head so
+   the dark palette never flashes first. It
    goes on <html> rather than <body> because <html> paints the canvas too: with
    the tokens overridden only on <body>, the page turned light but the surface
    behind it stayed dark.
    Only the tokens change: every rule above is written against them, so the two
    themes cannot drift apart.
 
-   These pages are filled in during live 1:1 and review conversations, often on
-   a laptop in a bright meeting room, where the dark theme reads poorly. */
+   Pages are often read on a laptop in a bright meeting room, where the dark
+   theme reads poorly. */
 
 .theme-light {
   --bg:       #f7f7f8;
   --surface:  #ffffff;
   --surface2: #f0f0f2;
   --border:   #dcdce0;
-  --mid:      #6b6b7a;   /* passes AA on the light surface */
+  --mid:      #636372;   /* AA on white, surface2 and the deep header rows */
   --light:    #1e1e22;   /* body text — the dark theme's "light" inverts */
   --contrast: #5a6450;
   --white:    #000000;   /* "strongest text", not literally white */
-  --accent:   #3f6d78;   /* darkened for contrast on white */
-  --green:    #15803d;
+  --accent:   #3a6772;   /* darkened: AA on the grey headers and gold tints too */
+  --green:    #157236;   /* AA on surface2 as well as white */
   --red:      #b91c1c;
   --panel:    #ffffff;
   --deep:     #ececed;
@@ -1516,27 +1541,39 @@ select.oto-in { color-scheme: var(--scheme); }
   --tint:     rgba(0,0,0,.022);
   --hairline: rgba(0,0,0,.07);
   --track:    rgba(0,0,0,.10);
-  --ok:       #15803d;
+  --ok:       #157236;
   --warn:     #b91c1c;
   --disabled: #a6a6ad;
   --scheme:   light;
+  --gold-06:  rgba(176,125,0,.06);
+  --gold-08:  rgba(176,125,0,.08);
+  --gold-12:  rgba(176,125,0,.11);
+  --gold-16:  rgba(176,125,0,.14);
+  --gold-24:  rgba(176,125,0,.20);
+  --accent-06: rgba(63,109,120,.05);
+  --accent-10: rgba(63,109,120,.09);
+  --accent-15: rgba(63,109,120,.13);
+  --accent-18: rgba(63,109,120,.16);
+  --amber:    #8a5a00;
+  --ok-edge:  rgba(21,128,61,.45);
+  --future:   #b4b4bb;
+  --on-accent:      #ffffff;
+  --on-accent-deep: #ffffff;
+  --overlay:      rgba(20,20,28,.35);
+  --shadow-modal: rgba(0,0,0,.18);
+  --shadow-tip:   rgba(0,0,0,.12);
+  --shadow-lift:  rgba(0,0,0,.12);
+  /* The accent-tinted fills were built for a dark ground and wash out on white. */
+  --feedback-border:   rgba(63,109,120,.55);
+  --feedback-bg:       linear-gradient(180deg, rgba(63,109,120,.14), rgba(63,109,120,.07));
+  --feedback-bg-hover: linear-gradient(180deg, rgba(63,109,120,.24), rgba(63,109,120,.14));
+  --feedback-fg:       #26525c;
+  --feedback-fg-hover: #17343c;
 }
 
 /* The logo is white artwork, so it disappears on a light ground. */
 .theme-light .logo { filter: invert(1) brightness(.25); }
 
-/* The accent-tinted fills were built for a dark ground and wash out on white. */
-.theme-light .feedback-btn {
-  background: linear-gradient(180deg, rgba(63,109,120,.14), rgba(63,109,120,.07));
-  color: #26525c;
-}
-.theme-light .feedback-btn:hover {
-  background: linear-gradient(180deg, rgba(63,109,120,.24), rgba(63,109,120,.14));
-  color: #17343c;
-}
-.theme-light .oto-week.current { color: #ffffff; }
-.theme-light .mbr-bar-fill.hit,
-.theme-light .nbt-bar-hit { background: var(--ok); }
 
 /* Theme toggle */
 .theme-toggle {
@@ -1580,7 +1617,7 @@ select.oto-in { color-scheme: var(--scheme); }
 .ai-delta.neg { color: var(--warn); }
 /* The band lives on the score itself, the app's own thresholds: <50, 50–74, ≥75 */
 .ai-red   .ai-score { color: var(--warn); }
-.ai-amber .ai-score { color: #d9b24b; }
+.ai-amber .ai-score { color: var(--amber); }
 .ai-green .ai-score { color: var(--ok); }
 .ai-none  .ai-score { color: var(--mid); }
 .oto-quarter .ai-pill { margin-left: 6px; }
@@ -1638,7 +1675,7 @@ tr.oto-closed { opacity: .45; text-decoration: line-through; }
 .oto-rung.done { color: var(--mid); background: var(--tint); }
 .oto-rung.todo { color: var(--disabled); }
 .oto-rung.now  {
-  color: var(--white); background: var(--accent); border-color: var(--accent);
+  color: var(--on-accent); background: var(--accent); border-color: var(--accent);
   font-weight: 600;
 }
 .oto-rung-arrow { color: var(--disabled); font-size: 13px; }
@@ -1672,7 +1709,7 @@ tr.oto-closed { opacity: .45; text-decoration: line-through; }
 .home-pill:hover, .home-pill:focus-visible { border-color: var(--accent); color: var(--white); }
 .home-pill-open { color: var(--accent); border-color: var(--accent); }
 .home-pill-open::after { content: " →"; }
-.home-pill-open:hover, .home-pill-open:focus-visible { background: var(--accent); color: var(--white); }
+.home-pill-open:hover, .home-pill-open:focus-visible { background: var(--accent); color: var(--on-accent); }
 @media (max-width: 520px) {
   .home { padding: 24px 16px 40px; }
   .home-grid { grid-template-columns: 1fr; }
