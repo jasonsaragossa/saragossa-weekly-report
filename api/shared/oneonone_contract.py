@@ -33,10 +33,10 @@ from shared.oneonone import (LEADS, VACANCY_GRADES, _activities, _activity_row, 
                              _live_jobs, _shortlist_row, _shortlists, _sorted, week_start)
 
 # The activity section (Jason, Oct 2026): inputs, the leading input, outputs.
+# Spec sends are first sends only — follow-up emails don't count (Jason, Oct 2026).
+# Senior candidate networking calls and B managers are typed on the page, not
+# counted here: the desk doesn't log them in a way Mercury can see.
 SPEC_CV = "47e272c6-a769-ee11-94f7-000d3ad6abf9"            # Spec CV — logged as an email
-# Senior candidate networking calls are logged as a candidate flip
-CANDIDATE_FLIP = {"41e272c6-a769-ee11-94f7-000d3ad6abf9",    # Candidate Flip Call
-                  "403d3f07-29ab-ee11-be37-002248c7244c"}    # Candidate Flip Meeting
 _GRADE_BY_ID = {v: k for k, v in VACANCY_GRADES.items()}
 
 
@@ -290,12 +290,6 @@ def build_contract_one_to_one(uid: str, week: date = None) -> dict:
     activity = [
         measure("candidate_calls", "Inputs", "Candidate calls",
                 acts(r["calls_w"], cand, "createdon"), acts(r["calls_m"], cand, "createdon")),
-        measure("senior_calls", "Inputs", "Senior candidate networking calls",
-                _sorted(acts(r["calls_w"], CANDIDATE_FLIP, "createdon")
-                        + acts(r["meetings"], CANDIDATE_FLIP, "scheduledstart")),
-                _sorted(acts(r["calls_m"], CANDIDATE_FLIP, "createdon")
-                        + acts(r["appts_m"], CANDIDATE_FLIP, "scheduledstart")),
-                "logged in Mercury as a candidate flip call or meeting"),
         measure("spec_sends", "Inputs", "Spec sends",
                 _sorted([_activity_row(e, "createdon", act_companies) for e in r["spec_w"]]),
                 _sorted([_activity_row(e, "createdon", act_companies) for e in r["spec_m"]]),

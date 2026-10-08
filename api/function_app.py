@@ -867,7 +867,8 @@ _OTO_KEEP = {
                  # Activity: B managers added / spoken to with a summary,
                  # solutions sold, and the open forum (Jason, Oct 2026)
                  "b_managers_added", "b_managers_spoken", "b_managers_summary",
-                 "solutions_sold", "solutions_note", "open_forum"),
+                 "senior_calls", "solutions_spotted", "solutions_sold", "solutions_note",
+                 "open_forum"),
     # Bristol's Loop template: last week's list reviewed, this week's list set.
     # The weekly guidelines aren't per person: see /api/one-to-one-guidelines.
     "loop": ("priority_review", "priorities", "live_job_notes",

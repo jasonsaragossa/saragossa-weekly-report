@@ -241,8 +241,7 @@ class _FixedDate(date):
 def test_activity_is_grouped_inputs_leading_input_outputs():
     d = C.build_contract_one_to_one(ME, WEEK)
     groups = [(m["group"], m["key"]) for m in d["activity"]]
-    assert groups == [("Inputs", "candidate_calls"), ("Inputs", "senior_calls"),
-                      ("Inputs", "spec_sends"), ("Inputs", "resumes"), ("Inputs", "leads"),
+    assert groups == [("Inputs", "candidate_calls"), ("Inputs", "spec_sends"), ("Inputs", "resumes"), ("Inputs", "leads"),
                       ("Leading input", "client_meetings"), ("Outputs", "jobs_pulled")]
 
 
@@ -261,7 +260,7 @@ def test_spec_sends_and_jobs_pulled_count_for_the_week_and_month(monkeypatch):
 def test_the_contract_save_keeps_the_new_typed_boxes_and_drops_placement_chances():
     import function_app as F
     keep = F._OTO_KEEP["contract"]
-    for k in ("b_managers_added", "b_managers_spoken", "b_managers_summary",
-              "solutions_sold", "solutions_note", "open_forum"):
+    for k in ("b_managers_added", "b_managers_spoken", "b_managers_summary", "senior_calls",
+              "solutions_spotted", "solutions_sold", "solutions_note", "open_forum"):
         assert k in keep
     assert not {"chances_week", "chances_month", "chances_other"} & set(keep)

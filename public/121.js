@@ -932,8 +932,10 @@ function renderContract(d) {
   const groupHead = (name) => `<tr class="team-header"><td colspan="3">${esc(name)}</td></tr>`;
   const activityRows =
     groupHead("Inputs") + group("Inputs")
-    + typedRow("b_managers_added", "B managers added", "typed — new hiring managers added to Mercury")
+    + typedRow("senior_calls", "Senior candidate networking calls", "typed")
+    + typedRow("b_managers_added", "B managers added", "typed")
     + typedRow("b_managers_spoken", "B managers spoken to", "typed")
+    + typedRow("solutions_spotted", "Solution opportunities spotted", "typed")
     + groupHead("Leading input") + group("Leading input")
     + groupHead("Outputs") + group("Outputs")
     + typedRow("solutions_sold", "Solutions sold / secured", "typed — not yet for most consultants");
@@ -1121,6 +1123,8 @@ async function saveContract() {
     b_managers_added: document.getElementById("f-b_managers_added").value,
     b_managers_spoken: document.getElementById("f-b_managers_spoken").value,
     b_managers_summary: document.getElementById("f-b_managers_summary").value,
+    senior_calls: document.getElementById("f-senior_calls").value,
+    solutions_spotted: document.getElementById("f-solutions_spotted").value,
     solutions_sold: document.getElementById("f-solutions_sold").value,
     solutions_note: document.getElementById("f-solutions_note").value,
     open_forum: document.getElementById("f-open_forum").value,
