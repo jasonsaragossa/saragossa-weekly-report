@@ -5,14 +5,23 @@
   <title>Access Denied — Saragossa</title>
   <link rel="stylesheet" href="/style.css">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <script>
+    /* Set on <html> in the head so the dark palette never paints first. */
+    try { if (localStorage.getItem("saragossa-theme") === "light")
+      document.documentElement.classList.add("theme-light"); } catch (e) {}
+  </script>
 </head>
 <body>
 <header class="header">
   <a href="/"><img src="/logo.svg" alt="Saragossa" class="logo"></a>
+  <div class="header-right">
+    <button class="theme-toggle" id="theme-toggle" type="button">◑ Light</button>
+  </div>
 </header>
 <div class="loading-state">
   <p>You need Director or Bristol Finance & Compliance access to view this page.</p>
   <a href="/" style="color:var(--gold);font-size:12px;">← Back to home</a>
 </div>
+<script src="/theme.js"></script>
 </body>
 </html>
