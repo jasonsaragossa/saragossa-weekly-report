@@ -146,7 +146,8 @@ def test_every_field_the_contract_save_reads_is_on_the_contract_page():
 def test_the_week_strip_follows_the_desk_locale():
     """The dates you see first. It was hand-built as day/month for everyone."""
     assert "${dt.getDate()}/${dt.getMonth() + 1}</button>" not in JS
-    assert "${shortDay(dt)}</button>" in JS
+    # The contract desk's strip names a 1:1 by the Monday it's held (Oct 2026)
+    assert "${shortDay(heldMonday ? held : dt)}</button>" in JS
 
 
 def test_team_snoz_week_strip_is_exactly_as_it_was():

@@ -216,17 +216,26 @@ function addRow(btn) {
 function quarterStrip(d) {
   const q = d.quarter || { weeks: [], completed: [] };
   const done = new Set(q.completed || []);
+  // A contract 1:1 is filed under the week it reviews but held the Monday
+  // after, so the strip names it by that Monday: next week's meeting reads as
+  // next week's date (Jason, Oct 2026). The data stays filed as it was.
+  const heldMonday = d.template && d.template.kind === "contract";
   return `
     <section class="oto-quarter">
       <button class="oto-nav" data-week="${esc(q.prev || "")}"${q.prev ? ' title="Earlier weeks"'
         : ' disabled title="1:1s started here"'}>‹</button>
-      <span class="oto-q-label">${esc(q.label || "")}</span>
+      <span class="oto-q-label">${esc(q.label || "")}${heldMonday ? " · 1:1 on Mon" : ""}</span>
       <div class="oto-weeks">
         ${(q.weeks || []).map(w => {
           const dt = new Date(w + "T00:00:00");
+          const held = new Date(dt); held.setDate(held.getDate() + 7);
           const cls = [w === d.week_start ? "current" : "", done.has(w) ? "done" : ""].join(" ").trim();
+          const state = done.has(w) ? "1:1 saved" : "not yet completed";
+          const title = heldMonday
+            ? `1:1 on ${held.toLocaleDateString(OTO_LOCALE, { weekday: "short", month: "numeric", day: "numeric" })}, reviewing the week of ${shortDay(dt)} — ${state}`
+            : state;
           return `<button class="oto-week ${cls}" data-week="${w}"
-            title="${done.has(w) ? "1:1 saved" : "not yet completed"}">${shortDay(dt)}</button>`;
+            title="${esc(title)}">${shortDay(heldMonday ? held : dt)}</button>`;
         }).join("")}
       </div>
       <button class="oto-nav" data-week="${esc(q.next || "")}"${q.next ? ' title="Later weeks"'
@@ -533,6 +542,13 @@ function templateSwitch(d) {
 function render(d) {
   templateSwitch(d);
   const kind = d.template && d.template.kind;
+  // The date picker holds the week a 1:1 is filed under — for the contract
+  // desk that's the week it reviews, so say so
+  const pick = document.getElementById("oto-week");
+  const pickLabel = pick && pick.closest("label");
+  if (pickLabel && pickLabel.firstChild && pickLabel.firstChild.nodeType === 3) {
+    pickLabel.firstChild.textContent = kind === "contract" ? "Week reviewed " : "Week beginning ";
+  }
   if (kind === "contract") renderContract(d);
   else if (kind === "loop") renderLoop(d);
   else renderPerm(d);
