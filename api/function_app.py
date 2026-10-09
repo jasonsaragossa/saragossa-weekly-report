@@ -965,8 +965,12 @@ def one_to_one(req: func.HttpRequest) -> func.HttpResponse:
                                      mimetype="application/json", status_code=403)
 
         raw = req.params.get("week") or (body or {}).get("week")
+        # "Today" on the team's own clock: Chicago's next 1:1 opens on
+        # Thursday in Chicago, not when it's Thursday in UTC
+        from shared.oto_templates import local_today
+        team_today = local_today(tpl["id"])
         try:
-            wk = week_start(date.fromisoformat(raw)) if raw else default_week(tpl["kind"])
+            wk = week_start(date.fromisoformat(raw)) if raw else default_week(tpl["kind"], team_today)
             # Nothing before the week a team started 1:1s — a request for an
             # earlier week lands on the first one instead.
             since = date.fromisoformat(tpl["start_week"]) if tpl.get("start_week") else None
@@ -975,7 +979,7 @@ def one_to_one(req: func.HttpRequest) -> func.HttpResponse:
             # ...and nothing after the 1:1 that is currently open. The next
             # one becomes available on the Thursday before it; nobody can see
             # or write a week beyond that (Jason, Sep 2026).
-            latest = default_week(tpl["kind"])
+            latest = default_week(tpl["kind"], team_today)
             if wk > latest:
                 wk = latest
         except ValueError:

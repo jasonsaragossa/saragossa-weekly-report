@@ -81,6 +81,20 @@ TEMPLATES = {
 
 _SELECT = "systemuserid,fullname,internalemailaddress,isdisabled,title"
 
+# Each team's own clock. The next 1:1 opens on Thursday where the team sits:
+# the server runs on UTC, which would open Chicago's on Wednesday evening
+# (Jason, Oct 2026).
+TIMEZONES = {"contract_usa": "America/Chicago"}
+DEFAULT_TIMEZONE = "Europe/London"
+
+
+def local_today(template_id: str, now=None):
+    """Today's date in the team's own time zone."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo(TIMEZONES.get(template_id, DEFAULT_TIMEZONE))
+    return (now.astimezone(tz) if now else datetime.now(tz)).date()
+
 # The consultant career ladder, in order. Shown at the top of a 1:1 with the
 # person's current rung highlighted, so progression is in front of both of
 # them every week (Jason, Sep 2026).

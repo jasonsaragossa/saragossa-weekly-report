@@ -266,3 +266,23 @@ def test_the_server_caps_every_request_at_the_open_1_1():
 
 def test_the_forward_arrow_is_disabled_at_the_open_1_1():
     assert 'disabled title="The next 1:1 opens on Thursday"' in _body("quarterStrip")
+
+
+# ── Each team's own clock (Oct 2026) ─────────────────────────────────────────
+
+def test_the_next_1_1_opens_on_thursday_in_the_teams_own_time_zone():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    from shared.oneonone import default_week
+    from shared.oto_templates import local_today
+    utc = ZoneInfo("UTC")
+    # 04:00 UTC on Thursday 8 Oct is still Wednesday evening in Chicago...
+    early = datetime(2026, 10, 8, 4, 0, tzinfo=utc)
+    assert local_today("contract_usa", early).isoformat() == "2026-10-07"
+    assert default_week("contract", local_today("contract_usa", early)).isoformat() == "2026-09-28"
+    # ...and Thursday morning in London, so the UK teams have moved on
+    assert local_today("snoz", early).isoformat() == "2026-10-08"
+    assert default_week("perm", local_today("bristol", early)).isoformat() == "2026-10-12"
+    # Once it's Thursday in Chicago, the US desk moves on too
+    later = datetime(2026, 10, 8, 6, 0, tzinfo=utc)          # 01:00 Thursday, Chicago
+    assert default_week("contract", local_today("contract_usa", later)).isoformat() == "2026-10-05"
