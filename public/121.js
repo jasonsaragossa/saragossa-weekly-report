@@ -929,16 +929,11 @@ function renderContract(d) {
         value="${S(saved[id])}" style="width:64px" aria-label="${esc(label)}"></td>
       <td class="num dim">—</td></tr>`;
   const group = (name) => (d.activity || []).filter(m => m.group === name).map(actRow).join("");
-  const groupHead = (name) => `<tr class="team-header"><td colspan="3">${esc(name)}</td></tr>`;
-  const activityRows =
-    groupHead("Inputs") + group("Inputs")
-    + typedRow("senior_calls", "Senior candidate networking calls", "typed")
-    + typedRow("b_managers_added", "B managers added", "typed")
-    + typedRow("b_managers_spoken", "B managers spoken to", "typed")
-    + typedRow("solutions_spotted", "Solution opportunities spotted", "typed")
-    + groupHead("Leading input") + group("Leading input")
-    + groupHead("Outputs") + group("Outputs")
-    + typedRow("solutions_sold", "Solutions sold / secured", "typed — not yet for most consultants");
+  const actTable = (rows) => rowsTable([{label:""}, {label:CONTRACT_WEEK_WORD, num:true},
+    {label:esc(d.month_label), num:true}], rows, "");
+  // Typed figures sit with the summary they belong to (Jason, Oct 2026)
+  const numBox = (id, label) => `<label class="oto-typed">${esc(label)}
+      <input type="number" min="0" class="oto-in oto-num" id="${id}" value="${S(saved[id.slice(2)])}"></label>`;
 
   document.getElementById("oto-content").innerHTML = quarterStrip(d) + ladderStrip(d) + `
     <section class="mbr-section">
@@ -968,18 +963,40 @@ function renderContract(d) {
 
     <section class="mbr-section">
       <h2>Activity</h2>
-      ${rowsTable([{label:""}, {label:CONTRACT_WEEK_WORD, num:true}, {label:esc(d.month_label), num:true}],
-        activityRows, "")}
-      <p class="mbr-note">Counted from Mercury unless marked typed. Click a count to see the records.</p>
-      <div class="oto-two">
-        <label class="mbr-field">B managers — summary
-          <textarea rows="3" class="oto-in" id="f-b_managers_summary"
-            placeholder="Who was added or spoken to, and what came of it">${S(saved.b_managers_summary)}</textarea></label>
-        <label class="mbr-field">Solutions — what was spotted or sold
-          <textarea rows="3" class="oto-in" id="f-solutions_note"
-            placeholder="Any solution opportunity spotted, and where it stands">${S(saved.solutions_note)}</textarea></label>
+      <p class="mbr-note" style="margin-top:0">Counted from Mercury unless marked typed. Click a count to see the records.</p>
+
+      <h3 class="perf-col-title">Inputs</h3>
+      ${actTable(group("Inputs") + typedRow("senior_calls", "Senior candidate networking calls", "typed"))}
+      <div class="oto-two oto-typed-groups">
+        <div class="oto-typed-group">
+          <h4>B managers</h4>
+          <div class="oto-typed-row">
+            ${numBox("f-b_managers_added", "Added")}
+            ${numBox("f-b_managers_spoken", "Spoken to")}
+          </div>
+          <textarea rows="3" class="oto-in" id="f-b_managers_summary" aria-label="B managers summary"
+            placeholder="Who was added or spoken to, and what came of it">${S(saved.b_managers_summary)}</textarea>
+        </div>
+        <div class="oto-typed-group">
+          <h4>Solutions</h4>
+          <div class="oto-typed-row">
+            ${numBox("f-solutions_spotted", "Opportunities spotted")}
+            ${numBox("f-solutions_sold", "Sold / secured")}
+          </div>
+          <textarea rows="3" class="oto-in" id="f-solutions_note" aria-label="Solutions notes"
+            placeholder="What was spotted or sold, and where it stands">${S(saved.solutions_note)}</textarea>
+        </div>
       </div>
-      <label class="mbr-field">Open forum — target clients and keeping-in-touch calls
+
+      <h3 class="perf-col-title" style="margin-top:18px">Leading input</h3>
+      ${actTable(group("Leading input"))}
+      ${rowsTable([{label:"Who"}, {label:"Client"}, {label:"Meeting"}, {label:"Type"}, {label:"Actions / expectations"}],
+        meetingRows, `No client meetings in Mercury for ${esc(CONTRACT_WEEK_WORD.toLowerCase())}.`)}
+
+      <h3 class="perf-col-title" style="margin-top:18px">Outputs</h3>
+      ${actTable(group("Outputs"))}
+
+      <label class="mbr-field" style="margin-top:14px">Open forum — target clients and keeping-in-touch calls
         <textarea rows="3" class="oto-in" id="f-open_forum"
           placeholder="Target clients, keeping-in-touch calls, senior calls — anything to talk through">${S(saved.open_forum)}</textarea></label>
     </section>
@@ -997,12 +1014,6 @@ function renderContract(d) {
       <h2>Roles with potential blocks</h2>
       ${rowsTable([{label:"Role"}, {label:"The block"}, {label:"Steps taken so far"}], blockRows, "")}
       ${addRowButton("blocks", "Add role")}
-    </section>
-
-    <section class="mbr-section">
-      <h2>Client meetings — ${esc(CONTRACT_WEEK_WORD.toLowerCase())}</h2>
-      ${rowsTable([{label:"Who"}, {label:"Client"}, {label:"Meeting"}, {label:"Type"}, {label:"Actions / expectations"}],
-        meetingRows, "No client meetings in Mercury for that week.")}
     </section>
 
     <section class="mbr-section">
