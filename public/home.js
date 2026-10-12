@@ -7,6 +7,10 @@
  */
 (async () => {
   const grid = document.getElementById("home-grid");
+  // The dashboard's page header carries the date on the right
+  const meta = document.getElementById("home-meta");
+  if (meta) meta.textContent = new Date().toLocaleDateString("en-GB",
+    { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const nav = window.SaragossaNav;
   let shown = null;
 
@@ -46,6 +50,9 @@
 function card(s) {
   const el = document.createElement("section");
   el.className = "home-card";
+  // Each section has its own colour on the card's top edge, as the
+  // dashboard marks its categories
+  el.dataset.key = s.key;
 
   const h = document.createElement("h2");
   h.className = "home-card-title";

@@ -85,6 +85,10 @@
   --btn:      #202024;
   --btn-edge: #3a3a41;
   --zero:     #4e4e58;
+  --cat-perm: #5d8f9a;
+  --cat-cont: #745c50;
+  --cat-note: #757f6a;
+  --cat-none: #3a3a41;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1585,6 +1589,10 @@ select.oto-in { color-scheme: var(--scheme); }
   --btn:      #ffffff;
   --btn-edge: #b9b9c1;
   --zero:     #b4b4bb;
+  --cat-perm: #3a6772;
+  --cat-cont: #7a5a4c;
+  --cat-note: #5a6450;
+  --cat-none: #b9b9c1;
 }
 
 /* The logo is white artwork, so it disappears on a light ground. */
@@ -2040,3 +2048,29 @@ thead th.num, .cmbr-grid thead th, .cmbr-grid thead th.num {
 .oto-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .oto-cards .mbr-card-value { font-size: 20px; }
 @media (max-width: 900px) { .oto-cards { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); } }
+
+/* Home, as the dashboard: a page header with an italic tail and the date, and
+   each section a raised panel with its category colour along the top */
+.home { max-width: 1180px; padding: 28px 28px 60px; }
+.home-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px;
+  flex-wrap: wrap; margin-bottom: 20px; }
+.home-head .home-title { margin: 0; }
+.home-title em { font-style: italic; color: var(--mid); font-weight: 400; }
+.home-meta { font-size: 12px; color: var(--text-2); }
+.home-grid { gap: 14px; }
+.home-card { --cat: var(--cat-none); border-top: 3px solid var(--cat); padding: 18px 20px; gap: 8px; }
+.home-card[data-key="report"] { --cat: var(--cat-perm); }
+.home-card[data-key="121"]    { --cat: var(--cat-note); }
+.home-card[data-key="mbr"]    { --cat: var(--cat-cont); }
+.home-card[data-key="perf"]   { --cat: var(--cat-cont); }
+.home-card[data-key="admin"]  { --cat: var(--cat-none); }
+.home-card:hover { border-color: var(--btn-edge); border-top-color: var(--cat); }
+.home-card-title { font-size: 18px; font-weight: 500; letter-spacing: -0.01em; }
+.home-card-desc { font-size: 13px; line-height: 1.5; }
+.home-pills { gap: 8px; margin-top: 6px; }
+.home-pill { border-radius: 8px; padding: 7px 12px; background: var(--btn); border: 1px solid var(--border);
+  color: var(--white); font-size: 13px; }
+.home-pill:hover, .home-pill:focus-visible { border-color: var(--btn-edge); color: var(--white); }
+.home-pill-open { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.home-pill-open:hover, .home-pill-open:focus-visible { background: var(--accent); border-color: var(--accent);
+  color: var(--on-accent); filter: brightness(1.1); }
