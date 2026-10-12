@@ -18,6 +18,7 @@ def _sheet(xlsx: bytes, name: str):
 
 def test_every_mapped_row_is_the_row_jonny_labelled_that_way():
     for template, sheet, rows in (("mbr_director.xlsx", "Contract Performance", E.DIRECTOR_ROWS),
+                                  ("mbr_director.xlsx", "Perm Performance", E.PERM_ROWS),
                                   ("mbr_consultant.xlsx", "Performance", E.CONSULTANT_ROWS)):
         ws = openpyxl.load_workbook(E.TEMPLATES / template)[sheet]
         for row, (label, _key) in rows.items():
@@ -73,3 +74,12 @@ def test_set_cells_keeps_the_style_and_never_overwrites_a_formula():
     assert "<f>C2+D2</f>" in out and "<v>99</v>" not in out
     assert out.index('r="C2"') < out.index('r="D2"') < out.index('r="F2"')     # column order kept
     assert '<row r="7"><c r="B7" t="inlineStr"><is><t>Name</t></is></c></row>' in out
+
+
+def test_the_perm_desk_exports_into_jonnys_perm_performance_sheet():
+    team = _view({"P1": {"gp_month": 226055, "deals_started": 8, "fees": 37017},
+                  "P9": {"gp_budget": 129675}})
+    ws = _sheet(E.director_perm(team), "Perm Performance")
+    assert ws["C2"].value == 226055 and ws["C7"].value == 8 and ws["C13"].value == 37017
+    assert ws["N3"].value == 129675
+    assert ws["F2"].value == "=C2+D2+E2"            # his quarter formula, untouched

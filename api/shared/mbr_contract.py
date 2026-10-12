@@ -173,6 +173,41 @@ MEASURES = [
     ("new_customers_meetings", "New customers with meetings", "Customers", "both", "count", "sum"),
 ]
 MEASURE = {m[0]: m for m in MEASURES}
+
+# ── London Perm (Oct 2026) ────────────────────────────────────────────────────
+# Jonny's "Perm Performance" sheet, row for row. Money is perm fees in GBP;
+# NFI for the month is typed by Jonny with Mercury's fees (placements starting
+# in the month, split-credited) shown greyed as a guide. "Deals started" go by
+# start date, "Number of deals" by when they were made; both use placement
+# credit. Interviews, jobs, meetings, activity and customers are the contract
+# desk's own measures, which don't depend on the kind of placement.
+_SHARED_SECTIONS = ("Interviews", "Jobs", "Meetings", "Activity", "Customers")
+PERM_MEASURES = [
+    ("gp_month", "NFI (month)", "Targets", "team", "money", "sum"),
+    ("gp_budget", "NFI budget", "Targets", "team", "money", "sum"),
+    ("gp_achievement", "% achievement", "Targets", "team", "pct", ("ratio", "gp_month", "gp_budget")),
+    ("gp_per_head", "NFI per fee earner", "Targets", "team", "money", ("ratio", "gp_month", "headcount")),
+    ("gp_per_head_budget", "NFI per fee earner budget", "Targets", "team", "money", "avg"),
+    ("deals_started", "Deals started", "Targets", "both", "count", "avg"),
+    ("deals_started_budget", "Deals started budget", "Targets", "team", "count", "avg"),
+    ("headcount", "Headcount", "Targets", "team", "count", "avg"),
+    ("deals", "Number of deals", "Deals", "both", "count", "avg"),
+    ("fees", "Total fees", "Deals", "both", "money", "avg"),
+    ("fee_avg", "Average fee size", "Deals", "both", "money", ("ratio", "fees", "_deal_credit")),
+    ("deals_per_head", "Deals per head", "Deals", "team", "ratio", ("ratio", "deals", "headcount")),
+    ("fees_per_head", "Fees per head", "Deals", "team", "money", ("ratio", "fees", "headcount")),
+    ("fee_pct_avg", "Average fee % of new deals", "Deals", "both", "pct", ("ratio", "_fee_pct_sum", "_fee_pct_n")),
+    ("clients_placed", "Clients placed with", "Deals", "both", "count", "avg"),
+    ("filled_a", "A jobs filled", "Deals", "both", "count", "avg"),
+    ("filled_b", "B jobs filled", "Deals", "both", "count", "avg"),
+] + [m for m in MEASURES if m[2] in _SHARED_SECTIONS
+     # filled A/B sit with the deals above; the perm sheet has no C fills or
+     # director's-own meetings
+     and m[0] not in ("filled_a", "filled_b", "filled_c", "filled_c_share",
+                      "c_jobs_per_placement", "client_meetings_own")]
+PERM_MEASURE = {m[0]: m for m in PERM_MEASURES}
+PERM_IMPORTED = ("gp_budget", "gp_per_head_budget", "deals_started_budget")
+
 TYPED = ("gp_month",)                                       # Jonny types these
 IMPORTED = ("gp_budget", "runners_budget", "gp_per_head_budget")   # from his sheet
 # Typed for the desk in every column, months and periods alike (Jason: "if in
@@ -184,6 +219,28 @@ DESK_INPUTS = TYPED + IMPORTED + ("carried_a", "carried_b")
 TONE = {"gp_month": "actual", "runners_split": "actual", "gp_per_head": "actual",
         "gp_budget": "budget", "gp_achievement": "budget", "runners_budget": "budget",
         "gp_per_head_budget": "budget"}
+PERM_DESK_INPUTS = TYPED + PERM_IMPORTED + ("carried_a", "carried_b")
+PERM_TONE = {"gp_month": "actual", "gp_per_head": "actual", "deals_started": "actual",
+             "gp_budget": "budget", "gp_achievement": "budget", "gp_per_head_budget": "budget",
+             "deals_started_budget": "budget"}
+
+
+class _Spec:
+    """What differs between a contract desk and a perm desk."""
+    def __init__(self, kind, measures, imported, desk_inputs, tone):
+        self.kind, self.measures, self.imported = kind, measures, imported
+        self.measure = {m[0]: m for m in measures}
+        self.desk_inputs, self.tone, self.typed = desk_inputs, tone, TYPED
+
+
+SPECS = {
+    "contract": _Spec("contract", MEASURES, IMPORTED, DESK_INPUTS, TONE),
+    "perm": _Spec("perm", PERM_MEASURES, PERM_IMPORTED, PERM_DESK_INPUTS, PERM_TONE),
+}
+
+
+def spec_for(desk: str) -> _Spec:
+    return SPECS[DESK_KIND.get(desk, "contract")]
 
 # ── Small helpers ─────────────────────────────────────────────────────────────
 
@@ -338,6 +395,25 @@ def compute(people: set, year: int, month: int, data: dict, fx: dict,
         out[f"filled_{g}"] = round(sum(_credit(p, book) for p in deals
                                        if vac_grade.get(p.get("_crimson_vacancy_value")) == g.upper()), 2)
 
+    # A perm desk (Jonny's Perm Performance sheet). The deals, clients placed
+    # and jobs filled above already read right for perm: placements made in
+    # the month, by placement credit. Money is the perm fee, split like the
+    # weekly report's money.
+    if data.get("kind") == "perm":
+        def fee(p):
+            ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode")
+            return (p.get("recruit_truegrossprofit") or 0.0) * fx.get(ccy, 1.0)
+        started = [p for p in contracts if (s := _d(p.get("crimson_startdate"))) and m_start <= s < m_end]
+        out["deals_started"] = round(sum(_credit(p, book) for p in started), 2)
+        # NFI is typed by Jonny; this is Mercury's figure, shown as his guide:
+        # fees on placements starting in the month
+        out["gp_month"] = round(sum(fee(p) * _share(p, book) for p in started), 2)
+        out["fees"] = round(sum(fee(p) * _share(p, book) for p in deals), 2)
+        out["_deal_credit"] = out["deals"]
+        pcts = [(p.get("crimson_permanentfeepercent") or 0) / 100 for p in deals
+                if p.get("crimson_permanentfeepercent")]
+        out["_fee_pct_sum"], out["_fee_pct_n"] = round(sum(pcts), 4), len(pcts)
+
     # Interviews and CVs, on shortlists the people own
     sl = [s for s in data["shortlists"] if s.get("_owninguser_value") in people]
 
@@ -460,28 +536,29 @@ def _ratio(n, d):
     return None if n is None or not d else n / d
 
 
-def finish(raw: dict) -> dict:
+def finish(raw: dict, measures: list | None = None) -> dict:
     """Fill in ratio measures from a month's (or a period's) raw totals."""
     out = dict(raw)
-    for key, _l, _s, _lv, _u, rule in MEASURES:
+    for key, _l, _s, _lv, _u, rule in (measures or MEASURES):
         if isinstance(rule, tuple):
             out[key] = _ratio(raw.get(rule[1]), raw.get(rule[2]))
     return out
 
 
-def period(months: list) -> dict:
+def period(months: list, measures: list | None = None) -> dict:
     """
     A quarter or half-year column from its months (only those that have
     happened). Monthly average for most measures, as the sheets' "Q1 Avg";
     summed where the rule says so; ratios worked from the totals.
     """
+    measures = measures or MEASURES
     months = [m for m in months if m]
     if not months:
         return {}
     keys = set().union(*months)
     totals = {k: sum((m.get(k) or 0) for m in months) for k in keys}
     out = {}
-    for key, _l, _s, _lv, _u, rule in MEASURES:
+    for key, _l, _s, _lv, _u, rule in measures:
         if rule == "sum":
             # A period where nothing was recorded is blank, not zero
             has = any(m.get(key) is not None for m in months)
@@ -493,7 +570,7 @@ def period(months: list) -> dict:
         if k.startswith("_"):
             out[k] = totals[k]
     # Ratios use the period's totals, not an average of the monthly ratios
-    for key, _l, _s, _lv, _u, rule in MEASURES:
+    for key, _l, _s, _lv, _u, rule in measures:
         if isinstance(rule, tuple):
             out[key] = _ratio(totals.get(rule[1]), totals.get(rule[2]))
     return out
@@ -511,7 +588,11 @@ PERIODS = [("Q1", (1, 2, 3)), ("Q2", (4, 5, 6)), ("H1", (1, 2, 3, 4, 5, 6)),
 DESKS = {
     # desk -> (territory, director's email)
     "London Contract": ("London Contract", "jonny@saragossa.io"),
+    # Jonny's "Perm Performance" sheet: Emily, Harry Snozwell, Ayman, Rachel
+    # and whoever joins the desk (Jason, Oct 2026)
+    "London Perm": ("London", "jonny@saragossa.io"),
 }
+DESK_KIND = {"London Contract": "contract", "London Perm": "perm"}
 DESK_KEY = "desk:{desk}"           # crbb7_mbrtarget user id for desk-level inputs
 
 
@@ -531,6 +612,7 @@ def fetch_year(desk: str, year: int, today: date | None = None) -> dict:
     today = today or date.today()
     territory, director_email = DESKS[desk]
     tid = TERRITORY_IDS[territory]
+    kind = DESK_KIND.get(desk, "contract")
     # The generic house account owns work but isn't a person on the desk;
     # its contracts still belong to the desk's book.
     on_desk = odata_get_all("systemusers", params={
@@ -548,17 +630,29 @@ def fetch_year(desk: str, year: int, today: date | None = None) -> dict:
     y0, y1, y2 = f"{year}-01-01", f"{year + 1}-01-01", f"{year + 1}-02-01"
 
     roles = " or ".join(_or(f, book_owners) for f in ROLE_FIELDS)
-    q = {
-        "placements": ("crimson_placements", {
+    placements = ("crimson_placements", {
+        "$select": ("crimson_placementid,crimson_name,crimson_placementidcode,crimson_extension,"
+                    "crimson_startdate,crimson_enddate,crimson_actualenddate,createdon,statuscode,"
+                    "recruit_trueweeklygrossprofit,mercury_marginpercent,mercury_ismarginonly,"
+                    "_crimson_clientname_value,"
+                    "_crimson_vacancy_value,_mercury_extendedplacementid_value," + ",".join(ROLE_FIELDS)),
+        "$filter": (f"(crimson_type eq 143570001 or crimson_type eq 143570002) and ({roles})"
+                    f" and (crimson_enddate ge {y0} or createdon ge {y0})"
+                    f" and crimson_startdate lt {y2}"),
+        "$expand": "recruit_trueweeklygrossprofitcurrency($select=isocurrencycode)"})
+    if kind == "perm":
+        # Perm placements made or starting in the year, with their fee
+        placements = ("crimson_placements", {
             "$select": ("crimson_placementid,crimson_name,crimson_placementidcode,crimson_extension,"
-                        "crimson_startdate,crimson_enddate,crimson_actualenddate,createdon,statuscode,"
-                        "recruit_trueweeklygrossprofit,mercury_marginpercent,mercury_ismarginonly,"
-                        "_crimson_clientname_value,"
-                        "_crimson_vacancy_value,_mercury_extendedplacementid_value," + ",".join(ROLE_FIELDS)),
-            "$filter": (f"(crimson_type eq 143570001 or crimson_type eq 143570002) and ({roles})"
-                        f" and (crimson_enddate ge {y0} or createdon ge {y0})"
-                        f" and crimson_startdate lt {y2}"),
-            "$expand": "recruit_trueweeklygrossprofitcurrency($select=isocurrencycode)"}),
+                        "crimson_startdate,createdon,statuscode,recruit_truegrossprofit,"
+                        "crimson_permanentfeepercent,_crimson_clientname_value,_crimson_vacancy_value,"
+                        + ",".join(ROLE_FIELDS)),
+            "$filter": (f"crimson_type eq 143570000 and ({roles})"
+                        f" and (createdon ge {y0} or crimson_startdate ge {y0})"
+                        f" and createdon lt {y2}"),
+            "$expand": "recruit_truegrossprofitcurrency($select=isocurrencycode)"})
+    q = {
+        "placements": placements,
         "shortlists": ("crimson_vacancycandidates", {
             "$select": ("crimson_vacancycandidateid,_owninguser_value,_crimson_vacancyid_value,"
                         "_crimson_clientid_value,new_statussubmitteddate,mercury_firstinterviewdate,"
@@ -663,6 +757,7 @@ def fetch_year(desk: str, year: int, today: date | None = None) -> dict:
     data["director"] = director
     data["book"] = set(book_owners)
     data["fx"] = fx
+    data["kind"] = kind
     return data
 
 
@@ -678,20 +773,21 @@ def build_year(desk: str, year: int, today: date | None = None, data: dict | Non
     inputs = inputs or {}
     through = 12 if year < today.year else today.month
     team_ids = {p["uid"] for p in data["people"]}
+    sp = spec_for(desk)
 
     def one(people, director=None, desk_inputs=False, book=None):
         months = {}
         for m in range(1, through + 1):
             raw = compute(people, year, m, data, data["fx"], director, book)
             if desk_inputs:
-                for k in TYPED + IMPORTED:
+                for k in sp.typed + sp.imported:
                     raw[k] = inputs.get(f"{k}:{year}-{m:02d}")
-            months[m] = finish(raw)
+            months[m] = finish(raw, sp.measures)
         cols = {f"P{m}": months[m] for m in months}
         for name, ms in PERIODS:
             got = [months[m] for m in ms if m in months]
             if got:
-                cols[name] = period(got)
+                cols[name] = period(got, sp.measures)
         return cols
 
     team = one(team_ids, data["director"], desk_inputs=True, book=data.get("book"))
@@ -700,7 +796,7 @@ def build_year(desk: str, year: int, today: date | None = None, data: dict | Non
     return {"desk": desk, "year": year, "through": through, "team": team,
             "consultants": sorted(consultants, key=lambda c: (not c["active"], c["name"])),
             "measures": [{"key": k, "label": lb, "section": s, "level": lv, "unit": u}
-                         for k, lb, s, lv, u, _r in MEASURES]}
+                         for k, lb, s, lv, u, _r in sp.measures]}
 
 
 # ── One view at a time, for the page ──────────────────────────────────────────
@@ -740,6 +836,7 @@ def build_view(desk: str, year: int, view: str, inputs: dict, today: date | None
         raise KeyError(view)
     people = team_ids if is_team else {view}
     snapshots = snapshots or {}
+    sp = spec_for(desk)            # the desk's own measures: contract or perm
 
     months, estimate, frozen = {}, {}, {}
     for m in range(1, through + 1):
@@ -752,10 +849,10 @@ def build_view(desk: str, year: int, view: str, inputs: dict, today: date | None
                           data["director"] if is_team else None,
                           data.get("book") if is_team else None)
         if is_team:
-            for k in DESK_INPUTS:
+            for k in sp.desk_inputs:
                 estimate[(k, f"P{m}")] = raw.get(k)          # Mercury's own figure, as a guide
                 raw[k] = inputs.get(f"{k}:{year}-{m:02d}")
-        months[m] = finish(raw)
+        months[m] = finish(raw, sp.measures)
     cols = {f"P{m}": months[m] for m in months}
 
     def typed_ratios(name, got):
@@ -763,20 +860,20 @@ def build_view(desk: str, year: int, view: str, inputs: dict, today: date | None
         # is the period's total (not its monthly average): Q1 GP per fee
         # earner is Q1's GP over Q1's person-months.
         def total(k):
-            if k in DESK_INPUTS:
+            if k in sp.desk_inputs:
                 return cols[name].get(k)
             vals = [mo.get(k) for mo in got if mo.get(k) is not None]
             return sum(vals) if vals else None
-        for key, _l, _s, _lv, _u, rule in MEASURES:
-            if isinstance(rule, tuple) and (rule[1] in DESK_INPUTS or rule[2] in DESK_INPUTS):
+        for key, _l, _s, _lv, _u, rule in sp.measures:
+            if isinstance(rule, tuple) and (rule[1] in sp.desk_inputs or rule[2] in sp.desk_inputs):
                 cols[name][key] = _ratio(total(rule[1]), total(rule[2]))
 
     for name, ms in PERIODS:
         got = [months[m] for m in ms if m in months]
         if got:
-            cols[name] = period(got)
+            cols[name] = period(got, sp.measures)
             if is_team:
-                for k in DESK_INPUTS:
+                for k in sp.desk_inputs:
                     estimate[(k, name)] = cols[name].get(k)
                     cols[name][k] = inputs.get(f"{k}:{year}-{name}")
                 typed_ratios(name, got)
@@ -784,11 +881,11 @@ def build_view(desk: str, year: int, view: str, inputs: dict, today: date | None
     # Year to date, over every month so far. Typed rows follow their typed
     # months (GP summed, budgets and carried-in averaged) and aren't typed here.
     got = [months[m] for m in sorted(months)]
-    cols["YTD"] = period(got)
+    cols["YTD"] = period(got, sp.measures)
     if is_team:
-        for k in DESK_INPUTS:
+        for k in sp.desk_inputs:
             vals = [mo.get(k) for mo in got if mo.get(k) is not None]
-            rule = MEASURE[k][5]
+            rule = sp.measure[k][5]
             cols["YTD"][k] = (sum(vals) if rule == "sum" else sum(vals) / len(vals)) if vals else None
         typed_ratios("YTD", got)
     if is_team:
@@ -807,12 +904,13 @@ def build_view(desk: str, year: int, view: str, inputs: dict, today: date | None
         # Months shown as frozen at 23:59 on their last day, and when
         "frozen": frozen,
         "columns": [c for c in COLUMN_ORDER if c in cols],
-        "values": {c: {k: cols[c].get(k) for k, *_ in MEASURES} for c in cols},
+        "kind": sp.kind,
+        "values": {c: {k: cols[c].get(k) for k, *_ in sp.measures} for c in cols},
         "measures": [{"key": k, "label": lb, "section": sec, "unit": u,
-                      "input": is_team and k in DESK_INPUTS,
-                      "tone": TONE.get(k) if is_team else None,
+                      "input": is_team and k in sp.desk_inputs,
+                      "tone": sp.tone.get(k) if is_team else None,
                       "estimate": (k == "headcount") or (not is_team and k.startswith("carried_"))}
-                     for k, lb, sec, lv, u, _r in MEASURES if lv in shown],
+                     for k, lb, sec, lv, u, _r in sp.measures if lv in shown],
         # Mercury's figure for each typed cell, shown greyed when it's empty
         "estimates": {f"{k}|{c}": v for (k, c), v in estimate.items() if v is not None},
         "people": [{"uid": p["uid"], "name": p["name"], "active": p["active"]}

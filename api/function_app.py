@@ -1149,7 +1149,9 @@ def performance_stats(req: func.HttpRequest) -> func.HttpResponse:
 # doesn't need one, and London Perm is no longer reviewed this way. Applied
 # inside the visibility check, so the home page, the MBR page's person list
 # and saving all agree.
-MBR_EXCLUDED_DESKS = {"Cameron Scott", "London Perm"}
+# London Perm came back (Jason, Oct 2026): Jonny reviews it on his own sheet's
+# layout, as the London Contract one — see shared/mbr_contract.DESKS.
+MBR_EXCLUDED_DESKS = {"Cameron Scott"}
 
 
 def _mbr_visible_people(email: str):
@@ -1300,10 +1302,13 @@ def _home_sections(email: str) -> list:
     # Someone on no desk, seeing only themselves (finance, ops) would get an
     # empty MBR of their own — so the section only appears where there is a
     # desk to review.
-    desks = sorted({d for d in (_mbr_desk(p) for p in mbr_people) if d})
+    from shared.mbr_contract import DESKS as CONTRACT_DESKS
+    desks = {d for d in (_mbr_desk(p) for p in mbr_people) if d}
+    # A desk's director always has its MBR, whatever the grants table says
+    desks |= {d for d, (_t, director) in CONTRACT_DESKS.items() if (email or "").lower() == director}
+    desks = sorted(desks)
     if desks:
         # Desks with their own MBR template open it; the rest use the perm MBR
-        from shared.mbr_contract import DESKS as CONTRACT_DESKS
         out.append(section("mbr", pills=[{"label": d, "href": (
             f"/mbr-contract?desk={quote(d)}" if d in CONTRACT_DESKS else f"/mbr?desk={quote(d)}")}
             for d in desks]))
@@ -1368,7 +1373,7 @@ def mbr_contract(req: func.HttpRequest) -> func.HttpResponse:
     if err:
         return err
     from shared.dataverse import get_mbr_targets, upsert_mbr_targets
-    from shared.mbr_contract import DESK_INPUTS, DESK_KEY, DESKS, build_view
+    from shared.mbr_contract import DESK_KEY, DESKS, build_view, spec_for
     try:
         body = req.get_json() if req.method == "POST" else {}
     except ValueError:
@@ -1388,7 +1393,7 @@ def mbr_contract(req: func.HttpRequest) -> func.HttpResponse:
             if not can_edit:
                 return func.HttpResponse(json.dumps({"ok": False, "error": "forbidden"}),
                                          mimetype="application/json", status_code=403)
-            allowed = set(DESK_INPUTS)
+            allowed = set(spec_for(desk).desk_inputs)        # this desk's own typed rows
             clean = {}
             for k, v in ((body or {}).get("values") or {}).items():
                 name, _, ym = str(k).partition(":")
@@ -1432,7 +1437,14 @@ def mbr_contract(req: func.HttpRequest) -> func.HttpResponse:
         if req.params.get("format") == "xlsx":
             # The same view, as Jonny's own workbook — same access, same figures
             from shared import mbr_export
-            if view == "team":
+            if out.get("kind") == "perm":
+                # Jonny's Perm Performance sheet is a desk sheet; there's no
+                # consultant workbook for perm
+                if view != "team":
+                    return _bad_request("no consultant workbook for a perm desk")
+                body = mbr_export.director_perm(out)
+                name = f"{year} Director MBR - {desk}.xlsx"
+            elif view == "team":
                 people = [p for p in out["people"] if p["active"]]
                 body = mbr_export.director(out, [
                     (p["name"], build_view(desk, year, p["uid"], {},

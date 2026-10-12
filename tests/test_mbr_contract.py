@@ -242,3 +242,52 @@ def test_an_empty_typed_cell_offers_mercurys_figure_as_a_guide():
     v = M.build_view("London Contract", 2026, "team", {}, today=date(2026, 3, 15), data=d)
     assert v["values"]["P3"]["carried_a"] is None                # nothing typed
     assert v["estimates"]["carried_a|P3"] == 1                   # Mercury's guess, shown greyed
+
+
+# ── London Perm (Oct 2026): Jonny's Perm Performance sheet ────────────────────
+
+def perm(pid, start, created, fee=20000.0, pct=20.0, roles=(A, A, A)):
+    p = pl(pid, f"{pid}/00/01", start, start, created=created, roles=roles)
+    p.update({"recruit_truegrossprofit": fee, "crimson_permanentfeepercent": pct,
+              "recruit_truegrossprofitcurrency": {"isocurrencycode": "GBP"}})
+    return p
+
+
+def run_perm(placements, month=3):
+    d = data(placements=placements, kind="perm")
+    return M.finish(M.compute({A}, 2026, month, d, GBP, J, None), M.PERM_MEASURES)
+
+
+def test_deals_started_go_by_start_date_and_deals_made_by_when_made():
+    out = run_perm([perm("p1", "2026-03-09", "2026-01-20"),     # made Jan, starts Mar
+                    perm("p2", "2026-05-04", "2026-03-11")])    # made Mar, starts May
+    assert out["deals_started"] == 1 and out["deals"] == 1
+
+
+def test_fees_split_like_the_weekly_report_and_deals_by_placement_credit():
+    # Alice is Consultant on a three-way deal: half a deal, a third of the fee
+    out = run_perm([perm("p1", "2026-06-01", "2026-03-11", fee=30000, roles=("x", A, "y"))])
+    assert out["deals"] == 0.5 and out["fees"] == 10000
+    assert out["fee_avg"] == 20000                                # fees per deal credited
+
+
+def test_nfi_guide_is_fees_on_placements_starting_in_the_month():
+    out = run_perm([perm("p1", "2026-03-09", "2026-01-20", fee=18000),
+                    perm("p2", "2026-04-06", "2026-03-02", fee=50000)])
+    assert out["gp_month"] == 18000
+
+
+def test_average_fee_percent_of_deals_made():
+    out = run_perm([perm("p1", "2026-05-01", "2026-03-02", pct=20.0),
+                    perm("p2", "2026-05-01", "2026-03-20", pct=25.0)])
+    assert out["fee_pct_avg"] == pytest.approx(0.225)
+
+
+def test_the_perm_desk_has_its_own_rows_and_typed_inputs():
+    keys = [m[0] for m in M.PERM_MEASURES]
+    assert keys[:8] == ["gp_month", "gp_budget", "gp_achievement", "gp_per_head",
+                        "gp_per_head_budget", "deals_started", "deals_started_budget", "headcount"]
+    assert "runners" not in keys and "wgp_running" not in keys
+    assert M.spec_for("London Perm").desk_inputs == ("gp_month", "gp_budget", "gp_per_head_budget",
+                                                       "deals_started_budget", "carried_a", "carried_b")
+    assert M.DESKS["London Perm"] == ("London", "jonny@saragossa.io")

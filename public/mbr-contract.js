@@ -186,7 +186,21 @@ function scorecard() {
   wrap.className = "cmbr-score";
   wrap.setAttribute("aria-label", `${LONG[monthOf(c) - 1]} at a glance`);
 
-  const tiles = d.view === "team" ? [
+  const tiles = d.kind === "perm" ? (d.view === "team" ? [
+    { key: "gp_month", label: "NFI", budget: "gp_budget", ach: "gp_achievement" },
+    { key: "deals_started", label: "Deals started", budget: "deals_started_budget", unit: "count" },
+    { key: "deals", label: "Deals made", sub: "fees", subLabel: "in fees" },
+    { key: "fee_avg", label: "Average fee", sub: "fee_pct_avg", subLabel: "average fee %" },
+    { key: "interviews", label: "Interviews", sub: "cvs", subLabel: "CVs sent" },
+    { key: "client_meetings", label: "Client meetings", sub: "bd_calls", subLabel: "BD calls" },
+  ] : [
+    { key: "deals_started", label: "Deals started" },
+    { key: "deals", label: "Deals made", sub: "fees", subLabel: "in fees" },
+    { key: "interviews", label: "Interviews", sub: "interviews_first", subLabel: "first interviews" },
+    { key: "cvs", label: "CVs sent", sub: "jobs_with_iv", subLabel: "jobs with interviews" },
+    { key: "client_meetings", label: "Client meetings", sub: "bd_calls", subLabel: "BD calls" },
+    { key: "jobs_added", label: "Jobs added", sub: "jobs_a", subLabel: "A jobs" },
+  ]) : d.view === "team" ? [
     { key: "gp_month", label: "GP", budget: "gp_budget", ach: "gp_achievement" },
     { key: "runners_split", label: "Runners out", budget: "runners_budget", unit: "count" },
     { key: "wgp_running", label: "Running WGP", sub: "runners", subLabel: "contractors" },
@@ -353,14 +367,17 @@ function gridCard() {
 
   // The same figures as Jonny's own workbook: the Director sheet for the team,
   // the consultant sheet for a person
-  const xl = document.createElement("a");
-  xl.className = "cmbr-btn-quiet";
-  xl.textContent = "Download Excel";
-  xl.title = d.view === "team" ? "As the Director MBR spreadsheet" : "As the consultant MBR spreadsheet";
-  xl.href = "/api/mbr-contract?" + new URLSearchParams(
-    { desk: d.desk, year: d.year, view: d.view, format: "xlsx" }).toString();
-  xl.setAttribute("download", "");
-  tools.appendChild(xl);
+  // A perm desk has only the Director sheet (Perm Performance), no consultant one
+  if (d.kind !== "perm" || d.view === "team") {
+    const xl = document.createElement("a");
+    xl.className = "cmbr-btn-quiet";
+    xl.textContent = "Download Excel";
+    xl.title = d.view === "team" ? "As the Director MBR spreadsheet" : "As the consultant MBR spreadsheet";
+    xl.href = "/api/mbr-contract?" + new URLSearchParams(
+      { desk: d.desk, year: d.year, view: d.view, format: "xlsx" }).toString();
+    xl.setAttribute("download", "");
+    tools.appendChild(xl);
+  }
 
   if (d.view === "team" && d.can_edit) {
     const edit = document.createElement("button");
@@ -475,7 +492,10 @@ function legend() {
   add("is-focus", `${LONG[monthOf(state.focus) - 1]} (reviewing)`);
   const note = document.createElement("span");
   note.className = "cmbr-legend-note";
-  note.textContent = "Money is weekly gross profit (WGP) in GBP. Quarter and half-year columns are monthly averages; ratios use each period's totals." +
+  note.textContent = (data.kind === "perm"
+      ? "Money is perm fees in GBP; NFI is typed, with Mercury's fees for placements starting that month as the guide. "
+      : "Money is weekly gross profit (WGP) in GBP. ") +
+    "Quarter and half-year columns are monthly averages (NFI and GP are totals); ratios use each period's totals." +
     (Object.keys(data.frozen || {}).length
       ? " Months marked “month end” are Mercury's figures as they stood at 23:59 on their last day."
       : " From October, each month is frozen at 23:59 on its last day; until then a month shows Mercury as it is now.");

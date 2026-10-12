@@ -115,8 +115,49 @@ CONSULTANT_ROWS = {
     76: ("New customers w/ meetings booked i.e. no live runners on site", "new_customers_meetings"),
 }
 
+# Director sheet, "Perm Performance" — the London Perm desk (Oct 2026)
+PERM_ROWS = {
+    2: ("NFI (Month)", "gp_month"),
+    3: ("NFI (Budget)", "gp_budget"),
+    6: ("NFI per fee earner (budget)", "gp_per_head_budget"),
+    7: ("Deals started", "deals_started"),
+    8: ("Deals started (budget)", "deals_started_budget"),
+    9: ("HC", "headcount"),
+    12: ("Number of deals", "deals"),
+    13: ("Total fees", "fees"),
+    17: ("Average margin of new deals", "fee_pct_avg"),
+    18: ("Number of clients placed with", "clients_placed"),
+    21: ("Number of interviews", "interviews"),
+    22: ("Number of unique interviews", "interviews_first"),
+    23: ("Number of JMIs", "jmis"),
+    27: ("Number of jobs w/ IV", "jobs_with_iv"),
+    28: ("Number of clients w/ IV", "clients_with_iv"),
+    29: ("CV Submissions", "cvs"),
+    32: ("A jobs", "jobs_a"),
+    33: ("B jobs", "jobs_b"),
+    34: ("C jobs", "jobs_c"),
+    36: ("Number of clients with jobs", "clients_with_jobs"),
+    44: ("F jobs", "jobs_f"),
+    45: ("P jobs", "jobs_p"),
+    48: ("Jobs filled A", "filled_a"),
+    49: ("Jobs filled B", "filled_b"),
+    54: ("A jobs carried into period", "carried_a"),
+    55: ("B jobs carried into period", "carried_b"),
+    59: ("Client meetings", "client_meetings"),
+    63: ("Candidate calls", "candidate_calls"),
+    64: ("Contractor leads pulled", "contractor_leads"),
+    65: ("Manager referral names pulled", "manager_referrals"),
+    68: ("BD calls", "bd_calls"),
+    69: ("Pitch Delivered", "pitches"),
+    71: ("Emails Sent", "bd_emails"),
+    74: ("New customers w/ placements done", "new_customers_placed"),
+    75: ("New customers w/ A,B,C,F,P jobs added", "new_customers_jobs"),
+    76: ("New customers w/ meetings booked", "new_customers_meetings"),
+}
+
 # Sheet parts inside each template
 DIRECTOR_PERF, DIRECTOR_WGP = "xl/worksheets/sheet1.xml", "xl/worksheets/sheet3.xml"
+DIRECTOR_PERM = "xl/worksheets/sheet2.xml"
 CONSULTANT_PERF, CONSULTANT_WGP = "xl/worksheets/sheet1.xml", "xl/worksheets/sheet2.xml"
 
 
@@ -152,6 +193,14 @@ def director(team: dict, consultants: list) -> bytes:
     src = (TEMPLATES / "mbr_director.xlsx").read_bytes()
     return X.rewrite(src, {DIRECTOR_PERF: _edit(_month_cells(team, DIRECTOR_ROWS)),
                            DIRECTOR_WGP: _edit(tracker),
+                           "xl/workbook.xml": X.recalc_on_open})
+
+
+def director_perm(team: dict) -> bytes:
+    """The London Perm team view, as the Perm Performance sheet of Jonny's
+    Director workbook."""
+    src = (TEMPLATES / "mbr_director.xlsx").read_bytes()
+    return X.rewrite(src, {DIRECTOR_PERM: _edit(_month_cells(team, PERM_ROWS)),
                            "xl/workbook.xml": X.recalc_on_open})
 
 
