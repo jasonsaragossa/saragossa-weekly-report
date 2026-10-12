@@ -102,6 +102,23 @@ def _compact(raw: dict) -> dict:
     return {k: (round(v, 4) if isinstance(v, float) else v) for k, v in raw.items()}
 
 
+def open_jobs(data: dict, people: set) -> dict:
+    """
+    Graded jobs (A, B, C, O) these people deliver that are open right now.
+    Taken at 23:59 on the last day, it is exactly what is carried into the next
+    month — the figure Mercury can't rebuild afterwards, since only about half
+    of closed jobs record when they closed (Jason, Oct 2026).
+    """
+    from shared.mbr_contract import CARRIED_GRADES, GRADES
+    out = {f"_open_end_{g.lower()}": 0 for g in CARRIED_GRADES}
+    for v in data.get("vacancies") or []:
+        g = GRADES.get(v.get("_mercury_vacancytype_value"))
+        if g in CARRIED_GRADES and v.get("statecode") == 0 \
+                and v.get("_crimson_deliveryownerid_value") in people:
+            out[f"_open_end_{g.lower()}"] += 1
+    return out
+
+
 def take(desk: str, year: int, month: int, late: bool = False, now_utc: datetime | None = None) -> dict:
     """Work out the month as Mercury has it now, and freeze it. Returns a summary."""
     from shared.mbr_contract import compute, fetch_year
@@ -113,6 +130,7 @@ def take(desk: str, year: int, month: int, late: bool = False, now_utc: datetime
     views += [(uid, {uid}, None, None) for uid in sorted(team_ids)]
     for view, people, director, book in views:
         raw = compute(people, year, month, data, data["fx"], director, book)
+        raw.update(open_jobs(data, people))
         _store(desk, view, year, month, {"taken_at": taken, "late": late, "raw": _compact(raw)})
     return {"desk": desk, "year": year, "month": month, "views": len(views), "late": late,
             "taken_at": taken}

@@ -47,7 +47,10 @@ GRADES = {
     "758d799d-96c6-ee11-9079-002248c7244c": "F",
     "ee8d799d-96c6-ee11-9079-002248c7244c": "P",
     "3e2642d0-9767-ee11-9ae6-002248c7244c": "S",          # Speculative
+    "14edf4cb-038a-ef11-8a69-7c1e5264b0c2": "O",
 }
+# Graded jobs that count as carried into a month (Jason, Oct 2026: A, B, C or O)
+CARRIED_GRADES = ("A", "B", "C", "O")
 TERMINATED = {143570007, 143570008}   # contractor / client served notice
 
 BD_FOLLOW_UP = "cca8257a-2895-ee11-be37-002248c7244c"
@@ -175,19 +178,19 @@ MEASURES = [
 MEASURE = {m[0]: m for m in MEASURES}
 
 # ── London Perm (Oct 2026) ────────────────────────────────────────────────────
-# Jonny's "Perm Performance" sheet, row for row. Money is perm fees in GBP;
-# NFI for the month is typed by Jonny with Mercury's fees (placements starting
-# in the month, split-credited) shown greyed as a guide. "Deals started" go by
-# start date, "Number of deals" by when they were made; both use placement
-# credit. Interviews, jobs, meetings, activity and customers are the contract
+# Jonny's "Perm Performance" sheet, row for row. Money is perm fees in GBP.
+# GP for the month comes from Mercury, not typed: fees on placements STARTING
+# in the month, split between the desk's people (Jason, Oct 2026 — "it should
+# be GP, not NFI"). "Deals started" go by start date, "Number of deals" by when
+# they were made; both use placement credit (0.5 Consultant, 0.5 AO). Interviews, jobs, meetings, activity and customers are the contract
 # desk's own measures, which don't depend on the kind of placement.
 _SHARED_SECTIONS = ("Interviews", "Jobs", "Meetings", "Activity", "Customers")
 PERM_MEASURES = [
-    ("gp_month", "NFI (month)", "Targets", "team", "money", "sum"),
-    ("gp_budget", "NFI budget", "Targets", "team", "money", "sum"),
+    ("gp_month", "GP (month)", "Targets", "both", "money", "sum"),
+    ("gp_budget", "GP budget", "Targets", "team", "money", "sum"),
     ("gp_achievement", "% achievement", "Targets", "team", "pct", ("ratio", "gp_month", "gp_budget")),
-    ("gp_per_head", "NFI per fee earner", "Targets", "team", "money", ("ratio", "gp_month", "headcount")),
-    ("gp_per_head_budget", "NFI per fee earner budget", "Targets", "team", "money", "avg"),
+    ("gp_per_head", "GP per fee earner", "Targets", "team", "money", ("ratio", "gp_month", "headcount")),
+    ("gp_per_head_budget", "GP per fee earner budget", "Targets", "team", "money", "avg"),
     ("deals_started", "Deals started", "Targets", "both", "count", "avg"),
     ("deals_started_budget", "Deals started budget", "Targets", "team", "count", "avg"),
     ("headcount", "Headcount", "Targets", "team", "count", "avg"),
@@ -205,6 +208,13 @@ PERM_MEASURES = [
      # director's-own meetings
      and m[0] not in ("filled_a", "filled_b", "filled_c", "filled_c_share",
                       "c_jobs_per_placement", "client_meetings_own")]
+# Jobs carried in on the perm desk: A and B typed by Jonny (his sheet's rows),
+# C and O from Mercury, and the total across all four
+for _i, _m in enumerate(PERM_MEASURES):
+    if _m[0] == "carried_c":
+        PERM_MEASURES[_i] = ("carried_c", "C jobs carried into month", "Jobs", "both", "count", "avg")
+        PERM_MEASURES.insert(_i + 1, ("carried_o", "O jobs carried into month", "Jobs", "both", "count", "avg"))
+        break
 PERM_MEASURE = {m[0]: m for m in PERM_MEASURES}
 PERM_IMPORTED = ("gp_budget", "gp_per_head_budget", "deals_started_budget")
 
@@ -219,7 +229,8 @@ DESK_INPUTS = TYPED + IMPORTED + ("carried_a", "carried_b")
 TONE = {"gp_month": "actual", "runners_split": "actual", "gp_per_head": "actual",
         "gp_budget": "budget", "gp_achievement": "budget", "runners_budget": "budget",
         "gp_per_head_budget": "budget"}
-PERM_DESK_INPUTS = TYPED + PERM_IMPORTED + ("carried_a", "carried_b")
+# GP isn't typed on the perm desk — Mercury's figure stands
+PERM_DESK_INPUTS = PERM_IMPORTED + ("carried_a", "carried_b")
 PERM_TONE = {"gp_month": "actual", "gp_per_head": "actual", "deals_started": "actual",
              "gp_budget": "budget", "gp_achievement": "budget", "gp_per_head_budget": "budget",
              "deals_started_budget": "budget"}
@@ -227,15 +238,15 @@ PERM_TONE = {"gp_month": "actual", "gp_per_head": "actual", "deals_started": "ac
 
 class _Spec:
     """What differs between a contract desk and a perm desk."""
-    def __init__(self, kind, measures, imported, desk_inputs, tone):
+    def __init__(self, kind, measures, imported, desk_inputs, tone, typed):
         self.kind, self.measures, self.imported = kind, measures, imported
         self.measure = {m[0]: m for m in measures}
-        self.desk_inputs, self.tone, self.typed = desk_inputs, tone, TYPED
+        self.desk_inputs, self.tone, self.typed = desk_inputs, tone, typed
 
 
 SPECS = {
-    "contract": _Spec("contract", MEASURES, IMPORTED, DESK_INPUTS, TONE),
-    "perm": _Spec("perm", PERM_MEASURES, PERM_IMPORTED, PERM_DESK_INPUTS, PERM_TONE),
+    "contract": _Spec("contract", MEASURES, IMPORTED, DESK_INPUTS, TONE, TYPED),
+    "perm": _Spec("perm", PERM_MEASURES, PERM_IMPORTED, PERM_DESK_INPUTS, PERM_TONE, ()),
 }
 
 
@@ -405,8 +416,7 @@ def compute(people: set, year: int, month: int, data: dict, fx: dict,
             return (p.get("recruit_truegrossprofit") or 0.0) * fx.get(ccy, 1.0)
         started = [p for p in contracts if (s := _d(p.get("crimson_startdate"))) and m_start <= s < m_end]
         out["deals_started"] = round(sum(_credit(p, book) for p in started), 2)
-        # NFI is typed by Jonny; this is Mercury's figure, shown as his guide:
-        # fees on placements starting in the month
+        # GP: fees on placements starting in the month, split
         out["gp_month"] = round(sum(fee(p) * _share(p, book) for p in started), 2)
         out["fees"] = round(sum(fee(p) * _share(p, book) for p in deals), 2)
         out["_deal_credit"] = out["deals"]
@@ -462,18 +472,20 @@ def compute(people: set, year: int, month: int, data: dict, fx: dict,
     # only about half of closed jobs (crbb7_closedon, else recruit_closeddate);
     # without one, a job counts as open until it was last changed. Marked as
     # an estimate on the page.
-    for g in "abc":
+    for g in "abco":
         out[f"carried_{g}"] = 0
     for v in mine:
         g = GRADES.get(v.get("_mercury_vacancytype_value"))
         created = _d(v.get("createdon"))
-        if g not in ("A", "B", "C") or not created or created >= m_start:
+        if g not in CARRIED_GRADES or not created or created >= m_start:
             continue
         closed_by = None if v.get("statecode") == 0 else (
             _d(v.get("crbb7_closedon")) or _d(v.get("recruit_closeddate")) or _d(v.get("modifiedon")))
         if closed_by is None or closed_by >= m_start:
             out[f"carried_{g.lower()}"] += 1
     out["carried_total"] = out["carried_a"] + out["carried_b"] + out["carried_c"]
+    if data.get("kind") == "perm":
+        out["carried_total"] += out["carried_o"]
 
     # Activity, owned by the people
     calls = [c for c in data["calls"] if c.get("_ownerid_value") in people
@@ -752,8 +764,13 @@ def fetch_year(desk: str, year: int, today: date | None = None) -> dict:
         presence[uid] = [(since, until)]
     data["presence"] = presence
 
+    # The desk is whoever was on it at some point this year: today's team and
+    # anyone who left part-way through. Leavers from earlier years drop off —
+    # London Perm listed sixteen of them (Jason, Oct 2026).
+    year_start = date(year, 1, 1)
     data["people"] = [{"uid": c["systemuserid"], "name": c.get("fullname", ""),
-                       "active": not c.get("isdisabled")} for c in members]
+                       "active": not c.get("isdisabled")} for c in members
+                      if any(until >= year_start for _since, until in presence.get(c["systemuserid"], []))]
     data["director"] = director
     data["book"] = set(book_owners)
     data["fx"] = fx
@@ -848,6 +865,16 @@ def build_view(desk: str, year: int, view: str, inputs: dict, today: date | None
             raw = compute(people, year, m, data, data["fx"],
                           data["director"] if is_team else None,
                           data.get("book") if is_team else None)
+        # Jobs carried in: the jobs open when last month was frozen at 23:59
+        # are exactly what came into this month — better than rebuilding it
+        # from closing dates, which only half of closed jobs carry
+        last = (snapshots.get(m - 1) or {}).get("raw") or {}
+        if "_open_end_a" in last:
+            raw = dict(raw)
+            for g in "abco":
+                raw[f"carried_{g}"] = last.get(f"_open_end_{g}", 0)
+            raw["carried_total"] = raw["carried_a"] + raw["carried_b"] + raw["carried_c"] + (
+                raw["carried_o"] if sp.kind == "perm" else 0)
         if is_team:
             for k in sp.desk_inputs:
                 estimate[(k, f"P{m}")] = raw.get(k)          # Mercury's own figure, as a guide
@@ -892,6 +919,9 @@ def build_view(desk: str, year: int, view: str, inputs: dict, today: date | None
         for c in cols.values():                      # total carried follows its typed parts
             a, b = c.get("carried_a"), c.get("carried_b")
             c["carried_total"] = None if a is None and b is None else (a or 0) + (b or 0)
+            if sp.kind == "perm" and c["carried_total"] is not None:
+                # Perm counts C and O jobs carried in too, from Mercury
+                c["carried_total"] += (c.get("carried_c") or 0) + (c.get("carried_o") or 0)
 
     shown = ("team", "both") if is_team else ("consultant", "both")
     # The month still running is shown, but marked, and isn't the default focus

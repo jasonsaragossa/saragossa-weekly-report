@@ -1437,13 +1437,17 @@ def mbr_contract(req: func.HttpRequest) -> func.HttpResponse:
         if req.params.get("format") == "xlsx":
             # The same view, as Jonny's own workbook — same access, same figures
             from shared import mbr_export
+            # Downloading is for the desk's manager only — never a consultant,
+            # not even their own (Jason, Oct 2026)
+            if not can_team:
+                return func.HttpResponse(json.dumps({"ok": False, "error": "forbidden"}),
+                                         mimetype="application/json", status_code=403)
             if out.get("kind") == "perm":
-                # Jonny's Perm Performance sheet is a desk sheet; there's no
-                # consultant workbook for perm
-                if view != "team":
-                    return _bad_request("no consultant workbook for a perm desk")
+                # The Perm Performance sheet, for the desk or for one of its people
                 body = mbr_export.director_perm(out)
-                name = f"{year} Director MBR - {desk}.xlsx"
+                who = "" if view == "team" else " - " + next(
+                    (p["name"] for p in out["people"] if p["uid"] == view), "Consultant")
+                name = f"{year} Perm MBR - {desk}{who}.xlsx"
             elif view == "team":
                 people = [p for p in out["people"] if p["active"]]
                 body = mbr_export.director(out, [

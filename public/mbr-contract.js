@@ -187,14 +187,14 @@ function scorecard() {
   wrap.setAttribute("aria-label", `${LONG[monthOf(c) - 1]} at a glance`);
 
   const tiles = d.kind === "perm" ? (d.view === "team" ? [
-    { key: "gp_month", label: "NFI", budget: "gp_budget", ach: "gp_achievement" },
+    { key: "gp_month", label: "GP", budget: "gp_budget", ach: "gp_achievement" },
     { key: "deals_started", label: "Deals started", budget: "deals_started_budget", unit: "count" },
     { key: "deals", label: "Deals made", sub: "fees", subLabel: "in fees" },
     { key: "fee_avg", label: "Average fee", sub: "fee_pct_avg", subLabel: "average fee %" },
     { key: "interviews", label: "Interviews", sub: "cvs", subLabel: "CVs sent" },
     { key: "client_meetings", label: "Client meetings", sub: "bd_calls", subLabel: "BD calls" },
   ] : [
-    { key: "deals_started", label: "Deals started" },
+    { key: "gp_month", label: "GP", sub: "deals_started", subLabel: "deals started" },
     { key: "deals", label: "Deals made", sub: "fees", subLabel: "in fees" },
     { key: "interviews", label: "Interviews", sub: "interviews_first", subLabel: "first interviews" },
     { key: "cvs", label: "CVs sent", sub: "jobs_with_iv", subLabel: "jobs with interviews" },
@@ -367,8 +367,8 @@ function gridCard() {
 
   // The same figures as Jonny's own workbook: the Director sheet for the team,
   // the consultant sheet for a person
-  // A perm desk has only the Director sheet (Perm Performance), no consultant one
-  if (d.kind !== "perm" || d.view === "team") {
+  // Downloading is for the desk's manager only, for the team or any of its people
+  if (d.can_team) {
     const xl = document.createElement("a");
     xl.className = "cmbr-btn-quiet";
     xl.textContent = "Download Excel";
@@ -493,9 +493,9 @@ function legend() {
   const note = document.createElement("span");
   note.className = "cmbr-legend-note";
   note.textContent = (data.kind === "perm"
-      ? "Money is perm fees in GBP; NFI is typed, with Mercury's fees for placements starting that month as the guide. "
+      ? "Money is perm fees in GBP. GP is Mercury's fees on placements starting that month, split between the desk's people. "
       : "Money is weekly gross profit (WGP) in GBP. ") +
-    "Quarter and half-year columns are monthly averages (NFI and GP are totals); ratios use each period's totals." +
+    "Quarter and half-year columns are monthly averages (GP is the total); ratios use each period's totals." +
     (Object.keys(data.frozen || {}).length
       ? " Months marked “month end” are Mercury's figures as they stood at 23:59 on their last day."
       : " From October, each month is frozen at 23:59 on its last day; until then a month shows Mercury as it is now.");

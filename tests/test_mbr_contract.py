@@ -271,7 +271,7 @@ def test_fees_split_like_the_weekly_report_and_deals_by_placement_credit():
     assert out["fee_avg"] == 20000                                # fees per deal credited
 
 
-def test_nfi_guide_is_fees_on_placements_starting_in_the_month():
+def test_gp_is_fees_on_placements_starting_in_the_month():
     out = run_perm([perm("p1", "2026-03-09", "2026-01-20", fee=18000),
                     perm("p2", "2026-04-06", "2026-03-02", fee=50000)])
     assert out["gp_month"] == 18000
@@ -288,6 +288,30 @@ def test_the_perm_desk_has_its_own_rows_and_typed_inputs():
     assert keys[:8] == ["gp_month", "gp_budget", "gp_achievement", "gp_per_head",
                         "gp_per_head_budget", "deals_started", "deals_started_budget", "headcount"]
     assert "runners" not in keys and "wgp_running" not in keys
-    assert M.spec_for("London Perm").desk_inputs == ("gp_month", "gp_budget", "gp_per_head_budget",
+    # GP comes from Mercury on the perm desk; budgets and carried-in are typed
+    assert M.spec_for("London Perm").desk_inputs == ("gp_budget", "gp_per_head_budget",
                                                        "deals_started_budget", "carried_a", "carried_b")
+    assert M.PERM_MEASURE["gp_month"][1] == "GP (month)"
     assert M.DESKS["London Perm"] == ("London", "jonny@saragossa.io")
+
+
+def test_perm_gp_is_mercurys_not_typed():
+    """Typed GP is ignored on the perm desk: Mercury's figure stands."""
+    d = data(placements=[perm("p1", "2026-03-09", "2026-01-20", fee=18000)], kind="perm")
+    out = M.build_view("London Perm", 2026, "team", {"gp_month:2026-03": 999},
+                       today=date(2026, 4, 15), data=d)
+    assert out["values"]["P3"]["gp_month"] == 18000
+
+
+def test_jobs_carried_in_come_from_last_months_freeze_when_there_is_one():
+    from shared import mbr_snapshot as S
+    vac = lambda vid, grade, state: {"crimson_vacancyid": vid, "statecode": state,
+                                     "_crimson_deliveryownerid_value": A,
+                                     "_mercury_vacancytype_value": next(k for k, g in M.GRADES.items() if g == grade)}
+    frozen = S.open_jobs({"vacancies": [vac("1", "A", 0), vac("2", "O", 0), vac("3", "B", 1)]}, {A})
+    assert frozen == {"_open_end_a": 1, "_open_end_b": 0, "_open_end_c": 0, "_open_end_o": 1}
+    d = data(kind="perm")
+    out = M.build_view("London Perm", 2026, A, {}, today=date(2026, 4, 15), data=d,
+                       snapshots={2: {"raw": {**M.compute({A}, 2026, 2, d, GBP), **frozen}}})
+    p3 = out["values"]["P3"]
+    assert (p3["carried_a"], p3["carried_o"], p3["carried_total"]) == (1, 1, 2)
