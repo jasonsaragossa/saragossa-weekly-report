@@ -105,3 +105,20 @@ def test_period_cells_and_carried_in_can_be_typed(desk, good):
     desk.update(email="jonny@saragossa.io", team=True, edit=True)
     status, _ = call(method="POST", body={"desk": DESK, "year": 2026, "values": {good: 5}})
     assert status == 200 and desk["saved"][1] == {good: 5.0}
+
+
+def test_the_desks_director_opens_everyone_on_it_whatever_the_grants_say(monkeypatch):
+    """Jonny had the team view but only his own page: his MBR grant didn't
+    name the desk (Oct 2026). Leavers too — the year still has their months."""
+    from shared import dataverse as D
+    tid = D.TERRITORY_IDS["London Contract"]
+    monkeypatch.setattr(F, "_mbr_visible_people", lambda email: ([], False))   # no grant
+    monkeypatch.setattr(D, "get_all_territory_consultants", lambda: [
+        {"systemuserid": LOUIS, "fullname": "Louis", "_territoryid_value": tid},
+        {"systemuserid": JUNAID, "fullname": "Junaid", "_territoryid_value": tid, "isdisabled": True},
+        {"systemuserid": "house", "fullname": "Saragossa House Contract", "_territoryid_value": tid},
+        {"systemuserid": OTHER, "fullname": "Elsewhere", "_territoryid_value": "other-desk"}])
+    visible, team, edit = F._mbr_contract_access("jonny@saragossa.io", DESK)
+    assert visible == {LOUIS, JUNAID} and team and edit
+    visible, team, edit = F._mbr_contract_access("louis@saragossa.io", DESK)
+    assert visible == set() and not team and not edit

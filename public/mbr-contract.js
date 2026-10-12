@@ -24,6 +24,13 @@ const state = {
   collapsed: new Set(),
 };
 let data = null;
+// Feedback (feedback.js) says which desk, view and month is on screen
+window.feedbackContext = () => {
+  const txt = id => { const el = document.getElementById(id);
+    return el && el.selectedIndex >= 0 ? el.options[el.selectedIndex].text : ""; };
+  return [document.getElementById("cmbr-desk").textContent, txt("cmbr-view"),
+          txt("cmbr-month"), txt("cmbr-year")].filter(Boolean).join(", ");
+};
 const dirty = {};
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

@@ -7,6 +7,12 @@
  */
 
 let mbrData = null;
+// Feedback (feedback.js) says whose MBR and which month is on screen
+window.feedbackContext = () => {
+  const sel = document.getElementById("mbr-person");
+  const who = sel && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex].text : "";
+  return [who, document.getElementById("mbr-month").value].filter(Boolean).join(", ");
+};
 let people  = [];
 
 (async () => {

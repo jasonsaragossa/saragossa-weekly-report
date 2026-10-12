@@ -12,7 +12,7 @@
       document.documentElement.classList.add("theme-light"); } catch (e) {}
   </script>
 </head>
-<body>
+<body data-feedback-page="Contract MBR">
 
 <header class="header">
   <a href="/" class="logo-link"><img src="/logo.svg" alt="Saragossa" class="logo"></a>
@@ -33,6 +33,7 @@
       <label class="cmbr-ctl">Who <select id="cmbr-view"></select></label>
       <label class="cmbr-ctl">Month <select id="cmbr-month"></select></label>
       <label class="cmbr-ctl">Year <select id="cmbr-year"></select></label>
+      <span data-feedback-host></span>
     </div>
   </div>
 
@@ -42,6 +43,7 @@
 </main>
 
 <script src="/theme.js"></script>
+<script src="/feedback.js"></script>
 <script src="/nav.js"></script>
 <script src="/mbr-contract.js"></script>
 </body>

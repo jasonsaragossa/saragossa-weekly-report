@@ -1351,6 +1351,13 @@ def _mbr_contract_access(email: str, desk: str):
     lower = (email or "").lower()
     is_director = lower == DESKS[desk][1]
     admin = lower in ONE_TO_ONE_ADMINS
+    if is_director or admin:
+        # The desk's director opens everyone on it, whatever the MBR grants
+        # table says — Jonny had the team view but only his own consultant
+        # page (Oct 2026). Leavers too: the year still shows their months.
+        on_desk = on_desk | {c["systemuserid"] for c in get_all_territory_consultants()
+                             if c.get("_territoryid_value") == tid
+                             and not is_house_account(c.get("fullname"))}
     can_team = is_director or admin or (everyone and everyone <= on_desk)
     return on_desk, bool(can_team), bool(is_director or admin)
 
