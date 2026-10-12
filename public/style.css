@@ -29,9 +29,9 @@
 
 :root {
   --bg:       #111112;
-  --surface:  #151516;
-  --surface2: #1c1c1d;
-  --border:   #2a2a2b;
+  --surface:  #18181b;   /* Client Dashboard panel */
+  --surface2: #1f1f23;   /* its table headers */
+  --border:   #2e2e33;
   --mid:      #747487;
   --light:    #c8c9cc;
   --contrast: #757f6a;
@@ -43,7 +43,7 @@
   --deep:     #0a0a0a;
   --hover:    rgba(255,255,255,.03);
   --tint:     rgba(255,255,255,.02);
-  --hairline: rgba(255,255,255,.05);
+  --hairline: #232326;
   --track:    rgba(255,255,255,.08);
   --ok:       #35a56b;
   --warn:     #d98b8b;
@@ -75,7 +75,16 @@
   --feedback-fg-hover: #ffffff;
   --tab-h:    48px;
   --font:     'Aeonik Pro', -apple-system, BlinkMacSystemFont, sans-serif;
-  --mono:     'SF Mono', 'Fira Code', ui-monospace, monospace;
+  --mono:     'JetBrains Mono', ui-monospace, 'Cascadia Code', 'SF Mono', monospace;
+  /* The Client Dashboard's design system (Oct 2026): secondary text, row
+     shading, bands and quiet buttons */
+  --text-2:   #a6a6b4;
+  --row-alt:  #1b1b1e;
+  --row-hover: #232327;
+  --band:     #26262b;
+  --btn:      #202024;
+  --btn-edge: #3a3a41;
+  --zero:     #4e4e58;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1569,6 +1578,13 @@ select.oto-in { color-scheme: var(--scheme); }
   --feedback-bg-hover: linear-gradient(180deg, rgba(63,109,120,.24), rgba(63,109,120,.14));
   --feedback-fg:       #26525c;
   --feedback-fg-hover: #17343c;
+  --text-2:   #55555f;
+  --row-alt:  #f9f9fa;
+  --row-hover: #f0f0f3;
+  --band:     #ececf0;
+  --btn:      #ffffff;
+  --btn-edge: #b9b9c1;
+  --zero:     #b4b4bb;
 }
 
 /* The logo is white artwork, so it disappears on a light ground. */
@@ -1895,3 +1911,132 @@ a.cmbr-btn-quiet { text-decoration: none; display: inline-flex; align-items: cen
 .oto-typed-row { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 8px; }
 .oto-typed { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--light); }
 .oto-typed .oto-num { width: 64px; }
+
+/* ══ Client Dashboard look (Oct 2026) ══════════════════════════════════════════
+   Jason: match the Client Dashboard's look and feel, without its big headline
+   cards — these pages are about individuals. Same palette, sentence-case
+   headings, readable table headers with row shading and white mono figures,
+   banded group rows, quiet rounded buttons and pills. Colours come from the
+   tokens above, so light mode follows. */
+
+body { font-size: 13.5px; -webkit-font-smoothing: antialiased; }
+
+/* Header bar */
+.header { padding: 10px 20px; min-height: 52px; }
+.settings-link, .logout-link, .theme-toggle {
+  border-radius: 8px; background: var(--btn); border-color: var(--border); color: var(--text-2);
+  font-size: 12px; padding: 5px 11px;
+}
+.settings-link:hover, .logout-link:hover, .theme-toggle:hover { border-color: var(--btn-edge); color: var(--white); }
+
+/* Underline tabs (the report's desks, Analytics' sections) */
+.tabs { background: var(--bg); padding: 0 20px; gap: 2px; }
+.tab { font-size: 14px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--text-2); padding: 0 14px; }
+.tab:hover { color: var(--white); }
+.tab.active { color: var(--white); border-bottom-color: var(--accent); }
+
+/* Tables */
+.table-wrap, .settings-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+table { background: var(--surface); }
+thead tr { background: var(--surface2); }
+th, .table-wrap thead th, .settings-table-wrap thead th {
+  background: var(--surface2); color: var(--text-2); font-size: 12px; font-weight: 500;
+  text-transform: none; letter-spacing: 0; padding: 10px 12px; border-bottom: 1px solid var(--border);
+}
+td { padding: 10px 12px; border-bottom: 1px solid var(--hairline); }
+tbody tr:nth-child(even):not(.team-header) td { background: var(--row-alt); }
+tbody tr:hover:not(.team-header) td { background: var(--row-hover); }
+tbody tr:hover:not(.team-header) { background: transparent; }
+td.num, .num { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--white); font-size: 12.5px; }
+td.num.dim, .num.dim { color: var(--text-2); }
+.role-cell { color: var(--text-2); font-size: 12px; }
+
+/* Group rows inside a table: a band, like the dashboard's column bands */
+tr.team-header td, tr.mbr-family td {
+  background: var(--band); color: var(--white); font-size: 11px; font-weight: 500;
+  letter-spacing: .06em; text-transform: uppercase; padding: 9px 12px;
+  border-top: none; border-bottom: none; box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+/* Page and section headings: sentence case, an italic tail where there is one */
+.mbr-title { font-size: 24px; font-weight: 500; letter-spacing: -0.01em; }
+.mbr-section h2 {
+  font-size: 18px; font-weight: 500; letter-spacing: -0.01em; text-transform: none;
+  color: var(--white); border-bottom: none; padding-bottom: 0; margin: 0 0 12px;
+}
+.mbr-section h2 em, .mbr-title em { font-style: italic; color: var(--mid); font-weight: 400; }
+.perf-col-title { font-size: 14px; font-weight: 500; color: var(--white); }
+.mbr-src { font-size: 12px; color: var(--text-2); }
+.mbr-note { color: var(--text-2); }
+
+/* Controls: quiet, rounded */
+.mbr-ctl { font-size: 12px; color: var(--text-2); }
+.mbr-ctl select, .mbr-ctl input {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+  font-size: 13px; padding: 5px 9px;
+}
+.save-btn {
+  border-radius: 8px; font-size: 13px; padding: 7px 14px;
+  background: var(--accent); color: var(--on-accent); border-color: var(--accent);
+}
+.save-btn:hover { background: var(--accent); filter: brightness(1.1); }
+.clear-btn { border-radius: 8px; font-size: 12px; padding: 6px 12px; }
+.oto-nav { border-radius: 6px; }
+.oto-in { border-radius: 6px; font-size: 13px; }
+
+/* Small figure cards (1:1 key figures, MBR headlines): compact, not the
+   dashboard's big headline tiles — mono figures, sentence-case labels */
+.mbr-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; gap: 6px; }
+.mbr-card-label { font-size: 13px; text-transform: none; letter-spacing: 0; color: var(--text-2); }
+.mbr-card-value { font-family: var(--mono); font-size: 24px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+.mbr-card-sub { font-size: 12px; color: var(--text-2); }
+
+/* Home */
+.home-title { font-size: 24px; font-weight: 500; letter-spacing: -0.01em; text-transform: none; color: var(--white); }
+.home-card { background: var(--surface); border-color: var(--border); }
+.home-card:hover { border-color: var(--btn-edge); }
+.home-card-desc { color: var(--text-2); }
+.home-pill { background: var(--btn); border-color: var(--border); color: var(--white); font-size: 13px; }
+.home-pill:hover, .home-pill:focus-visible { border-color: var(--btn-edge); }
+
+/* Modals */
+.modal-box { background: var(--surface); border-color: var(--btn-edge); }
+
+/* Contract / perm MBR (cmbr) */
+.cmbr-title { font-size: 24px; letter-spacing: -0.01em; }
+.cmbr-who { font-style: italic; color: var(--mid); }
+.cmbr-who::before { content: ""; }
+.cmbr-eyebrow { color: var(--text-2); letter-spacing: .06em; }
+.cmbr-ctl { text-transform: none; letter-spacing: 0; font-size: 12px; color: var(--text-2); }
+.cmbr-ctl select { background: var(--surface); border-radius: 6px; }
+.cmbr-tile { background: var(--surface); border-color: var(--border); }
+.cmbr-tile-label { font-size: 13px; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--text-2); }
+.cmbr-tile-value { font-family: var(--mono); font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+.cmbr-card { background: var(--surface); border-color: var(--border); }
+.cmbr-card-head h2 { font-size: 18px; font-weight: 500; letter-spacing: -0.01em; }
+.cmbr-btn-quiet { background: var(--btn); border-color: var(--border); border-radius: 8px; font-size: 13px; color: var(--white); }
+.cmbr-btn-quiet:hover, .cmbr-btn-quiet:focus-visible { border-color: var(--btn-edge); }
+.cmbr-grid thead th { font-size: 12px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--text-2); }
+.cmbr-grid thead .cmbr-name { font-size: 12px; text-transform: none; letter-spacing: 0; }
+.cmbr-grid tbody tr:nth-child(even) td { background-color: var(--row-alt); }
+.cmbr-grid tbody tr:nth-child(even) .cmbr-name { background: var(--row-alt); }
+.cmbr-grid .num { color: var(--white); }
+.cmbr-sec td { background: var(--band) !important; box-shadow: inset 0 -2px 0 var(--accent); }
+.cmbr-sec-btn { color: var(--white); letter-spacing: .06em; padding: 10px 12px; font-weight: 500; }
+.cmbr-status { border-radius: 999px; font-family: var(--mono); font-weight: 500; }
+
+/* Pills and chips: rounded, tinted, mono where they hold figures */
+.oto-kind, .nb-clients, .ai-pill { border-radius: 999px; }
+/* Headings over figure columns stay headings: quiet, in the text font */
+thead th.num, .cmbr-grid thead th, .cmbr-grid thead th.num {
+  font-family: var(--font); font-size: 12px; font-weight: 500; color: var(--text-2);
+}
+.cmbr-grid thead .cmbr-focus { color: var(--white); }
+/* The name column reads first: one line, a touch heavier, as the dashboard's */
+.table-wrap tbody td:first-child { white-space: nowrap; font-weight: 500; color: var(--white); }
+.role-cell { white-space: nowrap; }
+/* The 1:1's figure cards stay small: two to a row beside the table, and a row
+   of four when the page stacks — never four full-width slabs */
+.oto-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.oto-cards .mbr-card-value { font-size: 20px; }
+@media (max-width: 900px) { .oto-cards { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); } }
