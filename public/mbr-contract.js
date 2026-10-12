@@ -59,6 +59,8 @@ window.addEventListener("beforeunload", (e) => {
 
 (function init() {
   document.getElementById("cmbr-desk").textContent = DESK;
+  // The tab names the desk: "London Perm MBR", not "Contract MBR" for every desk
+  document.title = `${DESK} MBR — Saragossa`;
   const ys = document.getElementById("cmbr-year");
   const now = new Date().getFullYear();
   [now, now - 1].forEach(y => ys.appendChild(new Option(String(y), String(y))));
