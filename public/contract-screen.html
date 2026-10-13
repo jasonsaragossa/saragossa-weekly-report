@@ -14,10 +14,12 @@
       src: url('/fonts/AeonikPro-Medium.woff2') format('woff2'); }
 
     :root {
-      --bg: #0b0b0c; --panel: #151516; --border: #2a2a2b;
-      --mid: #8a8a99; --light: #d6d7db; --white: #fff; --accent: #5d8f9a;
+      /* The Client Dashboard's palette (Oct 2026) */
+      --bg: #111112; --panel: #18181b; --border: #2e2e33; --hairline: #232326;
+      --mid: #a6a6b4; --light: #e8e8ec; --white: #fff; --accent: #5d8f9a;
+      --head: #1f1f23; --row-alt: #1b1b1e;
       --font: 'Aeonik Pro', -apple-system, BlinkMacSystemFont, sans-serif;
-      --mono: 'SF Mono', 'Fira Code', ui-monospace, monospace;
+      --mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', 'SF Mono', monospace;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; background: var(--bg); color: var(--light);
@@ -28,8 +30,7 @@
     .top { display: flex; align-items: center; justify-content: space-between;
       margin-bottom: 1.6vh; }
     .logo { height: 4.2vh; }
-    .stamp { font-size: 1.6vh; color: var(--mid); letter-spacing: .08em;
-      text-transform: uppercase; text-align: right; line-height: 1.5; }
+    .stamp { font-size: 1.7vh; color: var(--mid); text-align: right; line-height: 1.5; }
     .stamp strong { color: var(--light); font-weight: 500; }
 
     .desks { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 2.4vw; min-height: 0; }
@@ -41,25 +42,26 @@
     .desks.single td { font-size: 3vh; padding: 1.7vh 0; }
     .desk { background: var(--panel); border: 1px solid var(--border); border-radius: 1.2vh;
       padding: 2.2vh 2vw; display: flex; flex-direction: column; min-height: 0; }
-    .desk h2 { font-size: 2.6vh; font-weight: 500; color: var(--white); letter-spacing: .02em;
+    .desk h2 { font-size: 2.8vh; font-weight: 500; color: var(--white); letter-spacing: -0.01em;
       display: flex; align-items: baseline; gap: 1vw; margin-bottom: 1.4vh; }
-    .desk h2 .ccy { font-size: 1.6vh; color: var(--accent); letter-spacing: .12em;
-      text-transform: uppercase; font-weight: 400; }
+    .desk h2 .ccy { font-size: 2vh; color: var(--mid); font-style: italic; font-weight: 400; }
 
     .scaler { flex: 1; min-height: 0; overflow: hidden; }
     table { width: 100%; border-collapse: collapse; transform-origin: top left; }
-    th { text-align: left; font-size: 1.5vh; font-weight: 500; color: var(--mid);
-      text-transform: uppercase; letter-spacing: .1em; padding: 0 0 1.2vh;
+    th { text-align: left; font-size: 1.7vh; font-weight: 500; color: var(--mid);
+      padding: 1vh .8vw; background: var(--head);
       border-bottom: 1px solid var(--border); white-space: nowrap; }
-    td { padding: 1.35vh 0; border-bottom: 1px solid var(--border); font-size: 2.3vh;
+    td { padding: 1.35vh .8vw; border-bottom: 1px solid var(--hairline); font-size: 2.3vh;
       color: var(--light); white-space: nowrap; }
+    tbody tr:nth-child(even) td { background: var(--row-alt); }
+    td:first-child { color: var(--white); font-weight: 500; }
     th.num, td.num { text-align: right; font-family: var(--mono);
       font-variant-numeric: tabular-nums; }
     td.num { color: var(--white); }
+    th.num { font-family: var(--font); }   /* headings stay text */
     tr.total td { border-bottom: none; border-top: 2px solid var(--accent);
       padding-top: 1.6vh; font-weight: 500; }
-    tr.total td:first-child { color: var(--accent); text-transform: uppercase;
-      letter-spacing: .1em; font-size: 1.7vh; }
+    tr.total td:first-child { color: var(--white); font-size: 2vh; }
     td.empty { color: var(--mid); font-size: 1.9vh; padding: 3vh 0; }
 
     .err { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;

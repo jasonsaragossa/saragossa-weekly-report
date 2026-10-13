@@ -69,7 +69,7 @@ function render() {
 
   const heading = document.createElement("div");
   heading.className = "admin-page-header";
-  heading.innerHTML = `<h1>${currentYear} Performance Analytics</h1>
+  heading.innerHTML = `<h1>Performance analytics <em>${currentYear}</em></h1>
     <p class="settings-desc">Monthly perm GP by consultant · admin only</p>`;
   container.appendChild(heading);
 
@@ -1253,13 +1253,18 @@ function buildBreakdownTabs() {
   let showWritten  = false;
   const toggleBar = document.createElement("div");
   toggleBar.className = "breakdown-toggle";
+  // Two segmented controls, as the Client Dashboard switches a view
   toggleBar.innerHTML = `
-    <button class="year-toggle-btn" data-year="last">${currentYear - 1}</button>
-    <button class="year-toggle-btn active" data-year="this">${currentYear}</button>
-    <button class="year-toggle-btn" data-year="next" title="Placements already made with a start date next year">${currentYear + 1}</button>
+    <span class="seg-toggle">
+      <button class="year-toggle-btn" data-year="last">${currentYear - 1}</button>
+      <button class="year-toggle-btn active" data-year="this">${currentYear}</button>
+      <button class="year-toggle-btn" data-year="next" title="Placements already made with a start date next year">${currentYear + 1}</button>
+    </span>
     <span class="breakdown-toggle-gap"></span>
-    <button class="year-toggle-btn active" data-mode="actuals" title="By placement start date">Actuals</button>
-    <button class="year-toggle-btn" data-mode="written" title="By the month the placement was created">Written</button>
+    <span class="seg-toggle">
+      <button class="year-toggle-btn active" data-mode="actuals" title="By placement start date">Actuals</button>
+      <button class="year-toggle-btn" data-mode="written" title="By the month the placement was created">Written</button>
+    </span>
   `;
   wrapper.appendChild(toggleBar);
 
