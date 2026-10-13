@@ -1523,6 +1523,59 @@ select.oto-in { color-scheme: var(--scheme); }
 .import-detail summary:hover { color: var(--white); }
 .import-done { font-size: 11px; color: var(--mid); line-height: 1.7; margin-left: 16px; }
 
+/* ── Ask the MBR (mbr-chat.js) ────────────────────────────────────────────────
+   A pill bottom-right that opens a panel docked to the right edge. Tokens
+   only, so it follows the theme. */
+
+.mchat-open {
+  position: fixed; right: 24px; bottom: 24px; z-index: 150;
+  padding: 11px 20px; border-radius: 999px;
+  border: 1px solid var(--accent); background: var(--accent); color: #fff;
+  font-family: var(--font); font-size: 13px; font-weight: 600; letter-spacing: .02em;
+  cursor: pointer; box-shadow: 0 6px 20px var(--shadow-lift);
+  transition: transform .16s ease;
+}
+.mchat-open:hover { transform: translateY(-1px); }
+.mchat {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 150;
+  width: min(440px, 100vw); display: flex; flex-direction: column;
+  background: var(--panel); border-left: 1px solid var(--border);
+  box-shadow: -8px 0 28px var(--shadow-lift);
+}
+.mchat[hidden] { display: none; }
+.mchat-head {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+  padding: 18px 20px 14px; border-bottom: 1px solid var(--border);
+}
+.mchat-title { font-size: 15px; font-weight: 500; color: var(--white); }
+.mchat-sub { font-size: 12px; color: var(--mid); margin-top: 2px; }
+.mchat-actions { display: flex; align-items: center; gap: 10px; }
+.mchat-link { background: none; border: none; color: var(--mid); font: inherit;
+  font-size: 12px; cursor: pointer; text-decoration: underline; }
+.mchat-link:hover { color: var(--white); }
+.mchat-x { background: none; border: none; color: var(--mid); font-size: 22px;
+  line-height: 1; cursor: pointer; padding: 0 2px; }
+.mchat-x:hover { color: var(--white); }
+.mchat-log { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex;
+  flex-direction: column; gap: 12px; }
+.mchat-hint { font-size: 13px; color: var(--mid); line-height: 1.6; }
+.mchat-msg { font-size: 13px; line-height: 1.6; color: var(--white);
+  border-radius: 10px; padding: 10px 13px; max-width: 92%; }
+.mchat-msg p + p, .mchat-msg p + ul, .mchat-msg ul + p { margin-top: 8px; }
+.mchat-msg ul { padding-left: 18px; }
+.mchat-msg li + li { margin-top: 3px; }
+.mchat-msg.user { align-self: flex-end; background: var(--row-alt);
+  border: 1px solid var(--border); white-space: pre-wrap; }
+.mchat-msg.assistant { align-self: flex-start; border: 1px solid var(--border); }
+.mchat-wait { color: var(--mid); font-style: italic; }
+.mchat-err { font-size: 12px; color: var(--red); }
+.mchat-form { display: flex; gap: 8px; align-items: flex-end;
+  padding: 12px 20px 18px; border-top: 1px solid var(--border); }
+.mchat-form textarea { flex: 1; resize: none; font: inherit; font-size: 13px;
+  padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--white); }
+.mchat-form textarea:focus { outline: none; border-color: var(--accent); }
+
 /* ── Light mode ──────────────────────────────────────────────────────────────
    Every page except the wall screen (contract-screen.html) opts in via
    <html class="theme-light">, set by the inline script in each page's head so

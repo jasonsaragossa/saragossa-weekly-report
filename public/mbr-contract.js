@@ -97,6 +97,8 @@ async function load() {
     syncUrl();
     renderControls();
     renderAll();
+    // Ask the MBR (mbr-chat.js) — the server says who has it
+    if (d.can_chat && window.initMbrChat) window.initMbrChat(state.year);
   } catch (e) {
     showError(`Could not load: ${e.message}`);
   }

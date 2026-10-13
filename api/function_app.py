@@ -1464,14 +1464,56 @@ def mbr_contract(req: func.HttpRequest) -> func.HttpResponse:
                 mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 headers={"Content-Disposition": f'attachment; filename="{name}"',
                          "Cache-Control": "no-store"})
+        from shared.mbr_chat import can_chat          # Jonny's "Ask the MBR"
         return func.HttpResponse(json.dumps({"ok": True, "can_team": can_team, "can_edit": can_edit,
-                                             **out}, default=str),
+                                             "can_chat": can_chat(email), **out}, default=str),
                                  mimetype="application/json", status_code=200)
     except KeyError:
         return func.HttpResponse(json.dumps({"ok": False, "error": "not on this desk"}),
                                  mimetype="application/json", status_code=404)
     except Exception:
         logging.exception("mbr-contract error")
+        return _server_error()
+
+
+# ── /api/mbr-chat (POST) — Jonny asks about his MBR pages ─────────────────────
+# {year, messages: [{role, content}, ...]} -> {reply}. Jonny only (Jason, Oct
+# 2026); the figures are both his desks' MBRs, built server-side, never sent
+# from the browser.
+
+@app.route(route="mbr-chat", methods=["POST"])
+def mbr_chat(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = require_auth(req)
+    if err:
+        return err
+    from shared import mbr_chat as C
+    if not C.can_chat(email):
+        return func.HttpResponse(json.dumps({"ok": False, "error": "forbidden"}),
+                                 mimetype="application/json", status_code=403)
+    try:
+        body = req.get_json() or {}
+    except ValueError:
+        return _bad_request("bad json")
+    try:
+        year = int(body.get("year") or date.today().year)
+        if body.get("warm"):
+            # Opening the panel builds the figures, so the first question
+            # doesn't wait for them (they're cached ten minutes)
+            C.figures(year)
+            return func.HttpResponse(json.dumps({"ok": True}), mimetype="application/json")
+        history = body.get("messages") or []
+        if not isinstance(history, list):
+            return _bad_request("messages must be a list")
+        history = [h for h in history if isinstance(h, dict)]
+        last = history[-1] if history else {}
+        if len(str(last.get("content") or "")) > C.MAX_QUESTION:
+            return _bad_request("question too long")
+        out = C.ask(year, history)
+        status = 200 if "reply" in out else 502
+        return func.HttpResponse(json.dumps({"ok": "reply" in out, **out}),
+                                 mimetype="application/json", status_code=status)
+    except Exception:
+        logging.exception("mbr-chat error")
         return _server_error()
 
 
