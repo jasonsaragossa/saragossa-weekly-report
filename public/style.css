@@ -2030,6 +2030,29 @@ tr.team-header td, tr.mbr-family td {
 .mbr-src { font-size: 12px; color: var(--text-2); }
 .mbr-note { color: var(--text-2); }
 
+/* MBR live jobs: brought in → added → closed → live, then the 1st's picture */
+.jobs-flow { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+.jobs-fig { flex: 1 1 150px; display: flex; flex-direction: column; gap: 3px;
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); }
+.jobs-fig.jobs-step { flex: 0 1 110px; background: transparent; }
+.jobs-fig-label { font-size: 12px; color: var(--text-2); }
+.jobs-fig-value { font-size: 22px; font-weight: 500; color: var(--white);
+  font-variant-numeric: tabular-nums; }
+.jobs-fig-sub { font-size: 11px; color: var(--text-2); }
+.jobs-sub { font-size: 13px; font-weight: 500; color: var(--white); margin: 0 0 8px; }
+.jobs-stages { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.jobs-stage { font-size: 12px; color: var(--white); padding: 4px 10px; border-radius: 999px;
+  border: 1px solid var(--accent); }
+.jobs-stage.cold, .jobs-stage-cell.cold { color: var(--text-2); border-color: var(--border); }
+.jobs-stage-cell.cold { font-style: italic; }
+.jobs-since { font-size: 12px; color: var(--text-2); margin: 0 0 12px; }
+.jobs-since strong, .jobs-stage strong { color: var(--white); font-weight: 600; }
+.jobs-table td { vertical-align: top; }
+.jobs-live { margin-top: 4px; }
+.jobs-live summary { cursor: pointer; font-size: 13px; color: var(--text-2); margin-bottom: 8px; }
+.jobs-live summary:hover { color: var(--white); }
+
 /* Controls: quiet, rounded */
 .mbr-ctl { font-size: 12px; color: var(--text-2); }
 .mbr-ctl select, .mbr-ctl input {

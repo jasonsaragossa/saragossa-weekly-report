@@ -1586,7 +1586,18 @@ def mbr(req: func.HttpRequest) -> func.HttpResponse:
 
         from shared.ai_readiness import for_display, month_score
 
-        data    = build_mbr_metrics(uid, year, month)
+        from concurrent.futures import ThreadPoolExecutor
+        from shared import mbr_jobs
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            # Live jobs (brought in, live now, where they stood on the 1st) —
+            # built alongside the metrics; the MBR still opens without it
+            f_jobs = pool.submit(mbr_jobs.build, uid, year, month)
+            data = build_mbr_metrics(uid, year, month)
+            try:
+                live_jobs = f_jobs.result()
+            except Exception:
+                logging.warning("MBR live jobs failed", exc_info=True)
+                live_jobs = None
         targets = {**DEFAULT_TARGETS, **(get_mbr_targets(uid).get(uid) or {})}
         saved   = get_mbr(uid, year, month)
         ly, lm  = previous_month(year, month)
@@ -1628,7 +1639,7 @@ def mbr(req: func.HttpRequest) -> func.HttpResponse:
 
         return func.HttpResponse(json.dumps({
             "ok": True, "person": {"uid": uid, "name": person.get("fullname", "")},
-            **data, "targets": targets, "saved": saved,
+            **data, "targets": targets, "saved": saved, "live_jobs": live_jobs,
             "ai_readiness": ai, "ai_readiness_prev": ai_prev,
             "carried_actions": (last or {}).get("actions") or [],
             "flagged": [f["key"] for f in flagged],

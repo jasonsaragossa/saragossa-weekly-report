@@ -221,6 +221,8 @@ function render(d) {
       </table></div>
     </section>
 
+    ${liveJobsHtml(d.live_jobs)}
+
     <section class="mbr-section">
       <h2>Your judgement</h2>
       ${candidates}
@@ -258,6 +260,92 @@ function render(d) {
     const rm = e.target.closest(".action-remove");
     if (rm) rm.closest("tr").remove();
   });
+}
+
+// ── Live jobs ────────────────────────────────────────────────────────────────
+// The jobs brought into the month, what's live now, and where the brought-in
+// jobs stood on the 1st (shared/mbr_jobs.py says how each is worked out).
+
+function liveJobsHtml(j) {
+  if (!j) return "";
+  const day = (iso, opts) => new Date(iso + "T00:00:00").toLocaleDateString("en-GB",
+    opts || { day: "numeric", month: "short" });
+  const monthName = day(j.start, { month: "long" });
+  const first = day(j.start, { day: "numeric", month: "long" });
+  const liveWhen = j.now ? `Live now · ${day(j.as_of)}` : `Live at month end · ${day(j.as_of)}`;
+  const grades = g => Object.entries(g || {}).map(([k, n]) =>
+    `${n} ${k === "Ungraded" ? "ungraded" : k}`).join(" · ") || "none";
+
+  const flow = `
+    <div class="jobs-flow">
+      <div class="jobs-fig"><span class="jobs-fig-label">Brought into ${esc(monthName)}</span>
+        <span class="jobs-fig-value">${j.brought_in.count}</span>
+        <span class="jobs-fig-sub">${esc(grades(j.brought_in.by_grade))}</span></div>
+      <div class="jobs-fig jobs-step"><span class="jobs-fig-label">Added since</span>
+        <span class="jobs-fig-value">+${j.added}</span></div>
+      <div class="jobs-fig jobs-step"><span class="jobs-fig-label">Closed since</span>
+        <span class="jobs-fig-value">−${j.closed}</span></div>
+      <div class="jobs-fig"><span class="jobs-fig-label">${esc(liveWhen)}</span>
+        <span class="jobs-fig-value">${j.live.count}</span>
+        <span class="jobs-fig-sub">${esc(grades(j.live.by_grade))}</span></div>
+    </div>`;
+
+  const stages = j.stages_on_first.filter(s => s.count).map(s =>
+    `<span class="jobs-stage${s.stage.startsWith("Quiet") || s.stage === "No CVs yet" ? " cold" : ""}">
+      <strong>${s.count}</strong> ${esc(s.stage)}</span>`).join("");
+  const o = j.outcomes;
+  const since = `Since then: <strong>${o["Still live"]}</strong> still live ·
+    <strong>${o["Filled"]}</strong> filled · <strong>${o["Lost or cancelled"]}</strong> lost or cancelled`;
+
+  const sinceNote = j.now ? "since the 1st" : "in the month";
+  const brought = j.brought_jobs.length ? j.brought_jobs.map(r => `
+    <tr>
+      <td>${esc(r.client)}<div class="oto-sub">${esc(r.job)}</div></td>
+      <td>${esc(r.grade || "—")}</td>
+      <td class="num">${r.days_open_on_first ?? "—"}</td>
+      <td><span class="jobs-stage-cell${/^Quiet|^No CVs/.test(r.stage_on_first) ? " cold" : ""}">${esc(r.stage_on_first)}</span></td>
+      <td class="dim">${r.last_activity_before ? day(r.last_activity_before, { day: "numeric", month: "short", year: "2-digit" }) : "—"}</td>
+      <td class="num">${r.cvs_in_month} / ${r.interviews_in_month}</td>
+      <td class="${r.live ? "" : /^Filled|^Part/.test(r.now) ? "pos" : "neg"}">${esc(r.now.replace(/^Live — /, ""))}</td>
+    </tr>`).join("")
+    : `<tr><td colspan="7" class="mbr-empty">No jobs open on ${esc(first)}.</td></tr>`;
+
+  const live = j.live_jobs.map(r => `
+    <tr>
+      <td>${esc(r.client)}<div class="oto-sub">${esc(r.job)}</div></td>
+      <td>${esc(r.grade || "—")}</td>
+      <td>${r.brought_in ? "Brought in" : `New · ${r.created ? day(r.created) : ""}`}</td>
+      <td>${esc(r.now.replace(/^Live — /, ""))}</td>
+      <td class="num">${r.cvs_in_month} / ${r.interviews_in_month}</td>
+    </tr>`).join("");
+
+  return `
+    <section class="mbr-section">
+      <h2>Live jobs</h2>
+      ${flow}
+      <h3 class="jobs-sub">Where the brought-in jobs stood on ${esc(first)}</h3>
+      <div class="jobs-stages">${stages || `<span class="dim">No jobs brought in.</span>`}</div>
+      ${j.brought_in.count ? `<p class="jobs-since">${since}</p>` : ""}
+      <div class="table-wrap"><table class="jobs-table">
+        <thead><tr><th>Client · job</th><th>Grade</th><th class="num">Days open on the 1st</th>
+          <th>On the 1st</th><th>Last activity before</th>
+          <th class="num" title="CVs sent / interviews ${sinceNote}">CVs / interviews ${sinceNote}</th>
+          <th>Now <span class="dim">(Mercury stage)</span></th></tr></thead>
+        <tbody>${brought}</tbody>
+      </table></div>
+      <p class="mbr-note">"On the 1st" is the furthest any candidate had got in the ${j.recent_days} days
+        before it — Mercury keeps only a job's current stage, so this is rebuilt from the candidates' dates.
+        Quiet means a job was open but nothing had happened on it for ${j.recent_days} days.</p>
+      ${j.live_jobs.length ? `
+      <details class="jobs-live">
+        <summary>All ${j.live.count} ${j.now ? "live now" : "live at month end"}</summary>
+        <div class="table-wrap"><table class="jobs-table">
+          <thead><tr><th>Client · job</th><th>Grade</th><th></th><th>Mercury stage</th>
+            <th class="num">CVs / interviews ${sinceNote}</th></tr></thead>
+          <tbody>${live}</tbody>
+        </table></div>
+      </details>` : ""}
+    </section>`;
 }
 
 // Answer boxes grow with the text rather than scrolling inside one line
