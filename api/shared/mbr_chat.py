@@ -140,7 +140,9 @@ How the figures are worked out (the app's own rules — rely on these):
   A JMI is a job with more than one interview in the month.
 - Jobs are counted against their delivery owner, by grade (A/B/C, F, P).
   "Jobs carried into month" is typed by Jonny from his own records.
-- New customers are clients never placed with before.
+- "New contract sites" (contract desk) are placements marked "New Contract
+  Site" in Mercury, in the month the mark is dated. On the perm desk, new
+  customers are clients never placed with before.
 - Headcount is people weighted by their share of the month on the desk, so a
   month still running counts only the days so far (nine people 13 days into
   October shows about 3.8). Per-head figures for that month are like-for-like.

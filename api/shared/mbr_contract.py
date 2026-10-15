@@ -30,6 +30,7 @@ and a client two consultants both placed with is one client.
 from __future__ import annotations
 
 import calendar
+import re
 from collections import defaultdict
 from datetime import date, timedelta
 
@@ -171,7 +172,8 @@ MEASURES = [
     ("bd_emails", "BD emails", "Activity", "both", "count", "avg"),
     ("reference_calls", "Reference calls", "Activity", "consultant", "count", "avg"),
     # Customers — summed over a period: each is a separate new customer
-    ("new_customers_placed", "New customers placed with", "Customers", "both", "count", "sum"),
+    # Contract: placements marked "New Contract Site" in Mercury (see compute)
+    ("new_customers_placed", "New contract sites", "Customers", "both", "count", "sum"),
     ("new_customers_jobs", "New customers with jobs added", "Customers", "both", "count", "sum"),
     ("new_customers_meetings", "New customers with meetings", "Customers", "both", "count", "sum"),
 ]
@@ -215,6 +217,10 @@ for _i, _m in enumerate(PERM_MEASURES):
         PERM_MEASURES[_i] = ("carried_c", "C jobs carried into month", "Jobs", "both", "count", "avg")
         PERM_MEASURES.insert(_i + 1, ("carried_o", "O jobs carried into month", "Jobs", "both", "count", "avg"))
         break
+# Perm keeps the never-placed-with-before rule, and its own label
+for _i, _m in enumerate(PERM_MEASURES):
+    if _m[0] == "new_customers_placed":
+        PERM_MEASURES[_i] = ("new_customers_placed", "New customers placed with") + _m[2:]
 PERM_MEASURE = {m[0]: m for m in PERM_MEASURES}
 PERM_IMPORTED = ("gp_budget", "gp_per_head_budget", "deals_started_budget")
 
@@ -288,6 +294,28 @@ def _is_extension(p) -> bool:
 def _wgp(p, fx) -> float:
     ccy = (p.get("recruit_trueweeklygrossprofitcurrency") or {}).get("isocurrencycode")
     return (p.get("recruit_trueweeklygrossprofit") or 0.0) * fx.get(ccy, 1.0)
+
+
+_NOTE_DATE = re.compile(r"(\d{1,2})/(\d{1,2})/(\d{4})")
+
+
+def site_note_dates(notes: list, placements: list) -> dict:
+    """{placement id: date} for placements with a "New Contract Site" note.
+    The date is the one written in the note ("New Contract Site - 14/09/2026",
+    UK order), else the placement's start date. A placement noted twice keeps
+    its earliest date."""
+    starts = {p.get("crimson_placementid"): _d(p.get("crimson_startdate")) for p in placements}
+    out = {}
+    for n in notes:
+        pid = n.get("_objectid_value")
+        m = _NOTE_DATE.search(f"{n.get('subject') or ''} {n.get('notetext') or ''}")
+        try:
+            when = date(int(m[3]), int(m[2]), int(m[1])) if m else starts.get(pid)
+        except ValueError:
+            when = starts.get(pid)
+        if pid and when and (pid not in out or when < out[pid]):
+            out[pid] = when
+    return out
 
 
 def _share(p, people) -> float:
@@ -522,8 +550,17 @@ def compute(people: set, year: int, month: int, data: dict, fx: dict,
         f = first.get(cid)
         return cid is not None and (f is None or f >= m_start)
 
-    out["new_customers_placed"] = sum(1 for c in placed_clients
-                                      if first.get(c) and m_start <= first[c] < m_end)
+    if data.get("kind") == "perm":
+        out["new_customers_placed"] = sum(1 for c in placed_clients
+                                          if first.get(c) and m_start <= first[c] < m_end)
+    else:
+        # New contract sites (Jason, Oct 2026): placements someone has marked
+        # "New Contract Site" in Mercury's timeline, in the month the note is
+        # dated. Whole numbers: a site counts once for each view on the deal.
+        sites = data.get("site_notes") or {}
+        out["new_customers_placed"] = sum(
+            1 for p in contracts
+            if (d := sites.get(p.get("crimson_placementid"))) and m_start <= d < m_end)
     out["new_customers_jobs"] = len({v.get("_crimson_clientid_value") for v in added
                                      if never_before(v.get("_crimson_clientid_value"))})
     out["new_customers_meetings"] = len({m.get("client") for m in meetings
@@ -703,6 +740,11 @@ def fetch_year(desk: str, year: int, today: date | None = None) -> dict:
             "$filter": (f"{_or('_recruit_purpose_value', BD_EMAIL_PURPOSES)}"
                         f" and {_or('_ownerid_value', people)}"
                         f" and createdon ge {{lo}} and createdon lt {{hi}}")}),
+        # "New Contract Site" notes on placements' timelines (a few dozen)
+        "site_notes": ("annotations", {
+            "$select": "_objectid_value,subject,notetext",
+            "$filter": ("objecttypecode eq 'crimson_placement' and ("
+                        "contains(subject,'new contract site') or contains(notetext,'new contract site'))")}),
     }
     # The two big ones are split into quarters and fetched side by side
     quarters = [(f"{year}-{a:02d}-01", f"{year}-{b:02d}-01" if b <= 12 else y1)
@@ -737,6 +779,7 @@ def fetch_year(desk: str, year: int, today: date | None = None) -> dict:
         a["client"] = acc or con
     data["emails"] = [{"owner": e.get("_ownerid_value"), "createdon": e.get("createdon")}
                       for e in data["emails"]]
+    data["site_notes"] = site_note_dates(data["site_notes"], data["placements"])
 
     clients = ({p.get("_crimson_clientname_value") for p in data["placements"]}
                | {v.get("_crimson_clientid_value") for v in data["vacancies"]}

@@ -187,11 +187,36 @@ def test_carried_in_uses_the_closing_date_where_there_is_one():
 
 # ── Customers ─────────────────────────────────────────────────────────────────
 
-def test_a_new_customer_is_one_never_placed_with_before():
-    d = data(placements=[pl("n", "070/00/01", "2026-03-10", "2026-09-10", client="newco"),
+def test_on_the_perm_desk_a_new_customer_is_one_never_placed_with_before():
+    d = data(kind="perm",
+             placements=[pl("n", "070/00/01", "2026-03-10", "2026-09-10", client="newco"),
                          pl("o", "071/00/01", "2026-03-10", "2026-09-10", client="oldco")],
              first_placed={"newco": date(2026, 3, 10), "oldco": date(2024, 5, 1)})
     assert run(d)["new_customers_placed"] == 1
+
+
+def test_contract_new_sites_are_placements_noted_new_contract_site():
+    """Counted in the month the note is dated, once per view on the deal — not
+    the never-placed-with-before rule (Jason, Oct 2026)."""
+    placements = [pl("s1", "080/00/01", "2026-03-16", "2026-09-10", roles=(A, B)),
+                  pl("s2", "081/00/01", "2026-04-01", "2026-09-10"),                 # dated April
+                  pl("s3", "082/00/01", "2026-03-20", "2026-09-10", client="newco"),  # no note
+                  pl("s4", "083/00/01", "2026-03-02", "2026-09-10", status=next(iter(M.CANCEL_CODES)))]
+    notes = [{"_objectid_value": "s1", "subject": "New Contract Site - 16/03/2026", "notetext": "New Contract Site"},
+             {"_objectid_value": "s2", "subject": "New Contract Site - 01/04/2026", "notetext": ""},
+             {"_objectid_value": "s4", "subject": "New Contract Site - 02/03/2026", "notetext": ""}]
+    d = data(placements=placements, first_placed={"newco": date(2026, 3, 20)},
+             site_notes=M.site_note_dates(notes, placements))
+    assert run(d)["new_customers_placed"] == 1                       # s1 only; cancelled s4 doesn't count
+    assert run(d, people={B})["new_customers_placed"] == 1           # Bob is on s1 too
+    assert run(d, people={A, B})["new_customers_placed"] == 1        # the team counts it once
+    assert run(d, month=4)["new_customers_placed"] == 1
+
+
+def test_a_site_note_without_a_date_takes_the_start_date():
+    placements = [pl("s1", "080/00/01", "2026-05-11", "2026-09-10")]
+    notes = [{"_objectid_value": "s1", "subject": "New Contract Site", "notetext": None}]
+    assert M.site_note_dates(notes, placements) == {"s1": date(2026, 5, 11)}
 
 
 # ── Headcount and periods ─────────────────────────────────────────────────────
