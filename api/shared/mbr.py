@@ -126,6 +126,14 @@ def _in(raw, start: date, end: date) -> bool:
     return start <= d < end
 
 
+def _new_business_client(p: dict, uid: str) -> bool:
+    """A placement that wins this person a new-business client: flagged New
+    Business, with them as Client Relationship Owner. Retainers included."""
+    return (p.get("_mercury_clientrelationshipowner_value") == uid
+            and "new business" in (p.get("crimson_specialinstructionsclient") or "").lower()
+            and bool(p.get("_crimson_clientname_value")))
+
+
 def compute_month(uid: str, year: int, month: int, to_gbp: dict = None) -> dict:
     """{metric_key: value} for one consultant in one month."""
     start, end = month_bounds(year, month)
@@ -145,6 +153,10 @@ def compute_month(uid: str, year: int, month: int, to_gbp: dict = None) -> dict:
     gp = deals = 0.0
     clients = set()
     for p in placements:
+        # A retainer is a won client, so it counts for new business (Jason,
+        # Oct 2026), as in the weekly report — but not for GP or deals here
+        if _new_business_client(p, uid):
+            clients.add(p["_crimson_clientname_value"])
         if p.get("_recruit_candidatecontact_value") == RETAINER_CONTACT:
             continue
         factor = split_factor(p, uid)
@@ -152,10 +164,6 @@ def compute_month(uid: str, year: int, month: int, to_gbp: dict = None) -> dict:
         ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode")
         gp += amount * factor * fx.get(ccy, 1.0)
         deals += placement_credit(p, uid)
-        if (p.get("_mercury_clientrelationshipowner_value") == uid
-                and "new business" in (p.get("crimson_specialinstructionsclient") or "").lower()):
-            if p.get("_crimson_clientname_value"):
-                clients.add(p["_crimson_clientname_value"])
 
     # Funnel
     cvs   = sum(1 for s in shortlists if _in(s.get("new_statussubmitteddate"), start, end))
@@ -222,17 +230,16 @@ def compute_ytd_headline(uid: str, year: int, month: int, to_gbp: dict = None) -
     gp = deals = written_starting = 0.0
     clients = set()
     for p in starting:
+        # "To date" stops at the end of the month being reviewed
+        to_date = parse_date(p["crimson_startdate"]) < to_date_end
+        if to_date and _new_business_client(p, uid):      # retainers count here too
+            clients.add(p["_crimson_clientname_value"])
         if p.get("_recruit_candidatecontact_value") == RETAINER_CONTACT:
             continue
         written_starting += value(p)
-        # "To date" stops at the end of the month being reviewed
-        if parse_date(p["crimson_startdate"]) < to_date_end:
+        if to_date:
             gp += value(p)
             deals += placement_credit(p, uid)
-            if (p.get("_mercury_clientrelationshipowner_value") == uid
-                    and "new business" in (p.get("crimson_specialinstructionsclient") or "").lower()
-                    and p.get("_crimson_clientname_value")):
-                clients.add(p["_crimson_clientname_value"])
 
     created_value = sum(value(p) for p in created
                         if p.get("_recruit_candidatecontact_value") != RETAINER_CONTACT)

@@ -100,9 +100,9 @@ REGISTRY = [
     dict(
         key="new_clients", name="New Business Clients", family="Revenue",
         definition="Distinct clients whose placement was flagged New Business and where this "
-                   "person is the Client Relationship Owner.",
+                   "person is the Client Relationship Owner. Retainers count.",
         source="crimson_placement, crimson_specialinstructionsclient contains 'new business', "
-               "CRO = this person, start date in the month.",
+               "CRO = this person, start date in the month; retainer placements included.",
         grain="individual", attribution="Client Relationship Owner only",
         direction="up", target_key=None, format="count",
         prompt_context="The clearest signal that BD effort is converting. Zero new clients over "
