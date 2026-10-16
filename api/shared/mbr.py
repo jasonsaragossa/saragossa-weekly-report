@@ -162,17 +162,16 @@ def compute_month(uid: str, year: int, month: int, to_gbp: dict = None) -> dict:
     gp = deals = 0.0
     clients = set()
     for p in placements:
-        # A retainer is a won client, so it counts for new business (Jason,
-        # Oct 2026), as in the weekly report — but not for GP or deals here
+        # A retainer is a won client and its fee is GP, as in the weekly report
+        # (Jason, Oct 2026). It isn't a deal: no one has been placed yet.
         if _new_business_client(p, uid):
             clients.add(p["_crimson_clientname_value"])
-        if p.get("_recruit_candidatecontact_value") == RETAINER_CONTACT:
-            continue
         factor = split_factor(p, uid)
         amount = (p.get("recruit_truegrossprofit") or 0.0) - rebate_of(p)[0]
         ccy = (p.get("recruit_truegrossprofitcurrency") or {}).get("isocurrencycode")
         gp += amount * factor * fx.get(ccy, 1.0)
-        deals += placement_credit(p, uid)
+        if p.get("_recruit_candidatecontact_value") != RETAINER_CONTACT:
+            deals += placement_credit(p, uid)
 
     # Funnel
     cvs   = sum(1 for s in shortlists if _in(s.get("new_statussubmitteddate"), start, end))
@@ -243,15 +242,14 @@ def compute_ytd_headline(uid: str, year: int, month: int, to_gbp: dict = None) -
         to_date = parse_date(p["crimson_startdate"]) < to_date_end
         if to_date and _new_business_client(p, uid):      # retainers count here too
             clients.add(p["_crimson_clientname_value"])
-        if p.get("_recruit_candidatecontact_value") == RETAINER_CONTACT:
-            continue
+        # Retainer fees are revenue; only the counts (deals, placements written) leave them out
         written_starting += value(p)
         if to_date:
             gp += value(p)
-            deals += placement_credit(p, uid)
+            if p.get("_recruit_candidatecontact_value") != RETAINER_CONTACT:
+                deals += placement_credit(p, uid)
 
-    created_value = sum(value(p) for p in created
-                        if p.get("_recruit_candidatecontact_value") != RETAINER_CONTACT)
+    created_value = sum(value(p) for p in created)
 
     return {"revenue": round(gp, 2), "deals": round(deals, 2), "new_clients": len(clients),
             "written_starting": round(written_starting, 2),

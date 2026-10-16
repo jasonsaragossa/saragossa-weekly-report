@@ -12,7 +12,7 @@ def placement(client, *, retainer=False, nb=True, cro=U, start="2026-04-20"):
             "_recruit_candidatecontact_value": mbr.RETAINER_CONTACT if retainer else "cand"}
 
 
-def test_a_retainer_counts_as_a_new_business_client_but_not_as_gp(monkeypatch):
+def test_a_retainer_counts_as_a_new_business_client_and_its_fee_as_gp(monkeypatch):
     rows = [placement("retained", retainer=True), placement("normal"),
             placement("not-nb", nb=False), placement("someone-elses", cro="other")]
     monkeypatch.setattr(mbr, "_placements", lambda uid, s, e: rows)
@@ -23,8 +23,8 @@ def test_a_retainer_counts_as_a_new_business_client_but_not_as_gp(monkeypatch):
     assert out["new_clients"] == 2                     # retained + normal
     rows.pop(0)                                        # the same, without the retainer
     without = mbr.compute_ytd_headline(U, 2026, 9, {"GBP": 1.0})
-    assert out["revenue"] == without["revenue"]        # its fee stays out of GP
-    assert out["deals"] == without["deals"]
+    assert out["revenue"] == without["revenue"] + 10000.0    # its fee is GP (Jason, Oct 2026)
+    assert out["deals"] == without["deals"]                  # but it isn't a deal
 
 
 def test_a_client_counts_only_from_its_first_new_business_placement(monkeypatch):

@@ -75,9 +75,10 @@ REGISTRY = [
         key="perm_gp", name="Perm Revenue (GP)", family="Revenue",
         definition="Gross profit on permanent placements starting in the month, "
                    "shared using the standard ownership split (CRO / Consultant / AO, "
-                   "quarters where there is a Contractor Owner).",
+                   "quarters where there is a Contractor Owner). Retainer fees included.",
         source="crimson_placement, recruit_truegrossprofit, filtered to crimson_startdate "
-               "in the month, cancellations excluded, rebates netted at the rebate date.",
+               "in the month, cancellations excluded, rebates netted at the rebate date, "
+               "retainer placements included.",
         grain="individual", attribution="Standard ownership split, same as the weekly report",
         direction="up", target_key="revenue", format="money",
         prompt_context="The headline outcome metric. It is a lagging indicator — it moves "
