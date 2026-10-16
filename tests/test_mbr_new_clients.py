@@ -16,6 +16,8 @@ def test_a_retainer_counts_as_a_new_business_client_but_not_as_gp(monkeypatch):
     rows = [placement("retained", retainer=True), placement("normal"),
             placement("not-nb", nb=False), placement("someone-elses", cro="other")]
     monkeypatch.setattr(mbr, "_placements", lambda uid, s, e: rows)
+    monkeypatch.setattr("shared.dataverse.get_nb_flagged_placements",
+                        lambda: [r for r in rows if r["crimson_specialinstructionsclient"]])
     monkeypatch.setattr(mbr, "_placements_created", lambda uid, s, e: [])
     out = mbr.compute_ytd_headline(U, 2026, 9, {"GBP": 1.0})
     assert out["new_clients"] == 2                     # retained + normal
@@ -23,3 +25,13 @@ def test_a_retainer_counts_as_a_new_business_client_but_not_as_gp(monkeypatch):
     without = mbr.compute_ytd_headline(U, 2026, 9, {"GBP": 1.0})
     assert out["revenue"] == without["revenue"]        # its fee stays out of GP
     assert out["deals"] == without["deals"]
+
+
+def test_a_client_counts_only_from_its_first_new_business_placement(monkeypatch):
+    """Won in 2025, placed again in 2026: not a 2026 new-business client."""
+    rows = [placement("x", start="2026-05-01")]
+    history = rows + [placement("x", start="2025-09-10")]
+    monkeypatch.setattr(mbr, "_placements", lambda uid, s, e: rows)
+    monkeypatch.setattr(mbr, "_placements_created", lambda uid, s, e: [])
+    monkeypatch.setattr("shared.dataverse.get_nb_flagged_placements", lambda: history)
+    assert mbr.compute_ytd_headline(U, 2026, 9, {"GBP": 1.0})["new_clients"] == 0

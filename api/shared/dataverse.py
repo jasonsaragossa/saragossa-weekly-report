@@ -1035,6 +1035,20 @@ def delete_nb_alert_state(rowid: str) -> None:
     odata_delete(f"crbb7_nbalerts({rowid})")
 
 
+@ttl_cached(600, copy=False)
+def get_nb_flagged_placements() -> list[dict]:
+    """Every live or rebated placement flagged New Business, all time and all
+    types (~200) — so each client's FIRST new-business placement can be found
+    (see calc.first_nb_wins). Shared and read-only."""
+    return odata_get_all("crimson_placements", params={
+        "$select": ("crimson_placementid,crimson_startdate,crimson_type,_crimson_clientname_value,"
+                    "_mercury_clientrelationshipowner_value,crimson_extension,"
+                    "crimson_placementidcode,_mercury_parentplacementid_value"),
+        "$filter": (f"contains(crimson_specialinstructionsclient,'new business')"
+                    f" and crimson_startdate ne null and {active_or_rebated_filter()}"),
+    })
+
+
 def get_nb_clients_for_cro(uid: str, start_date: str, end_date: str) -> dict:
     """
     {client_id: name} — new-business clients won as CRO in the window, any
@@ -1057,11 +1071,14 @@ def get_nb_clients_for_cro(uid: str, start_date: str, end_date: str) -> dict:
             "$expand": "crimson_clientname($select=name)",
         },
     )
+    from shared.calc import first_nb_wins, nb_win_counts
+    first = first_nb_wins(get_nb_flagged_placements())
     out = {}
     for p in rows:
         if "new business" in (p.get("crimson_specialinstructionsclient") or "").lower():
             cid = p.get("_crimson_clientname_value")
-            if cid:
+            # Only the client's first new-business placement wins it
+            if cid and nb_win_counts(first, cid, uid, p.get("crimson_startdate")):
                 out[cid] = (p.get("crimson_clientname") or {}).get("name") or "(unknown client)"
     return out
 

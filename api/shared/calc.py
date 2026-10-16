@@ -118,6 +118,41 @@ def is_retainer(p: dict) -> bool:
     return p.get("_recruit_candidatecontact_value") == RETAINER_CANDIDATE_CONTACT_ID
 
 
+def first_nb_wins(nb_placements: list) -> dict:
+    """
+    {client id: (date, {CRO uids})} — each client's FIRST placement flagged New
+    Business, by start date, any type (contract extensions aside: they carry
+    their parent's flag but aren't a win). Only that placement wins the client
+    for the NB clients count (Jason, Oct 2026): a later New Business placement
+    at the same client doesn't win it again. Two on the same first day both
+    count, for their own CROs.
+    """
+    out = {}
+    for p in nb_placements:
+        cid, raw = p.get("_crimson_clientname_value"), p.get("crimson_startdate")
+        if not cid or not raw or (p.get("crimson_type") != _PERM_TYPE_CODE and _is_extension(p)):
+            continue
+        d = parse_date(raw)
+        cro = p.get("_mercury_clientrelationshipowner_value")
+        if cid not in out or d < out[cid][0]:
+            out[cid] = (d, {cro})
+        elif d == out[cid][0]:
+            out[cid][1].add(cro)
+    return out
+
+
+def nb_win_counts(first: dict, client_id, uid: str, start) -> bool:
+    """Does a New Business placement starting on `start` win `client_id` for
+    `uid`? Only if it is the client's first (see first_nb_wins). Without the
+    lookup (`first` None) or a client it doesn't hold, every placement counts,
+    as before the rule."""
+    if first is None or client_id not in first:
+        return True
+    d = parse_date(start) if isinstance(start, str) else start
+    when, cros = first[client_id]
+    return d == when and uid in cros
+
+
 def _nb_qualifies(p: dict, th: dict) -> bool:
     """Does this placement clear the new-business uplift thresholds?"""
     # Retainers are exempt (Jason, Aug 2026): a retainer fee is a staged
@@ -159,7 +194,7 @@ def rebate_of(p: dict) -> tuple:
 def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: date,
                     to_gbp: dict = None, to_usd: dict = None, thresholds: dict = None,
                     contract_placements: list = None, manual_clients: list = None,
-                    recognised_ids: set = None) -> dict:
+                    recognised_ids: set = None, first_nb: dict = None) -> dict:
     """
     Returns YTD, Written, Year Prediction, and Rolling 12M for a single user.
     Financial figures are perm-only; the NB-client count spans perm + contract.
@@ -215,7 +250,9 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
             # the business) — 50% of their own contribution, not split to others.
             if is_nb and is_cro:
                 client_id = p.get("_crimson_clientname_value")
-                if client_id:
+                # The client counts only from its first NB placement; the
+                # uplift below still pays on every qualifying one (Jason, Oct 2026)
+                if client_id and nb_win_counts(first_nb, client_id, uid, d):
                     nb_clients[client_id] = (p.get("crimson_clientname") or {}).get("name") or "(unknown client)"
                 if nb_earning:
                     roll12_uplift += val * 0.5
@@ -258,7 +295,7 @@ def compute_metrics(uid: str, placements: list[dict], display_ccy: str, today: d
         rate   = fx.get(ccy, 1.0)
         if roll12_start <= d <= today:
             cid = p.get("_crimson_clientname_value")
-            if cid:
+            if cid and nb_win_counts(first_nb, cid, uid, d):
                 nb_clients[cid] = (p.get("crimson_clientname") or {}).get("name") or "(unknown client)"
             if qualifies:
                 gp = p.get("recruit_truegrossprofit") or 0.0
@@ -1318,6 +1355,7 @@ def build_report(
     nb_alert_state: dict = None,   # uid -> set of client ids already in a milestone
     contract_entries: dict = None, # uid -> {"YYYY-M": amount} manual contract ledger
     solution_entries: dict = None, # uid -> {"YYYY-M": amount} Deploy & Consult ledger
+    first_nb: dict = None,         # client -> its first NB placement (first_nb_wins)
 ) -> dict:
     """
     Assembles the full report structure.
@@ -1361,7 +1399,7 @@ def build_report(
 
         metrics = compute_metrics(uid, placements, ccy, today, to_gbp, to_usd, nb_thresholds,
                                   contract_placements, (manual_nb_clients or {}).get(uid, []),
-                                  (nb_alert_state or {}).get(uid))
+                                  (nb_alert_state or {}).get(uid), first_nb)
         wnf     = compute_wnf(uid, live_contracts, ccy, to_gbp, to_usd)
 
         # Deploy & Consult revenue is entered in one ledger for everybody; where

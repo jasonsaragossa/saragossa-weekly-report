@@ -10,7 +10,7 @@ from datetime import date
 from concurrent.futures import ThreadPoolExecutor
 
 from shared.calc import (TO_GBP, TO_USD, _build_fx_tables, split_factor, placement_credit,
-                         parse_date, rebate_of)
+                         parse_date, rebate_of, first_nb_wins, nb_win_counts)
 from shared.dataverse import (odata_get_all, odata_str, active_or_rebated_filter,
                               get_fx_rates, get_territory_name)
 from shared.mbr_registry import (BD_CALL_PURPOSES, BD_NO_PITCH_PURPOSE, BD_PITCH_PURPOSE,
@@ -128,10 +128,19 @@ def _in(raw, start: date, end: date) -> bool:
 
 def _new_business_client(p: dict, uid: str) -> bool:
     """A placement that wins this person a new-business client: flagged New
-    Business, with them as Client Relationship Owner. Retainers included."""
-    return (p.get("_mercury_clientrelationshipowner_value") == uid
+    Business, with them as Client Relationship Owner, and the client's FIRST
+    such placement (the weekly report's rule, Oct 2026). Retainers included."""
+    if not (p.get("_mercury_clientrelationshipowner_value") == uid
             and "new business" in (p.get("crimson_specialinstructionsclient") or "").lower()
-            and bool(p.get("_crimson_clientname_value")))
+            and p.get("_crimson_clientname_value")):
+        return False
+    try:
+        from shared.dataverse import get_nb_flagged_placements
+        first = first_nb_wins(get_nb_flagged_placements())
+    except Exception:
+        logging.warning("MBR: NB first-placement lookup failed", exc_info=True)
+        first = None
+    return nb_win_counts(first, p["_crimson_clientname_value"], uid, p.get("crimson_startdate"))
 
 
 def compute_month(uid: str, year: int, month: int, to_gbp: dict = None) -> dict:

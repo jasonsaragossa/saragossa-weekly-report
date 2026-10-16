@@ -24,8 +24,9 @@ from shared.dataverse import (
     get_solution_entries, upsert_solution_entries,
     get_manual_nb_clients, add_manual_nb_client, remove_manual_nb_client, search_accounts,
     get_nb_clients_for_cro, get_nb_alert_state, upsert_nb_alert_state, delete_nb_alert_state,
+    get_nb_flagged_placements,
 )
-from shared.calc import build_report, build_admin_report
+from shared.calc import build_report, build_admin_report, first_nb_wins
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
@@ -80,6 +81,7 @@ def _load_report(today: date) -> tuple:
             "fx_rates":         pool.submit(get_fx_rates),
             "contract_entries": pool.submit(get_contract_entries),
             "solution_entries": pool.submit(get_solution_entries),
+            "nb_flagged":       pool.submit(get_nb_flagged_placements),
         }
         got = {}
         for name, fut in futs.items():
@@ -88,7 +90,9 @@ def _load_report(today: date) -> tuple:
             except Exception:
                 # FX and the alert state each have a working fallback; the
                 # rest are load-bearing and must surface as a failure.
-                if name not in ("fx_rates", "alert_state"):
+                # Without the NB-flagged list every NB placement wins its client,
+                # the rule before Oct 2026 — logged, so a miss doesn't go unseen.
+                if name not in ("fx_rates", "alert_state", "nb_flagged"):
                     raise
                 logging.warning("report: %s unavailable, using fallback", name)
                 got[name] = None
@@ -102,7 +106,9 @@ def _load_report(today: date) -> tuple:
                           got["manual_nb"],
                           nb_alert_state=alert_state,
                           contract_entries=got["contract_entries"],
-                          solution_entries=got["solution_entries"])
+                          solution_entries=got["solution_entries"],
+                          first_nb=(first_nb_wins(got["nb_flagged"])
+                                    if got["nb_flagged"] is not None else None))
     total_ms = round((time.monotonic() - t0) * 1000)
     return report, fetch_ms, total_ms - fetch_ms
 
